@@ -29,6 +29,17 @@ def test_planner_maps_new_actions():
     assert plan.actions[0].args == [2, 0.4]
 
 
+def test_macro_planning_path():
+    planner = IntentPlanner(
+        llm=DummyLLM('{"explanation":"unused","confidence":0.1,"calls":[]}'),
+        ableton=AbletonOSCClient("127.0.0.1", 11000),
+    )
+    plan = planner.plan("macro:idea_sketch")
+    assert plan.confidence == 1.0
+    assert plan.explanation == "Macro expansion plan."
+    assert len(plan.actions) >= 2
+
+
 def test_destructive_requires_approval_flag():
     planner = IntentPlanner(
         llm=DummyLLM('{"explanation":"stop","confidence":0.7,"calls":[{"tool":"stop_all_clips","args":{}}]}'),
@@ -62,8 +73,9 @@ def test_planstore_prunes_expired():
     assert store.get("old") is None
 
 
-def test_planstore_marks_executed():
-    store = PlanStore()
+def test_planstore_marks_executed(tmp_path):
+    persist = tmp_path / "plans.json"
+    store = PlanStore(persist_path=str(persist))
     plan = StoredPlan(
         id="p1",
         prompt="x",
@@ -76,6 +88,25 @@ def test_planstore_marks_executed():
     store.put(plan)
     store.mark_executed("p1")
     assert store.get("p1").executed_at is not None
+
+
+def test_planstore_persists_and_loads(tmp_path):
+    persist = tmp_path / "plans.json"
+    store1 = PlanStore(persist_path=str(persist))
+    plan = StoredPlan(
+        id="p2",
+        prompt="prompt",
+        explanation="ex",
+        confidence=0.8,
+        actions=[],
+        llm_raw="raw",
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    store1.put(plan)
+    store2 = PlanStore(persist_path=str(persist))
+    loaded = store2.get("p2")
+    assert loaded is not None
+    assert loaded.prompt == "prompt"
 
 
 def test_planner_handles_bad_json():
