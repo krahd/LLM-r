@@ -227,5 +227,5 @@ def _extract_json_candidate(text: str) -> str:
     start = src.find("{")
     end = src.rfind("}")
     if start != -1 and end > start:
-        return src[start : end + 1]
+        return src[start: end + 1]
     return src

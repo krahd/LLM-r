@@ -19,7 +19,8 @@ class DummyLLM:
 
 def test_planner_maps_new_actions():
     planner = IntentPlanner(
-        llm=DummyLLM('{"explanation":"ok","confidence":0.9,"calls":[{"tool":"set_track_volume","args":{"track_index":2,"volume":0.4}}]}'),
+        llm=DummyLLM(
+            '{"explanation":"ok","confidence":0.9,"calls":[{"tool":"set_track_volume","args":{"track_index":2,"volume":0.4}}]}'),
         ableton=AbletonOSCClient("127.0.0.1", 11000),
     )
     plan = planner.plan("lower track 2")
@@ -42,7 +43,8 @@ def test_macro_planning_path():
 
 def test_destructive_requires_approval_flag():
     planner = IntentPlanner(
-        llm=DummyLLM('{"explanation":"stop","confidence":0.7,"calls":[{"tool":"stop_all_clips","args":{}}]}'),
+        llm=DummyLLM(
+            '{"explanation":"stop","confidence":0.7,"calls":[{"tool":"stop_all_clips","args":{}}]}'),
         ableton=AbletonOSCClient("127.0.0.1", 11000),
     )
     plan = planner.plan("stop everything")

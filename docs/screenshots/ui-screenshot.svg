@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="520" viewBox="0 0 980 520">
+  <rect width="100%" height="100%" fill="#0b1020" rx="12"/>
+  <g font-family="Inter, system-ui, sans-serif" fill="#f8fafc">
+    <text x="28" y="48" font-size="24" font-weight="700">LLM-r Web UI (demo)</text>
+    <rect x="28" y="72" width="924" height="120" fill="#0f1724" rx="8" stroke="#374151"/>
+    <text x="44" y="100" font-size="14">Prompt</text>
+    <rect x="44" y="110" width="420" height="64" fill="#0b1220" rx="6" stroke="#1f2937"/>
+
+    <rect x="480" y="110" width="120" height="40" fill="#22c55e" rx="6"/>
+    <text x="500" y="136" font-size="14" fill="#052e16">Create Plan</text>
+
+    <rect x="610" y="110" width="120" height="40" fill="#93c5fd" rx="6"/>
+    <text x="634" y="136" font-size="14" fill="#0c4a6e">Execute Plan</text>
+
+    <text x="44" y="214" font-size="14">Result / Plan JSON</text>
+    <rect x="44" y="220" width="860" height="220" fill="#071024" rx="8" stroke="#1f2937"/>
+  </g>
+</svg>

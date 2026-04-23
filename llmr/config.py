@@ -11,10 +11,6 @@ class Settings(BaseModel):
     app_host: str = Field(default=os.getenv("LLMR_HOST", "0.0.0.0"))
     app_port: int = Field(default=int(os.getenv("LLMR_PORT", "8787")))
     plan_store_path: str = Field(default=os.getenv("LLMR_PLAN_STORE_PATH", ".llmr/plans.json"))
-<<<<<<< HEAD
-=======
-    plan_store_path: str = Field(default=os.getenv("LLMR_PLAN_STORE_PATH", ".llmr/plans.json"))
->>>>>>> pr-2
 
 
 settings = Settings()
