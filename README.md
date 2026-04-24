@@ -40,3 +40,7 @@ Open `http://localhost:8787`.
 ## Screenshots
 
 ![Web UI](docs/screenshots/ui-screenshot.svg)
+
+## Screenshots
+
+![Web UI](docs/screenshots/ui-screenshot.svg)

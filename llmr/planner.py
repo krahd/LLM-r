@@ -19,13 +19,18 @@ Return ONLY valid JSON matching schema:
   "explanation": "short explanation",
   "confidence": 0.0,
   "calls": [
-    {"tool": "set_tempo", "args": {"bpm": 128}},
-    {"tool": "fire_clip", "args": {"track_index": 0, "clip_index": 0}}
+        {"tool": "set_tempo", "args": {"bpm": 128}},
+        {"tool": "fire_clip", "args": {"track_index": 0, "clip_index": 0}},
+        {"tool": "set_device_parameter", "args": {"track_index": 0, "device_index": 0, "parameter_index": 1, "value": 0.75}}
   ]
 }
 Available tools:
 create_midi_track, create_audio_track, set_tempo, fire_clip, stop_all_clips,
-set_track_volume, set_track_mute, set_track_solo, arm_track, fire_scene.
+set_track_volume, set_track_mute, set_track_solo, arm_track, fire_scene,
+start_transport, stop_transport, start_recording, stop_recording, save_set, export_audio,
+duplicate_clip, delete_clip, set_device_parameter, get_device_parameter, create_scene,
+duplicate_scene, move_clip, select_track, rename_track, toggle_metronome, set_loop,
+set_track_send, insert_return_track, delete_track
 """
 
 
@@ -56,6 +61,7 @@ class PlanStore:
         self._max_items = max_items
         self._ttl = timedelta(minutes=ttl_minutes)
         self._persist_path = Path(persist_path) if persist_path else None
+        self._undos: dict[str, list[AbletonAction]] = {}
         self._load()
 
     def put(self, plan: StoredPlan) -> None:
@@ -149,6 +155,19 @@ class PlanStore:
             plans[p.id] = p
         self._plans = plans
         self.prune()
+
+    # Undo support: save undo actions for an executed plan.
+    def save_undo(self, plan_id: str, undo_actions: list[AbletonAction]) -> None:
+        if not undo_actions:
+            return
+        self._undos[plan_id] = undo_actions
+
+    def get_undo(self, plan_id: str) -> list[AbletonAction] | None:
+        return self._undos.get(plan_id)
+
+    def clear_undo(self, plan_id: str) -> None:
+        if plan_id in self._undos:
+            del self._undos[plan_id]
 
 
 class IntentPlanner:
