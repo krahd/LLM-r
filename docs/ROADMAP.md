@@ -3,7 +3,7 @@
 ## Near-term
 - Harden Modelito integration and provider/model configuration
 - Add more tests (API, error cases, macro expansion)
-- Improve documentation (Modelito, macros, security)
+- Improve documentation (Modelito, macros, security, GitHub repository metadata)
 - Plan and prototype GUI plugin (Ableton/desktop)
 
 ## Mid-term
