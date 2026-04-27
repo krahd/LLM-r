@@ -17,31 +17,33 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install build tools
+      - name: Install build tools and project dependencies
         run: |
           python -m pip install --upgrade pip
           pip install build pyinstaller
+          pip install -e . || true
+          pip install PyQt6 || true
         shell: bash
 
       - name: Build wheel and sdist
-        run: |
-          python -m build --sdist --wheel
+        if: runner.os == 'Linux'
+        run: python -m build --sdist --wheel
         shell: bash
 
       - name: Build GUI binary
         run: |
           mkdir -p release || true
-          pyinstaller --onefile --name llm-r-gui gui/pyqt_app.py --distpath release --workpath build/pyinstaller || true
+          pyinstaller --onefile --name llm-r-gui-${{ runner.os }} gui/pyqt_app.py --distpath release --workpath build/pyinstaller || true
         shell: bash
 
       - name: Build server binary
         run: |
           mkdir -p release || true
-          pyinstaller --onefile --name llm-r-server backend/main.py --distpath release --workpath build/pyinstaller || true
+          pyinstaller --onefile --name llm-r-server-${{ runner.os }} backend/main.py --distpath release --workpath build/pyinstaller || true
         shell: bash
 
       - name: List artifacts
@@ -64,26 +66,16 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download Ubuntu artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-ubuntu-latest
-          path: downloaded/ubuntu
+          path: downloaded
 
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: release-macos-latest
-          path: downloaded/macos
-
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: release-windows-latest
-          path: downloaded/windows
+      - name: List downloaded artifacts
+        run: find downloaded -type f | sort
 
       - name: Create GitHub release and upload assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: downloaded/**/*
         env:
