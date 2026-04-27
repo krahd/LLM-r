@@ -116,3 +116,12 @@ def test_planner_handles_bad_json():
     plan = planner.plan("whatever")
     assert plan.actions == []
     assert plan.confidence == 0.0
+
+
+def test_system_prompt_reflects_capabilities():
+    from llmr.planner import _system_prompt
+
+    prompt = _system_prompt()
+    assert "song_play" in prompt
+    assert "song_metronome" in prompt
+    assert "track_rename" in prompt

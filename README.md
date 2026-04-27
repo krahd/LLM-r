@@ -38,6 +38,11 @@ LLM-r bridges **Ableton Live** and an LLM using AbletonOSC + modelito.
 
 ## What's improved in 1.3.0
 
+- Added declarative OSC capability registry with stricter argument validation and reduced planner/tool drift.
+- Added transport controls (`song_play`, `song_stop`, `song_continue`, `song_record`, `song_metronome`).
+- Expanded capability surface with song/time controls, track lifecycle/mixer controls, scene+clip lifecycle, and device parameter actions.
+- Added per-action execution reporting in `POST /api/execute` responses.
+- Added introspection endpoints for live state snapshots: `/api/live/song`, `/api/live/tracks`, `/api/live/tracks/{id}/devices`, `/api/live/tracks/{id}/clips`.
 - Added **persistent plan storage** to disk (`LLMR_PLAN_STORE_PATH`, default `.llmr/plans.json`).
 - Plans now survive process restarts and still respect TTL pruning behavior.
 - Added `GET /api/plan/{plan_id}` for plan audit/retrieval after creation.
@@ -62,6 +67,10 @@ LLM-r bridges **Ableton Live** and an LLM using AbletonOSC + modelito.
 - `GET /api/model_metadata`
 - `GET /api/plan/{plan_id}`
 - `POST /api/execute`
+- `GET /api/live/song`
+- `GET /api/live/tracks`
+- `GET /api/live/tracks/{track_id}/devices`
+- `GET /api/live/tracks/{track_id}/clips`
 - `GET /api/sessions`
 - `GET /api/sessions/{session_id}`
 - `GET /api/history`
