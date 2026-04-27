@@ -6,6 +6,28 @@ from typing import Any, Iterator
 
 
 @dataclass
+class _LocalMessage:
+    role: str
+    content: str
+
+
+class _LocalMockClient:
+    def __init__(self, provider: str, model: str) -> None:
+        self.provider = provider
+        self.model = model
+
+    def summarize(self, messages: list[_LocalMessage]) -> str:
+        prompt = messages[-1].content if messages else ""
+        return f"[MOCK] {prompt}"
+
+    def stream(self, messages: list[_LocalMessage]) -> Iterator[str]:
+        yield self.summarize(messages)
+
+    def list_models(self) -> list[dict[str, str]]:
+        return [{"id": self.model, "provider": self.provider}]
+
+
+@dataclass
 class LLMResult:
     raw_text: str
 
@@ -20,6 +42,15 @@ class ModelitoClient:
         try:
             import modelito  # type: ignore
         except Exception as exc:
+            if provider == "mock":
+                logging.warning(
+                    "Modelito is not installed. Using built-in local mock provider for tests."
+                )
+                self._client = _LocalMockClient(provider=provider, model=model)
+                self._Message = _LocalMessage
+                self._normalize_models = None
+                self._normalize_metadata = None
+                return
             logging.error(
                 "Modelito is not installed. Please install the modelito package and re-run.")
             raise RuntimeError(
