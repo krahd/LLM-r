@@ -15,8 +15,8 @@ build/
 pip-wheel-metadata/
 
 # Release artifacts
-release/
-release-*/
+# Release artifacts
+# Note: `release/` is tracked in this repository so release artifacts can be committed
 
 # PyInstaller
 *.spec
