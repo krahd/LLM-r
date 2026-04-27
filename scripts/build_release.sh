@@ -4,6 +4,8 @@ set -euo pipefail
 echo "Preparing local release build..."
 python -m pip install --upgrade pip
 pip install build pyinstaller
+echo "Installing GUI dependencies (PyQt6) to support GUI binary build..."
+pip install PyQt6 || true
 
 echo "Building wheel and sdist..."
 python -m build --sdist --wheel
