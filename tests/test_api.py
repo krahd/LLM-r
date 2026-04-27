@@ -44,6 +44,19 @@ def isolated_app_state(tmp_path):
     app_module.store = app_module.PlanStore(persist_path=str(tmp_path / "plans.json"))
     app_module.session_store = SessionStore(persist_path=str(tmp_path / "sessions.json"))
     app_module._plan_session_index.clear()
+    app_module._live_state = {
+        "song": {
+            "tempo": 120.0,
+            "is_playing": False,
+            "session_record": False,
+            "metronome": False,
+            "time_signature": {"numerator": 4, "denominator": 4},
+            "global_quantization": 4,
+            "count_in": 1,
+        },
+        "tracks": [],
+        "scenes": [],
+    }
     init_macro_store(str(tmp_path / "macros.json"))
 
 
@@ -144,6 +157,7 @@ def test_execute_plan_dry_run(monkeypatch):
 
     execute = app_module.execute_plan(app_module.ExecuteRequest(plan_id=plan_resp["plan_id"], dry_run=True))
     assert execute["dry_run"] is True
+    assert execute["execution_report"][0]["status"] == "dry_run"
 
 
 def test_auth_dependency(monkeypatch):
@@ -152,3 +166,92 @@ def test_auth_dependency(monkeypatch):
         app_module._require_auth("Bearer secret")
     finally:
         monkeypatch.setattr(app_module.settings, "api_token", "")
+
+
+def test_capabilities_include_transport():
+    payload = app_module.get_capabilities()
+    names = {item["tool"] for item in payload["capabilities"]}
+    assert "song_play" in names
+    assert "song_stop" in names
+    by_tool = {item["tool"]: item for item in payload["capabilities"]}
+    assert by_tool["song_play"]["domain"] == "song"
+
+
+def test_capabilities_v2_filters():
+    payload = app_module.get_capabilities_v2(domain="song", include_destructive=False)
+    assert payload["count"] >= 1
+    assert all(item["domain"] == "song" for item in payload["capabilities"])
+    assert all(item["destructive"] is False for item in payload["capabilities"])
+
+
+def test_live_state_endpoints_after_execute():
+    plan = StoredPlan(
+        id="state-1",
+        prompt="state",
+        explanation="state",
+        confidence=1.0,
+        actions=[
+            AbletonAction(
+                tool=ToolName.create_midi_track,
+                address="/live/song/create_midi_track",
+                args=[-1],
+                description="Create MIDI track",
+                destructive=False,
+            ),
+            AbletonAction(
+                tool=ToolName.track_rename,
+                address="/live/track/set/name",
+                args=[0, "Bass"],
+                description="Rename track",
+                destructive=False,
+            ),
+            AbletonAction(
+                tool=ToolName.clip_create,
+                address="/live/clip_slot/create_clip",
+                args=[0, 0, 8.0],
+                description="Create clip",
+                destructive=False,
+            ),
+            AbletonAction(
+                tool=ToolName.device_set_parameter,
+                address="/live/device/set/parameter/value",
+                args=[0, 0, 1, 0.75],
+                description="Set parameter",
+                destructive=False,
+            ),
+        ],
+        llm_raw="{}",
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    app_module.store.put(plan)
+
+    app_module.execute_plan(app_module.ExecuteRequest(plan_id="state-1", dry_run=False))
+
+    tracks_payload = app_module.get_live_tracks()
+    assert tracks_payload["count"] >= 1
+    assert tracks_payload["tracks"][0]["name"] == "Bass"
+
+    clips_payload = app_module.get_live_track_clips(0)
+    assert clips_payload["clips"][0]["length_beats"] == 8.0
+
+    devices_payload = app_module.get_live_track_devices(0)
+    assert devices_payload["devices"][0]["parameters"][1] == 0.75
+
+    params_payload = app_module.get_live_track_parameters(0)
+    assert params_payload["count"] >= 1
+    assert params_payload["parameters"][0]["parameter_index"] == 1
+
+
+def test_execute_batch_dry_run():
+    payload = app_module.execute_batch(
+        app_module.ExecuteBatchRequest(
+            dry_run=True,
+            calls=[
+                app_module.ExecuteCallInput(tool=ToolName.set_tempo, args={"bpm": 127}),
+                app_module.ExecuteCallInput(tool=ToolName.utility_undo, args={}),
+            ],
+        )
+    )
+    assert payload["dry_run"] is True
+    assert payload["executed_count"] == 2
+    assert all(item["status"] == "dry_run" for item in payload["execution_report"])
