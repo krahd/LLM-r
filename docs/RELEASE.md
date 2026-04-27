@@ -31,3 +31,17 @@ Notes and caveats:
 - Building the GUI binary requires `PyQt6` (optional). Install with `pip install -e .[gui]` if you want the GUI bundled.
 - PyInstaller builds are platform-specific and may require additional tooling on each platform; CI builds run on `ubuntu-latest`, `macos-latest`, and `windows-latest` to produce per-platform artifacts.
 - If the GitHub Actions job fails to upload an asset automatically, you can also create a release manually and upload the files from `dist/` and `release/`.
+
+Update GitHub "About" box programmatically (optional):
+
+If you have the GitHub CLI (`gh`) installed and authenticated, you can update the repository description and topics from the command line. Example:
+
+```bash
+# set a short description
+gh repo edit --description "LLM-r: Ableton Live + LLM bridge powered by Modelito"
+
+# add recommended topics (run multiple times or use multiple --add-topic flags)
+gh repo edit --add-topic llm --add-topic ableton --add-topic modelito --add-topic osc --add-topic music --add-topic automation --add-topic plugin
+```
+
+If `gh` is not available, update the About box in the repository web UI (top-right 'About' edit button on the repo page).

@@ -7,8 +7,8 @@ pip install build pyinstaller
 echo "Installing GUI dependencies (PyQt6) to support GUI binary build..."
 pip install PyQt6 || true
 
-echo "Building wheel and sdist..."
-python -m build --sdist --wheel
+echo "Building wheel and sdist (best-effort, will continue on failure)..."
+python -m build --sdist --wheel || true
 
 echo "Building standalone binaries with PyInstaller (may be platform-specific)..."
 mkdir -p release

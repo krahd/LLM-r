@@ -1,3 +1,6 @@
+LLM-r: Ableton Live + LLM bridge powered by Modelito (AbletonOSC automation)
+
+Topics: llm, ableton, modelito, osc, music, automation, plugin, python
 # Repository About Box (GitHub)
 
 Use this metadata in the GitHub **About** panel.

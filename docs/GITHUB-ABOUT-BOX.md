@@ -1,3 +1,30 @@
+# GitHub About Box — Suggested copy
+
+Short description (one line):
+
+LLM-r: Ableton Live + LLM bridge powered by Modelito (AbletonOSC automation)
+
+Long description (2–3 sentences):
+
+LLM-r bridges Ableton Live and large language models to automate music-production workflows via OSC and Modelito. It provides a local FastAPI server, an optional PyQt GUI scaffold, a macro system, and a planner to safely generate and execute action sequences.
+
+Suggested topics (copy into GitHub topics):
+
+- llm
+- ableton
+- modelito
+- osc
+- music
+- automation
+- plugin
+- python
+
+Usage (quick): paste the short description into the repository About box. To set programmatically with the GitHub CLI:
+
+```bash
+gh repo edit --description "LLM-r: Ableton Live + LLM bridge powered by Modelito"
+gh repo edit --add-topic llm --add-topic ableton --add-topic modelito --add-topic osc --add-topic music --add-topic automation --add-topic plugin
+```
 # GitHub About Box
 
 This document stores copy-ready metadata for the repository's **GitHub About** section.

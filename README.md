@@ -32,7 +32,7 @@ To propose a new macro, open an issue or contribute to `llmr/macros.py`.
 - API keys and credentials are handled by Modelito and are never logged or exposed by LLM-r.
 - If you see a warning about running on a public interface, review your deployment settings.
 
-# LLM-r 1.3.0
+# LLM-r 1.5.1
 
 ## GitHub About Box
 
@@ -43,9 +43,19 @@ For maintainers: copy-ready GitHub About metadata is documented in:
 
 Recommended short description:
 
-`LLM-r bridges Ableton Live and LLM agents via AbletonOSC + Modelito for safe music-production automation.`
+`LLM-r bridges Ableton Live and LLM agents via AbletonOSC + Modelito.`
 
-LLM-r bridges **Ableton Live** and an LLM using AbletonOSC + modelito.
+LLM-r bridges **Ableton Live** and an LLM using AbletonOSC + Modelito.
+
+## Release Binaries
+
+This repository now includes a CI workflow and local helper to produce release artifacts (source distributions, wheels, and standalone binaries built by PyInstaller).
+
+- CI workflow: [.github/workflows/release.yml](.github/workflows/release.yml)
+- Local build helper: [scripts/build_release.sh](scripts/build_release.sh)
+- Release instructions: [docs/RELEASE.md](docs/RELEASE.md)
+
+PyInstaller binaries are platform-specific and are placed in the `release/` directory when built locally. Use the CI (tag push) to build per-platform artifacts and attach them to a GitHub Release.
 
 ## What's improved in 1.3.0
 

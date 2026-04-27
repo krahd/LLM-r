@@ -1,4 +1,49 @@
+# Python cache and compiled files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Virtual environments
 .venv/
+env/
+venv/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+pip-wheel-metadata/
+
+# Release artifacts
+release/
+release-*/
+
+# PyInstaller
+*.spec
+llm-r-gui
+llm-r-server
+
+# Testing
 .pytest_cache/
+.cache/
+coverage.xml
+htmlcov/
+.tox/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+*.dSYM
+
+# Environment files
+.env
+.env.*
+
+# Type check / cache
+.mypy_cache/
+
