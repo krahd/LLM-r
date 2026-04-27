@@ -3,6 +3,7 @@ name = "llm-r"
 version = "1.5.3"
 description = "LLM-r: Ableton Live + LLM bridge powered by modelito"
 requires-python = ">=3.11"
+authors = [ { name = "Tomas Laurenzo" } ]
 dependencies = [
   "fastapi>=0.115.0",
   "modelito @ git+https://github.com/krahd/modelito.git@f6db8b41a9a31f6e473020f8304cddec8a196252",

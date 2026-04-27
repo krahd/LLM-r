@@ -8,16 +8,15 @@ from llmr.schemas import Capability, ToolName
 
 try:
     from pythonosc.udp_client import SimpleUDPClient  # type: ignore
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     class SimpleUDPClient:  # type: ignore[override]
         def __init__(self, host: str, port: int) -> None:
-            self.host = host
-            self.port = port
-            self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            raise RuntimeError(
+                "python-osc is required. Install it with: pip install python-osc"
+            )
 
-        def send_message(self, address: str, args: list[Any]) -> None:
-            payload = f"{address} {args}".encode("utf-8")
-            self._sock.sendto(payload, (self.host, self.port))
+        def send_message(self, address: str, args: list[Any]) -> None:  # pragma: no cover
+            pass
 
 
 @dataclass

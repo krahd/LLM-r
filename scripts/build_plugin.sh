@@ -22,6 +22,7 @@ Options:
   --server    build server binary
   --all       build both (default)
   --clean     clean previous build artifacts before building
+  --vendor    set vendor name (default: Tomas Laurenzo)
   --version   set explicit version (overrides pyproject.toml)
   -h, --help  show this help
 EOF
@@ -31,6 +32,9 @@ EOF
 BUILD_GUI=0
 BUILD_SERVER=0
 CLEAN=0
+VENDOR="Tomas Laurenzo"
+
+PLUGIN_FOLDER="$(basename "$REPO_ROOT")"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --server) BUILD_SERVER=1; shift ;;
     --all) BUILD_GUI=1; BUILD_SERVER=1; shift ;;
     --clean) CLEAN=1; shift ;;
+    --vendor) VENDOR="$2"; shift 2 ;;
     --version) VERSION="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1"; usage; exit 1 ;;
@@ -107,6 +112,20 @@ package() {
     return
   fi
   zip -r "$out" "${files[@]}"
+
+  # Create vendor install folder (e.g. release/Tomas Laurenzo/LLM-r/) and copy artifacts
+  vendor_dir="$DIST_DIR/$VENDOR/$PLUGIN_FOLDER"
+  mkdir -p "$vendor_dir"
+  for f in "${files[@]}"; do
+    if [[ -e "$f" ]]; then
+      cp -a "$f" "$vendor_dir/"
+    fi
+  done
+
+  # Create a vendor-level zip for easy install into Ableton (underscores for spaces)
+  vendor_zip="${VENDOR// /_}-${PLUGIN_FOLDER}-${VERSION}.zip"
+  (cd "$DIST_DIR" && zip -r "$vendor_zip" "$VENDOR" >/dev/null || true)
+
   popd >/dev/null
 }
 
