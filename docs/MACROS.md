@@ -1,6 +1,22 @@
 # Macro documentation for contributors
 
-## How to add a new macro
+## Built-in and runtime macros
+
+LLM-r supports two macro sources:
+- **Static macros** in `llmr/macros.py` (`_STATIC_MACROS`)
+- **Runtime macros** persisted to `LLMR_MACRO_STORE_PATH` (default `.llmr/macros.json`)
+
+## Runtime macro API
+
+- `GET /api/macros` → list names
+- `GET /api/macros/{name}` → fetch one macro (includes `source`: `static`/`runtime`)
+- `POST /api/macros` → create runtime macro
+- `PUT /api/macros/{name}` → update runtime macro
+- `DELETE /api/macros/{name}` → delete runtime macro
+
+When `LLMR_API_TOKEN` is set, create/update/delete endpoints require bearer auth.
+
+## Static macro contribution flow
 
 1. Edit `llmr/macros.py`.
 2. Add a new entry to `_STATIC_MACROS` with a unique name and a list of `PlannedToolCall` actions.
@@ -13,10 +29,6 @@ _STATIC_MACROS["my_macro"] = [
 ]
 ```
 
-4. Test your macro using the API:
-   - `GET /api/macros` to list macros
+4. Test via:
+   - `GET /api/macros`
    - `POST /api/plan_macro` with `{ "name": "my_macro" }`
-
-## Future: Editable macros
-- The macro system is designed for runtime editing in the future.
-- Contributions for runtime macro editing are welcome!

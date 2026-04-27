@@ -1,36 +1,26 @@
-# GUI Plugin Planning
+# GUI Plugin / Desktop Client
 
-## Goals
-- Provide a user-friendly GUI for LLM-r, focused on composition and automation workflows.
-- Allow users to send prompts, select macros, review plans, and approve/execute actions.
-- Integrate with Ableton Live (as a device, Max for Live, or standalone desktop app).
+LLM-r now includes a minimal **PyQt6 desktop scaffold** at `gui/pyqt_app.py`.
 
-## Options
+## What it does
+- Connects to the LLM-r API (default `http://127.0.0.1:8787`)
+- Sends prompts to `POST /api/plan`
+- Displays plan JSON
+- Executes the latest plan via `POST /api/execute`
+- Supports dry-run toggle
+- Supports bearer auth via `LLMR_GUI_API_TOKEN`
 
-### 1. Ableton Device (Max for Live)
-- Pros: Native to Ableton, direct access to Live API, familiar to users.
-- Cons: Limited UI flexibility, requires Max for Live license, more complex deployment.
+## Run
 
-### 2. Standalone Desktop App (Electron, PyQt, etc.)
-- Pros: Full UI flexibility, cross-platform, can communicate with LLM-r API over localhost.
-- Cons: Separate from Ableton, requires window management.
+```bash
+pip install PyQt6
+python gui/pyqt_app.py
+```
 
-### 3. Hybrid
-- Max for Live device for basic control, desktop app for advanced features.
+Optional environment variables:
+- `LLMR_GUI_API_URL` (default `http://127.0.0.1:8787`)
+- `LLMR_GUI_API_TOKEN` (if `LLMR_API_TOKEN` is enabled server-side)
 
-## Requirements
-- Display available macros and allow selection.
-- Input box for prompts (with validation).
-- Plan review/approval UI (show actions, destructive flag, etc.).
-- Execution controls (dry-run, approve, execute).
-- Status/log output.
-
-## Next Steps
-- Decide on initial platform (Max for Live vs. desktop app).
-- Create wireframes for core UI.
-- Define API endpoints needed for GUI.
-- Prototype basic GUI (e.g., Electron + React, or Max for Live patch).
-
----
-
-*Contributions and feedback welcome!*
+## Notes
+- This is a starting scaffold, not a production UX.
+- Next steps: macro browser, capability explorer, streaming output panel, and better execution review UI.
