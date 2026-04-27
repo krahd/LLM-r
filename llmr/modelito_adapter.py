@@ -20,8 +20,10 @@ class ModelitoClient:
         try:
             import modelito  # type: ignore
         except Exception as exc:
-            logging.error("Modelito is not installed. Please install the modelito package and re-run.")
-            raise RuntimeError("modelito is not installed. Install your modelito package and re-run.") from exc
+            logging.error(
+                "Modelito is not installed. Please install the modelito package and re-run.")
+            raise RuntimeError(
+                "modelito is not installed. Install your modelito package and re-run.") from exc
         try:
             self._client = modelito.Client(provider=provider, model=model)
             self._Message = modelito.Message
@@ -80,7 +82,8 @@ class ModelitoClient:
     def model_metadata(self, model: str | None = None) -> dict[str, Any]:
         """Return metadata for a model when supported by provider."""
         model_id = model or self.model
-        method = getattr(self._client, "model_metadata", None) or getattr(self._client, "get_model_metadata", None)
+        method = getattr(self._client, "model_metadata", None) or getattr(
+            self._client, "get_model_metadata", None)
         if not method:
             return {"model": model_id, "provider": self.provider, "available": False, "metadata": {}}
 
