@@ -66,6 +66,14 @@ class MacroMutationRequest(BaseModel):
     calls: list[MacroCallInput] = Field(default_factory=list)
 
 
+class SettingsPatch(BaseModel):
+    modelito_provider: str | None = None
+    modelito_model: str | None = None
+    ableton_host: str | None = None
+    ableton_port: int | None = None
+    api_token: str | None = None
+
+
 app = FastAPI(title="LLM-r", version="1.5.0")
 store = PlanStore(persist_path=settings.plan_store_path)
 init_macro_store(settings.macro_store_path)
@@ -474,6 +482,32 @@ def get_live_track_parameters(track_id: int) -> dict:
         for p_idx, value in device.get("parameters", {}).items()
     ]
     return {"track_index": track_id, "parameters": flattened, "count": len(flattened)}
+
+
+@app.get("/api/settings")
+def get_settings() -> dict:
+    return {
+        "modelito_provider": settings.modelito_provider,
+        "modelito_model": settings.modelito_model,
+        "ableton_host": settings.ableton_host,
+        "ableton_port": settings.ableton_port,
+    }
+
+
+@app.patch("/api/settings", dependencies=[Depends(_require_auth)])
+def update_settings(req: SettingsPatch) -> dict:
+    if req.modelito_provider is not None:
+        settings.modelito_provider = req.modelito_provider
+    if req.modelito_model is not None:
+        settings.modelito_model = req.modelito_model
+    if req.ableton_host is not None:
+        settings.ableton_host = req.ableton_host
+    if req.ableton_port is not None:
+        settings.ableton_port = req.ableton_port
+    if req.api_token is not None:
+        settings.api_token = req.api_token
+    settings.save()
+    return get_settings()
 
 
 @app.get("/api/models")
