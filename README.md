@@ -1,6 +1,8 @@
 # LLM-r
 
-**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. Describe what you want in plain language — LLM-r translates it into OSC actions and sends them to Ableton Live via [AbletonOSC](https://github.com/sigabrt/AbletonOSC). LLM connectivity is provided by [Modelito](https://github.com/krahd/modelito), a lightweight adapter that supports OpenAI, Anthropic, Google, Ollama, and other providers.
+**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. 
+
+LLM-r translates LLMs' output into OSC actions and sends them to Ableton Live via [AbletonOSC](https://github.com/sigabrt/AbletonOSC). LLM connectivity is provided by [Modelito](https://github.com/krahd/modelito), a lightweight adapter that supports OpenAI, Anthropic, Google, Ollama, and other providers.
 
 ```text
 Natural language prompt
