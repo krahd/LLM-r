@@ -1,0 +1,90 @@
+name: Build and publish release binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.11']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build pyinstaller
+        shell: bash
+
+      - name: Build wheel and sdist
+        run: |
+          python -m build --sdist --wheel
+        shell: bash
+
+      - name: Build GUI binary
+        run: |
+          mkdir -p release || true
+          pyinstaller --onefile --name llm-r-gui gui/pyqt_app.py --distpath release --workpath build/pyinstaller || true
+        shell: bash
+
+      - name: Build server binary
+        run: |
+          mkdir -p release || true
+          pyinstaller --onefile --name llm-r-server backend/main.py --distpath release --workpath build/pyinstaller || true
+        shell: bash
+
+      - name: List artifacts
+        run: |
+          echo "dist contents:"
+          ls -la dist || true
+          echo "release contents:"
+          ls -la release || true
+        shell: bash
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          path: |
+            dist
+            release
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Ubuntu artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-ubuntu-latest
+          path: downloaded/ubuntu
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-macos-latest
+          path: downloaded/macos
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-windows-latest
+          path: downloaded/windows
+
+      - name: Create GitHub release and upload assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: downloaded/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
