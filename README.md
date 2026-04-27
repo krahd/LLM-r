@@ -34,6 +34,17 @@ To propose a new macro, open an issue or contribute to `llmr/macros.py`.
 
 # LLM-r 1.3.0
 
+## GitHub About Box
+
+For maintainers: copy-ready GitHub About metadata is documented in:
+
+- `docs/GITHUB-ABOUT-BOX.md` (full guidance + checklist)
+- `.github/ABOUT_BOX.md` (quick copy version)
+
+Recommended short description:
+
+`LLM-r bridges Ableton Live and LLM agents via AbletonOSC + Modelito for safe music-production automation.`
+
 LLM-r bridges **Ableton Live** and an LLM using AbletonOSC + modelito.
 
 ## What's improved in 1.3.0
