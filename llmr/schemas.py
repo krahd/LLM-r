@@ -36,6 +36,8 @@ class ToolName(str, Enum):
     clip_delete = "clip_delete"
     device_get_parameters = "device_get_parameters"
     device_set_parameter = "device_set_parameter"
+    utility_undo = "utility_undo"
+    utility_redo = "utility_redo"
 
 
 @dataclass

@@ -11,6 +11,8 @@ def test_capabilities_include_transport_tools():
     assert ToolName.song_continue in names
     assert ToolName.song_record in names
     assert ToolName.song_metronome in names
+    assert ToolName.utility_undo in names
+    assert ToolName.utility_redo in names
 
 
 def test_to_action_validates_volume_range():

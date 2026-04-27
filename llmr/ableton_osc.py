@@ -450,6 +450,22 @@ _TOOL_SPECS: dict[ToolName, ToolSpec] = {
         args_builder=_build_device_set_parameter,
         domain="parameters",
     ),
+    ToolName.utility_undo: ToolSpec(
+        tool=ToolName.utility_undo,
+        address="/live/song/undo",
+        description="Undo last operation",
+        args_schema={},
+        args_builder=_build_song_noargs,
+        domain="utility",
+    ),
+    ToolName.utility_redo: ToolSpec(
+        tool=ToolName.utility_redo,
+        address="/live/song/redo",
+        description="Redo last undone operation",
+        args_schema={},
+        args_builder=_build_song_noargs,
+        domain="utility",
+    ),
 }
 
 

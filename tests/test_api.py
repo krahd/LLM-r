@@ -177,6 +177,13 @@ def test_capabilities_include_transport():
     assert by_tool["song_play"]["domain"] == "song"
 
 
+def test_capabilities_v2_filters():
+    payload = app_module.get_capabilities_v2(domain="song", include_destructive=False)
+    assert payload["count"] >= 1
+    assert all(item["domain"] == "song" for item in payload["capabilities"])
+    assert all(item["destructive"] is False for item in payload["capabilities"])
+
+
 def test_live_state_endpoints_after_execute():
     plan = StoredPlan(
         id="state-1",
@@ -229,3 +236,22 @@ def test_live_state_endpoints_after_execute():
 
     devices_payload = app_module.get_live_track_devices(0)
     assert devices_payload["devices"][0]["parameters"][1] == 0.75
+
+    params_payload = app_module.get_live_track_parameters(0)
+    assert params_payload["count"] >= 1
+    assert params_payload["parameters"][0]["parameter_index"] == 1
+
+
+def test_execute_batch_dry_run():
+    payload = app_module.execute_batch(
+        app_module.ExecuteBatchRequest(
+            dry_run=True,
+            calls=[
+                app_module.ExecuteCallInput(tool=ToolName.set_tempo, args={"bpm": 127}),
+                app_module.ExecuteCallInput(tool=ToolName.utility_undo, args={}),
+            ],
+        )
+    )
+    assert payload["dry_run"] is True
+    assert payload["executed_count"] == 2
+    assert all(item["status"] == "dry_run" for item in payload["execution_report"])

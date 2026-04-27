@@ -41,6 +41,17 @@ class ExecuteRequest(BaseModel):
     dry_run: bool = False
 
 
+class ExecuteCallInput(BaseModel):
+    tool: ToolName
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExecuteBatchRequest(BaseModel):
+    calls: list[ExecuteCallInput] = Field(default_factory=list)
+    approved: bool = False
+    dry_run: bool = False
+
+
 class StreamRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
 
@@ -194,6 +205,64 @@ def _apply_action_to_live_state(action) -> None:
         track["devices"][device_index]["parameters"][int(args[2])] = float(args[3])
 
 
+def _execute_actions(actions: list[Any], *, approved: bool, dry_run: bool) -> tuple[list[dict[str, Any]], str | None]:
+    requires_approval = any(a.destructive for a in actions)
+    if requires_approval and not approved:
+        _raise_api_error(
+            status_code=400,
+            code="approval_required",
+            message="Plan includes destructive actions and requires approval",
+        )
+
+    execution_report: list[dict[str, Any]] = []
+    executed_at: str | None = None
+    if not dry_run:
+        ableton = AbletonOSCClient(settings.ableton_host, settings.ableton_port)
+        for index, action in enumerate(actions):
+            try:
+                ableton.send(action)
+                _apply_action_to_live_state(action)
+                execution_report.append(
+                    {
+                        "index": index,
+                        "tool": action.tool.value,
+                        "address": action.address,
+                        "args": action.args,
+                        "status": "sent",
+                    }
+                )
+            except Exception as exc:
+                execution_report.append(
+                    {
+                        "index": index,
+                        "tool": action.tool.value,
+                        "address": action.address,
+                        "args": action.args,
+                        "status": "failed",
+                        "error": str(exc),
+                    }
+                )
+                _raise_api_error(
+                    status_code=502,
+                    code="osc_send_failed",
+                    message="Failed sending one or more OSC actions",
+                    diagnostics={"report": execution_report},
+                )
+        executed_at = datetime.now(timezone.utc).isoformat()
+    else:
+        for index, action in enumerate(actions):
+            execution_report.append(
+                {
+                    "index": index,
+                    "tool": action.tool.value,
+                    "address": action.address,
+                    "args": action.args,
+                    "status": "dry_run",
+                }
+            )
+    return execution_report, executed_at
+
+
 def _error_payload(
     *,
     code: str,
@@ -343,6 +412,33 @@ def get_capabilities() -> dict:
     }
 
 
+@app.get("/api/v2/capabilities")
+def get_capabilities_v2(
+    domain: str | None = None,
+    safety: str | None = None,
+    include_destructive: bool = True,
+) -> dict:
+    rows = []
+    for cap in capabilities():
+        if domain and cap.domain != domain:
+            continue
+        if safety and cap.safety != safety:
+            continue
+        if not include_destructive and cap.destructive:
+            continue
+        rows.append(
+            {
+                "tool": cap.tool.value,
+                "description": cap.description,
+                "args_schema": cap.args_schema,
+                "destructive": cap.destructive,
+                "domain": cap.domain,
+                "safety": cap.safety,
+            }
+        )
+    return {"capabilities": rows, "count": len(rows)}
+
+
 @app.get("/api/live/song")
 def get_live_song_state() -> dict:
     return {"song": _live_state["song"]}
@@ -365,6 +461,19 @@ def get_live_track_clips(track_id: int) -> dict:
     if track_id < 0 or track_id >= len(_live_state["tracks"]):
         _raise_api_error(status_code=404, code="track_not_found", message="Track not found")
     return {"track_index": track_id, "clips": _live_state["tracks"][track_id]["clips"]}
+
+
+@app.get("/api/live/tracks/{track_id}/parameters")
+def get_live_track_parameters(track_id: int) -> dict:
+    if track_id < 0 or track_id >= len(_live_state["tracks"]):
+        _raise_api_error(status_code=404, code="track_not_found", message="Track not found")
+    devices = _live_state["tracks"][track_id]["devices"]
+    flattened = [
+        {"device_index": device["device_index"], "parameter_index": p_idx, "value": value}
+        for device in devices
+        for p_idx, value in device.get("parameters", {}).items()
+    ]
+    return {"track_index": track_id, "parameters": flattened, "count": len(flattened)}
 
 
 @app.get("/api/models")
@@ -505,46 +614,8 @@ def execute_plan(req: ExecuteRequest) -> dict:
     if plan.executed_at:
         _raise_api_error(status_code=409, code="plan_already_executed", message="Plan already executed")
 
-    if plan.requires_approval and not req.approved:
-        _raise_api_error(
-            status_code=400,
-            code="approval_required",
-            message="Plan includes destructive actions and requires approval",
-        )
-
-    execution_report: list[dict[str, Any]] = []
+    execution_report, executed_at = _execute_actions(plan.actions, approved=req.approved, dry_run=req.dry_run)
     if not req.dry_run:
-        ableton = AbletonOSCClient(settings.ableton_host, settings.ableton_port)
-        for index, action in enumerate(plan.actions):
-            try:
-                ableton.send(action)
-                _apply_action_to_live_state(action)
-                execution_report.append(
-                    {
-                        "index": index,
-                        "tool": action.tool.value,
-                        "address": action.address,
-                        "args": action.args,
-                        "status": "sent",
-                    }
-                )
-            except Exception as exc:
-                execution_report.append(
-                    {
-                        "index": index,
-                        "tool": action.tool.value,
-                        "address": action.address,
-                        "args": action.args,
-                        "status": "failed",
-                        "error": str(exc),
-                    }
-                )
-                _raise_api_error(
-                    status_code=502,
-                    code="osc_send_failed",
-                    message="Failed sending one or more OSC actions",
-                    diagnostics={"report": execution_report},
-                )
         store.mark_executed(plan.id)
     else:
         for index, action in enumerate(plan.actions):
@@ -576,7 +647,7 @@ def execute_plan(req: ExecuteRequest) -> dict:
         "executed_count": len(plan.actions),
         "requires_approval": plan.requires_approval,
         "dry_run": req.dry_run,
-        "executed_at": store.get(plan.id).executed_at if store.get(plan.id) else None,
+        "executed_at": executed_at if req.dry_run else (store.get(plan.id).executed_at if store.get(plan.id) else None),
         "executed_actions": [
             {
                 "tool": a.tool.value,
@@ -586,6 +657,25 @@ def execute_plan(req: ExecuteRequest) -> dict:
             }
             for a in plan.actions
         ],
+        "execution_report": execution_report,
+    }
+
+
+@app.post("/api/execute_batch", dependencies=[Depends(_require_auth)])
+def execute_batch(req: ExecuteBatchRequest) -> dict:
+    if not req.calls:
+        _raise_api_error(status_code=400, code="empty_batch", message="At least one call is required")
+    ableton = AbletonOSCClient(settings.ableton_host, settings.ableton_port)
+    try:
+        actions = [ableton.to_action(call.tool, call.args) for call in req.calls]
+    except ValueError as exc:
+        _raise_api_error(status_code=400, code="invalid_call", message=str(exc))
+    execution_report, executed_at = _execute_actions(actions, approved=req.approved, dry_run=req.dry_run)
+    return {
+        "executed_count": len(actions),
+        "requires_approval": any(a.destructive for a in actions),
+        "dry_run": req.dry_run,
+        "executed_at": executed_at,
         "execution_report": execution_report,
     }
 
