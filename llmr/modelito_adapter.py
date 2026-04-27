@@ -27,6 +27,8 @@ class ModelitoClient:
         try:
             self._client = modelito.Client(provider=provider, model=model)
             self._Message = modelito.Message
+            self._normalize_models = getattr(modelito, "normalize_models", None)
+            self._normalize_metadata = getattr(modelito, "normalize_metadata", None)
         except Exception as exc:
             logging.error("Failed to initialize Modelito client: %s", exc)
             raise RuntimeError(f"Failed to initialize Modelito client: {exc}") from exc
@@ -44,15 +46,31 @@ class ModelitoClient:
     def stream(self, prompt: str) -> Iterator[str]:
         """Stream completion chunks. Falls back to summarize() when stream is unavailable."""
         messages = [self._Message(role="user", content=prompt)]
-        if not hasattr(self._client, "stream"):
-            yield self.complete(prompt).raw_text
-            return
+        stream_method = getattr(self._client, "stream", None)
+        provider_stream_method = getattr(getattr(self._client, "provider", None), "stream", None)
 
         try:
-            for chunk in self._client.stream(messages):
-                if chunk is None:
-                    continue
-                yield str(chunk)
+            if callable(stream_method):
+                yielded = False
+                for chunk in stream_method(messages):
+                    if chunk is None:
+                        continue
+                    yielded = True
+                    yield str(chunk)
+                if yielded:
+                    return
+
+            if callable(provider_stream_method):
+                yielded = False
+                for chunk in provider_stream_method(messages):
+                    if chunk is None:
+                        continue
+                    yielded = True
+                    yield str(chunk)
+                if yielded:
+                    return
+
+            yield self.complete(prompt).raw_text
         except Exception as exc:
             logging.error("Modelito stream failed: %s", exc)
             raise RuntimeError(f"Modelito stream failed: {exc}") from exc
@@ -68,15 +86,21 @@ class ModelitoClient:
             logging.error("Modelito list_models failed: %s", exc)
             raise RuntimeError(f"Modelito list_models failed: {exc}") from exc
 
-        models: list[dict[str, Any]] = []
-        for item in raw or []:
-            if isinstance(item, dict):
-                mid = str(item.get("id") or item.get("model") or "")
-                payload = {"id": mid or self.model, **item}
-            else:
-                payload = {"id": str(item)}
+        normalizer = self._normalize_models
+        if callable(normalizer):
+            models = list(normalizer(raw))
+        else:
+            models = []
+            for item in raw or []:
+                if isinstance(item, dict):
+                    mid = str(item.get("id") or item.get("model") or "")
+                    payload = {"id": mid or self.model, **item}
+                else:
+                    payload = {"id": str(item)}
+                models.append(payload)
+
+        for payload in models:
             payload.setdefault("provider", self.provider)
-            models.append(payload)
         return models
 
     def model_metadata(self, model: str | None = None) -> dict[str, Any]:
@@ -93,9 +117,16 @@ class ModelitoClient:
             logging.error("Modelito model metadata lookup failed: %s", exc)
             raise RuntimeError(f"Modelito model metadata lookup failed: {exc}") from exc
 
+        normalizer = self._normalize_metadata
+        normalized_metadata = normalizer(metadata) if callable(normalizer) else metadata
+
         return {
             "model": model_id,
             "provider": self.provider,
             "available": True,
-            "metadata": metadata if isinstance(metadata, dict) else {"value": metadata},
+            "metadata": (
+                normalized_metadata
+                if isinstance(normalized_metadata, dict)
+                else {"value": normalized_metadata}
+            ),
         }

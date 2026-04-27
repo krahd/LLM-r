@@ -1,9 +1,13 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from llmr.ableton_osc import AbletonAction
 from llmr import app as app_module
+from llmr.macros import init_macro_store
 from llmr.planner import StoredPlan
 from llmr.schemas import ToolName
+from llmr.sessions import SessionStore
 
 
 class DummyPlanner:
@@ -33,6 +37,14 @@ class DummyModelitoClient:
     def stream(self, prompt: str):
         yield f"chunk:{prompt[:5]}"
         yield "chunk:done"
+
+
+@pytest.fixture(autouse=True)
+def isolated_app_state(tmp_path):
+    app_module.store = app_module.PlanStore(persist_path=str(tmp_path / "plans.json"))
+    app_module.session_store = SessionStore(persist_path=str(tmp_path / "sessions.json"))
+    app_module._plan_session_index.clear()
+    init_macro_store(str(tmp_path / "macros.json"))
 
 
 def _build_plan(plan_id: str = "p1") -> StoredPlan:
