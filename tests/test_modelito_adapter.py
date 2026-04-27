@@ -14,7 +14,7 @@ def test_modelito_adapter_uses_real_mock_provider():
     assert metadata == {
         "model": "mock-model",
         "provider": "mock",
-        "available": True,
+        "available": False,
         "metadata": {},
     }
 

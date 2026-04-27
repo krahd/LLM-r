@@ -123,7 +123,7 @@ class ModelitoClient:
         return {
             "model": model_id,
             "provider": self.provider,
-            "available": True,
+            "available": bool(normalized_metadata),
             "metadata": (
                 normalized_metadata
                 if isinstance(normalized_metadata, dict)
