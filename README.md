@@ -51,10 +51,20 @@ LLM-r bridges **Ableton Live** and an LLM using AbletonOSC + modelito.
 - `GET /health`
 - `GET /api/capabilities`
 - `GET /api/macros`
+- `GET /api/macros/{name}`
+- `POST /api/macros` (auth if enabled)
+- `PUT /api/macros/{name}` (auth if enabled)
+- `DELETE /api/macros/{name}` (auth if enabled)
 - `POST /api/plan`
 - `POST /api/plan_macro`
+- `POST /api/stream` (SSE streaming completions)
+- `GET /api/models`
+- `GET /api/model_metadata`
 - `GET /api/plan/{plan_id}`
 - `POST /api/execute`
+- `GET /api/sessions`
+- `GET /api/sessions/{session_id}`
+- `GET /api/history`
 
 
 ## Modelito Configuration
@@ -64,6 +74,9 @@ LLM-r uses [Modelito](https://github.com/krahd/modelito) to connect to LLMs. You
 - `LLMR_PROVIDER` (e.g., `openai`, `anthropic`, `google`, `ollama`)
 - `LLMR_MODEL` (e.g., `gpt-4.1-mini`, `claude-3-sonnet`, `gemini-pro`, `llama3`)
 - `LLMR_PLAN_STORE_PATH` (default `.llmr/plans.json`)
+- `LLMR_MACRO_STORE_PATH` (default `.llmr/macros.json`)
+- `LLMR_SESSION_STORE_PATH` (default `.llmr/sessions.json`)
+- `LLMR_API_TOKEN` (optional bearer token for protected endpoints)
 - `LLMR_ABLETON_HOST`, `LLMR_ABLETON_PORT`
 
 **API keys and credentials are handled by Modelito.**
@@ -93,3 +106,8 @@ Open `http://localhost:8787`.
 ## Screenshots
 
 ![Web UI](docs/screenshots/ui-screenshot.svg)
+
+
+## GUI
+
+A minimal PyQt desktop scaffold is available at `gui/pyqt_app.py` (see `docs/GUI-PLUGIN.md`).
