@@ -16,6 +16,26 @@ class ToolName(str, Enum):
     set_track_solo = "set_track_solo"
     arm_track = "arm_track"
     fire_scene = "fire_scene"
+    song_play = "song_play"
+    song_stop = "song_stop"
+    song_continue = "song_continue"
+    song_record = "song_record"
+    song_metronome = "song_metronome"
+    song_set_time_signature = "song_set_time_signature"
+    song_set_global_quantization = "song_set_global_quantization"
+    song_set_count_in = "song_set_count_in"
+    track_rename = "track_rename"
+    track_delete = "track_delete"
+    track_duplicate = "track_duplicate"
+    track_set_pan = "track_set_pan"
+    track_set_send = "track_set_send"
+    scene_create = "scene_create"
+    scene_delete = "scene_delete"
+    scene_rename = "scene_rename"
+    clip_create = "clip_create"
+    clip_delete = "clip_delete"
+    device_get_parameters = "device_get_parameters"
+    device_set_parameter = "device_set_parameter"
 
 
 @dataclass
@@ -37,6 +57,8 @@ class Capability:
     description: str
     args_schema: dict[str, str]
     destructive: bool = False
+    domain: str = "utility"
+    safety: str = "safe"
 
 
 def parse_plan_envelope(data: dict[str, Any]) -> PlanEnvelope:

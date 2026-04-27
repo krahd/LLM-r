@@ -61,6 +61,138 @@ init_macro_store(settings.macro_store_path)
 session_store = SessionStore(persist_path=settings.session_store_path)
 _plan_session_index: dict[str, str] = {}
 
+_live_state: dict[str, Any] = {
+    "song": {
+        "tempo": 120.0,
+        "is_playing": False,
+        "session_record": False,
+        "metronome": False,
+        "time_signature": {"numerator": 4, "denominator": 4},
+        "global_quantization": 4,
+        "count_in": 1,
+    },
+    "tracks": [],
+    "scenes": [],
+}
+
+
+def _ensure_track(track_index: int) -> dict[str, Any]:
+    while len(_live_state["tracks"]) <= track_index:
+        idx = len(_live_state["tracks"])
+        _live_state["tracks"].append(
+            {
+                "track_index": idx,
+                "name": f"Track {idx + 1}",
+                "volume": 0.8,
+                "pan": 0.0,
+                "mute": False,
+                "solo": False,
+                "arm": False,
+                "sends": {},
+                "clips": [],
+                "devices": [],
+            }
+        )
+    return _live_state["tracks"][track_index]
+
+
+def _ensure_scene(scene_index: int) -> dict[str, Any]:
+    while len(_live_state["scenes"]) <= scene_index:
+        idx = len(_live_state["scenes"])
+        _live_state["scenes"].append({"scene_index": idx, "name": f"Scene {idx + 1}"})
+    return _live_state["scenes"][scene_index]
+
+
+def _apply_action_to_live_state(action) -> None:
+    tool = action.tool.value
+    args = action.args
+    song = _live_state["song"]
+
+    if tool == "set_tempo":
+        song["tempo"] = float(args[0])
+    elif tool == "song_play":
+        song["is_playing"] = True
+    elif tool == "song_stop":
+        song["is_playing"] = False
+    elif tool == "song_record":
+        song["session_record"] = bool(args[0])
+    elif tool == "song_metronome":
+        song["metronome"] = bool(args[0])
+    elif tool == "song_set_time_signature":
+        song["time_signature"] = {"numerator": int(args[0]), "denominator": int(args[1])}
+    elif tool == "song_set_global_quantization":
+        song["global_quantization"] = int(args[0])
+    elif tool == "song_set_count_in":
+        song["count_in"] = int(args[0])
+    elif tool in {"create_midi_track", "create_audio_track"}:
+        index = int(args[0])
+        if index < 0:
+            _ensure_track(len(_live_state["tracks"]))
+        else:
+            _ensure_track(index)
+    elif tool in {"set_track_volume", "set_track_mute", "set_track_solo", "arm_track", "track_set_pan"}:
+        track = _ensure_track(int(args[0]))
+        mapping = {
+            "set_track_volume": "volume",
+            "set_track_mute": "mute",
+            "set_track_solo": "solo",
+            "arm_track": "arm",
+            "track_set_pan": "pan",
+        }
+        track[mapping[tool]] = args[1]
+    elif tool == "track_set_send":
+        track = _ensure_track(int(args[0]))
+        track["sends"][int(args[1])] = float(args[2])
+    elif tool == "track_rename":
+        _ensure_track(int(args[0]))["name"] = str(args[1])
+    elif tool == "track_delete":
+        index = int(args[0])
+        if 0 <= index < len(_live_state["tracks"]):
+            _live_state["tracks"].pop(index)
+            for idx, tr in enumerate(_live_state["tracks"]):
+                tr["track_index"] = idx
+    elif tool == "track_duplicate":
+        index = int(args[0])
+        if 0 <= index < len(_live_state["tracks"]):
+            original = dict(_live_state["tracks"][index])
+            original["clips"] = [dict(c) for c in original["clips"]]
+            original["devices"] = [dict(d) for d in original["devices"]]
+            _live_state["tracks"].insert(index + 1, original)
+            for idx, tr in enumerate(_live_state["tracks"]):
+                tr["track_index"] = idx
+    elif tool == "scene_create":
+        index = int(args[0])
+        if index < 0 or index >= len(_live_state["scenes"]):
+            _ensure_scene(len(_live_state["scenes"]))
+        else:
+            _live_state["scenes"].insert(index, {"scene_index": index, "name": f"Scene {index + 1}"})
+            for idx, sc in enumerate(_live_state["scenes"]):
+                sc["scene_index"] = idx
+    elif tool == "scene_delete":
+        index = int(args[0])
+        if 0 <= index < len(_live_state["scenes"]):
+            _live_state["scenes"].pop(index)
+            for idx, sc in enumerate(_live_state["scenes"]):
+                sc["scene_index"] = idx
+    elif tool == "scene_rename":
+        _ensure_scene(int(args[0]))["name"] = str(args[1])
+    elif tool == "clip_create":
+        track = _ensure_track(int(args[0]))
+        clip_index = int(args[1])
+        while len(track["clips"]) <= clip_index:
+            track["clips"].append({"clip_index": len(track["clips"]), "length_beats": 4.0})
+        track["clips"][clip_index] = {"clip_index": clip_index, "length_beats": float(args[2])}
+    elif tool == "clip_delete":
+        track = _ensure_track(int(args[0]))
+        clip_index = int(args[1])
+        track["clips"] = [c for c in track["clips"] if c["clip_index"] != clip_index]
+    elif tool == "device_set_parameter":
+        track = _ensure_track(int(args[0]))
+        device_index = int(args[1])
+        while len(track["devices"]) <= device_index:
+            track["devices"].append({"device_index": len(track["devices"]), "name": "Device", "parameters": {}})
+        track["devices"][device_index]["parameters"][int(args[2])] = float(args[3])
+
 
 def _error_payload(
     *,
@@ -203,10 +335,36 @@ def get_capabilities() -> dict:
                 "description": c.description,
                 "args_schema": c.args_schema,
                 "destructive": c.destructive,
+                "domain": c.domain,
+                "safety": c.safety,
             }
             for c in capabilities()
         ]
     }
+
+
+@app.get("/api/live/song")
+def get_live_song_state() -> dict:
+    return {"song": _live_state["song"]}
+
+
+@app.get("/api/live/tracks")
+def get_live_tracks() -> dict:
+    return {"tracks": _live_state["tracks"], "count": len(_live_state["tracks"])}
+
+
+@app.get("/api/live/tracks/{track_id}/devices")
+def get_live_track_devices(track_id: int) -> dict:
+    if track_id < 0 or track_id >= len(_live_state["tracks"]):
+        _raise_api_error(status_code=404, code="track_not_found", message="Track not found")
+    return {"track_index": track_id, "devices": _live_state["tracks"][track_id]["devices"]}
+
+
+@app.get("/api/live/tracks/{track_id}/clips")
+def get_live_track_clips(track_id: int) -> dict:
+    if track_id < 0 or track_id >= len(_live_state["tracks"]):
+        _raise_api_error(status_code=404, code="track_not_found", message="Track not found")
+    return {"track_index": track_id, "clips": _live_state["tracks"][track_id]["clips"]}
 
 
 @app.get("/api/models")
@@ -354,11 +512,51 @@ def execute_plan(req: ExecuteRequest) -> dict:
             message="Plan includes destructive actions and requires approval",
         )
 
+    execution_report: list[dict[str, Any]] = []
     if not req.dry_run:
         ableton = AbletonOSCClient(settings.ableton_host, settings.ableton_port)
-        for action in plan.actions:
-            ableton.send(action)
+        for index, action in enumerate(plan.actions):
+            try:
+                ableton.send(action)
+                _apply_action_to_live_state(action)
+                execution_report.append(
+                    {
+                        "index": index,
+                        "tool": action.tool.value,
+                        "address": action.address,
+                        "args": action.args,
+                        "status": "sent",
+                    }
+                )
+            except Exception as exc:
+                execution_report.append(
+                    {
+                        "index": index,
+                        "tool": action.tool.value,
+                        "address": action.address,
+                        "args": action.args,
+                        "status": "failed",
+                        "error": str(exc),
+                    }
+                )
+                _raise_api_error(
+                    status_code=502,
+                    code="osc_send_failed",
+                    message="Failed sending one or more OSC actions",
+                    diagnostics={"report": execution_report},
+                )
         store.mark_executed(plan.id)
+    else:
+        for index, action in enumerate(plan.actions):
+            execution_report.append(
+                {
+                    "index": index,
+                    "tool": action.tool.value,
+                    "address": action.address,
+                    "args": action.args,
+                    "status": "dry_run",
+                }
+            )
 
     session_id = _plan_session_index.get(plan.id)
     if session_id:
@@ -388,6 +586,7 @@ def execute_plan(req: ExecuteRequest) -> dict:
             }
             for a in plan.actions
         ],
+        "execution_report": execution_report,
     }
 
 

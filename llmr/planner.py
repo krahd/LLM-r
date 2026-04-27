@@ -7,25 +7,30 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from llmr.ableton_osc import AbletonAction, AbletonOSCClient
+from llmr.ableton_osc import AbletonAction, AbletonOSCClient, capabilities
 from llmr.macros import get_macro
 from llmr.modelito_adapter import ModelitoClient
 from llmr.schemas import PlanEnvelope, PlannedToolCall, ToolName, parse_plan_envelope
 
 
-_SYSTEM_PROMPT = """You are the LLM-r planner for Ableton Live.
+
+def _system_prompt() -> str:
+    available_tools = "\n".join(
+        f'- {cap.tool.value} ({cap.domain}, safety={cap.safety}): {cap.description}; args={cap.args_schema}'
+        for cap in capabilities()
+    )
+    return f"""You are the LLM-r planner for Ableton Live.
 Return ONLY valid JSON matching schema:
-{
+{{
   "explanation": "short explanation",
   "confidence": 0.0,
   "calls": [
-    {"tool": "set_tempo", "args": {"bpm": 128}},
-    {"tool": "fire_clip", "args": {"track_index": 0, "clip_index": 0}}
+    {{"tool": "set_tempo", "args": {{"bpm": 128}}}},
+    {{"tool": "fire_clip", "args": {{"track_index": 0, "clip_index": 0}}}}
   ]
-}
+}}
 Available tools:
-create_midi_track, create_audio_track, set_tempo, fire_clip, stop_all_clips,
-set_track_volume, set_track_mute, set_track_solo, arm_track, fire_scene.
+{available_tools}
 """
 
 
@@ -168,7 +173,7 @@ class IntentPlanner:
                 ableton=self.ableton,
             )
 
-        result = self.llm.complete(f"{_SYSTEM_PROMPT}\nUser request: {user_prompt}")
+        result = self.llm.complete(f"{_system_prompt()}\nUser request: {user_prompt}")
         envelope = _parse_envelope(result.raw_text)
         return _build_stored_plan(
             prompt=user_prompt,
