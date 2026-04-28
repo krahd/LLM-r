@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from urllib import request
 
 try:
-    from PyQt6.QtCore import QTimer
+    from PyQt6.QtCore import QThread, pyqtSignal
     from PyQt6.QtWidgets import (
         QApplication,
         QCheckBox,
@@ -34,15 +32,14 @@ except Exception as exc:  # pragma: no cover
         "PyQt6 is required for the GUI. Install with: pip install PyQt6"
     ) from exc
 
-# Project root: gui/ is one level below the repo root.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _GUI_SETTINGS_PATH = Path.home() / ".llmr" / "gui.json"
-_SERVER_LOG_PATH = Path.home() / ".llmr" / "server.log"
 
 _PROVIDERS = ["openai", "anthropic", "google", "ollama", "cohere", "mistral", "other"]
 
-# How long to wait for the server to start (seconds).
-_STARTUP_TIMEOUT = 20
+# Ensure llmr is importable when running from the source tree.
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 
 # ── Local settings helpers ────────────────────────────────────────────────────
@@ -61,96 +58,35 @@ def _save_gui_settings(data: dict) -> None:
     _GUI_SETTINGS_PATH.write_text(json.dumps(data, indent=2))
 
 
-# ── Server management ─────────────────────────────────────────────────────────
+# ── Backend interface ─────────────────────────────────────────────────────────
 
-class ServerManager:
-    """Manages the lifecycle of the llm-r server subprocess."""
+class Backend:
+    """Common interface implemented by both HttpBackend and EmbeddedBackend."""
 
-    def __init__(self) -> None:
-        self._proc: subprocess.Popen | None = None
-        self._log_file = None
+    def plan(self, prompt: str) -> dict:
+        raise NotImplementedError
 
-    @property
-    def owned(self) -> bool:
-        """True when this manager launched the server (vs. it was already running)."""
-        return self._proc is not None
+    def execute(self, plan_id: str, dry_run: bool, approved: bool = False) -> dict:
+        raise NotImplementedError
 
-    def start(self, base_url: str) -> bool:
-        """Launch the server if it is not already running.
+    def get_settings(self) -> dict:
+        raise NotImplementedError
 
-        Returns True if a subprocess was started, False if the server was
-        already up (in which case we leave it alone).
-        """
-        if self._ping(base_url):
-            return False  # already running — don't touch it
-
-        cmd = self._find_command()
-        env = {**os.environ, "LLMR_HOST": "127.0.0.1"}
-
-        _SERVER_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        self._log_file = open(_SERVER_LOG_PATH, "w")  # noqa: SIM115
-
-        self._proc = subprocess.Popen(
-            cmd,
-            cwd=str(_PROJECT_ROOT),
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=self._log_file,
-            stderr=self._log_file,
-        )
-        return True
-
-    def stop(self) -> None:
-        if self._proc and self._proc.poll() is None:
-            self._proc.terminate()
-            try:
-                self._proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._proc.kill()
-        if self._log_file:
-            self._log_file.close()
-            self._log_file = None
-
-    def crashed(self) -> bool:
-        """True if we launched the server but it has since exited unexpectedly."""
-        return self._proc is not None and self._proc.poll() is not None
-
-    @staticmethod
-    def _ping(base_url: str) -> bool:
-        try:
-            request.urlopen(f"{base_url}/health", timeout=1)
-            return True
-        except Exception:
-            return False
-
-    @staticmethod
-    def _find_command() -> list[str]:
-        # PyInstaller bundle: companion binary sits next to the GUI executable.
-        if getattr(sys, "frozen", False):
-            for name in ("llm-r-server", "llm-r-server.exe"):
-                candidate = Path(sys.executable).with_name(name)
-                if candidate.exists():
-                    return [str(candidate)]
-
-        # Source layout: backend/main.py at the project root.
-        backend = _PROJECT_ROOT / "backend" / "main.py"
-        if backend.exists():
-            return [sys.executable, str(backend)]
-
-        # Fallback: invoke uvicorn directly.
-        return [sys.executable, "-m", "uvicorn", "llmr.app:app",
-                "--host", "127.0.0.1", "--port", "8787"]
+    def patch_settings(self, data: dict) -> dict:
+        raise NotImplementedError
 
 
-# ── API client ────────────────────────────────────────────────────────────────
+# ── HTTP backend ──────────────────────────────────────────────────────────────
 
-@dataclass
-class ApiClient:
-    base_url: str
-    token: str = ""
+class HttpBackend(Backend):
+    """Delegates to a running LLM-r server over HTTP."""
+
+    def __init__(self, base_url: str, token: str = "") -> None:
+        self.base_url = base_url.rstrip("/")
+        self.token = token
 
     def _request(self, method: str, path: str, payload: dict | None = None) -> dict:
-        data = json.dumps(payload).encode("utf-8") if payload is not None else None
+        data = json.dumps(payload).encode() if payload is not None else None
         req = request.Request(
             f"{self.base_url}{path}",
             data=data,
@@ -159,8 +95,8 @@ class ApiClient:
         )
         if self.token:
             req.add_header("Authorization", f"Bearer {self.token}")
-        with request.urlopen(req, timeout=15) as resp:
-            raw = resp.read().decode("utf-8")
+        with request.urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode()
             return json.loads(raw) if raw else {}
 
     def plan(self, prompt: str) -> dict:
@@ -179,25 +115,201 @@ class ApiClient:
         return self._request("PATCH", "/api/settings", data)
 
 
+# ── Embedded backend ──────────────────────────────────────────────────────────
+
+class EmbeddedBackend(Backend):
+    """Runs LLM planning and OSC execution in-process — no server needed."""
+
+    def __init__(self) -> None:
+        from llmr.config import settings
+        from llmr.macros import init_macro_store
+        from llmr.planner import PlanStore
+
+        self._settings = settings
+        self._store = PlanStore(persist_path=settings.plan_store_path)
+        init_macro_store(settings.macro_store_path)
+
+    def _build_planner(self):
+        from llmr.ableton_osc import AbletonOSCClient
+        from llmr.modelito_adapter import ModelitoClient
+        from llmr.planner import IntentPlanner
+
+        return IntentPlanner(
+            llm=ModelitoClient(
+                provider=self._settings.modelito_provider,
+                model=self._settings.modelito_model,
+            ),
+            ableton=AbletonOSCClient(
+                self._settings.ableton_host,
+                self._settings.ableton_port,
+            ),
+        )
+
+    def plan(self, prompt: str) -> dict:
+        planner = self._build_planner()
+        plan = planner.plan(prompt.strip())
+        self._store.put(plan)
+        return {
+            "plan_id": plan.id,
+            "prompt": plan.prompt,
+            "explanation": plan.explanation,
+            "confidence": plan.confidence,
+            "requires_approval": plan.requires_approval,
+            "created_at": plan.created_at,
+            "executed_at": plan.executed_at,
+            "planned_actions": [
+                {
+                    "tool": a.tool.value,
+                    "address": a.address,
+                    "args": a.args,
+                    "description": a.description,
+                    "destructive": a.destructive,
+                }
+                for a in plan.actions
+            ],
+            "llm_raw": plan.llm_raw,
+        }
+
+    def execute(self, plan_id: str, dry_run: bool, approved: bool = False) -> dict:
+        from llmr.executor import execute_actions
+
+        plan = self._store.get(plan_id)
+        if plan is None:
+            raise ValueError("Plan not found or expired")
+        if plan.executed_at:
+            raise ValueError("Plan already executed")
+
+        try:
+            report, _ = execute_actions(
+                plan.actions,
+                ableton_host=self._settings.ableton_host,
+                ableton_port=self._settings.ableton_port,
+                approved=approved,
+                dry_run=dry_run,
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+
+        if not dry_run:
+            plan = self._store.mark_executed(plan.id) or plan
+
+        return {
+            "plan_id": plan.id,
+            "dry_run": dry_run,
+            "executed_at": plan.executed_at,
+            "requires_approval": plan.requires_approval,
+            "executed_count": len(plan.actions),
+            "execution_report": report,
+        }
+
+    def get_settings(self) -> dict:
+        s = self._settings
+        return {
+            "modelito_provider": s.modelito_provider,
+            "modelito_model": s.modelito_model,
+            "ableton_host": s.ableton_host,
+            "ableton_port": int(s.ableton_port),
+        }
+
+    def patch_settings(self, data: dict) -> dict:
+        s = self._settings
+        if data.get("modelito_provider"):
+            s.modelito_provider = data["modelito_provider"]
+        if data.get("modelito_model"):
+            s.modelito_model = data["modelito_model"]
+        if data.get("ableton_host"):
+            s.ableton_host = data["ableton_host"]
+        if data.get("ableton_port"):
+            s.ableton_port = int(data["ableton_port"])
+        if "api_token" in data:
+            s.api_token = data.get("api_token") or ""
+        s.save()
+        return self.get_settings()
+
+
+# ── Backend selection ─────────────────────────────────────────────────────────
+
+def _ping(url: str) -> bool:
+    try:
+        request.urlopen(f"{url.rstrip('/')}/health", timeout=1)
+        return True
+    except Exception:
+        return False
+
+
+def _choose_backend(base_url: str, token: str) -> tuple[Backend, str]:
+    """Return (backend, status_text). Prefers a live server; falls back to embedded."""
+    if _ping(base_url):
+        return HttpBackend(base_url=base_url, token=token), f"Server: {base_url}"
+    return EmbeddedBackend(), "Embedded mode"
+
+
+# ── Background workers ────────────────────────────────────────────────────────
+
+class _PlanWorker(QThread):
+    finished: pyqtSignal = pyqtSignal(dict)
+    error: pyqtSignal = pyqtSignal(str)
+
+    def __init__(self, backend: Backend, prompt: str) -> None:
+        super().__init__()
+        self._backend = backend
+        self._prompt = prompt
+
+    def run(self) -> None:
+        try:
+            self.finished.emit(self._backend.plan(self._prompt))
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class _ExecuteWorker(QThread):
+    finished: pyqtSignal = pyqtSignal(dict)
+    error: pyqtSignal = pyqtSignal(str)
+
+    def __init__(
+        self, backend: Backend, plan_id: str, dry_run: bool, approved: bool,
+    ) -> None:
+        super().__init__()
+        self._backend = backend
+        self._plan_id = plan_id
+        self._dry_run = dry_run
+        self._approved = approved
+
+    def run(self) -> None:
+        try:
+            self.finished.emit(
+                self._backend.execute(self._plan_id, self._dry_run, self._approved)
+            )
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
 # ── Settings dialog ───────────────────────────────────────────────────────────
 
 class SettingsDialog(QDialog):
-    def __init__(self, client: ApiClient, cached: dict, parent=None) -> None:
+    def __init__(self, backend: Backend, cached: dict, parent=None) -> None:
         super().__init__(parent)
-        self.client = client
+        self._backend = backend
         self.setWindowTitle("LLM-r Settings")
         self.setMinimumWidth(440)
 
         outer = QVBoxLayout()
 
-        conn_box = QGroupBox("Connection")
+        conn_box = QGroupBox("Server Connection")
         conn_form = QFormLayout()
-        self.url_edit = QLineEdit(client.base_url)
-        self.token_edit = QLineEdit(client.token)
+        self.url_edit = QLineEdit(cached.get("base_url", "http://127.0.0.1:8787"))
+        self.token_edit = QLineEdit(cached.get("token", ""))
         self.token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.token_edit.setPlaceholderText("leave empty to disable auth")
+        note = QLabel(
+            "When a server is reachable at this URL the GUI connects to it;"
+            " otherwise it runs embedded."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color: gray; font-size: 11px;")
         conn_form.addRow("Server URL:", self.url_edit)
         conn_form.addRow("API Token:", self.token_edit)
+        conn_form.addRow(note)
         conn_box.setLayout(conn_form)
 
         llm_box = QGroupBox("LLM Provider")
@@ -240,13 +352,13 @@ class SettingsDialog(QDialog):
         self.ableton_host_edit.setText(cached.get("ableton_host", "127.0.0.1"))
         self.ableton_port_spin.setValue(int(cached.get("ableton_port", 11000)))
         try:
-            live = self.client.get_settings()
+            live = self._backend.get_settings()
             self.provider_combo.setCurrentText(live.get("modelito_provider", "openai"))
             self.model_edit.setText(live.get("modelito_model", ""))
             self.ableton_host_edit.setText(live.get("ableton_host", "127.0.0.1"))
             self.ableton_port_spin.setValue(int(live.get("ableton_port", 11000)))
         except Exception:
-            pass  # server not reachable yet — keep cached values
+            pass  # keep cached values if backend is unreachable
 
     def values(self) -> dict:
         return {
@@ -266,15 +378,17 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("LLM-r")
 
-        gui_cfg = _load_gui_settings()
-        self.client = ApiClient(
-            base_url=gui_cfg.get("base_url", os.getenv("LLMR_GUI_API_URL", "http://127.0.0.1:8787")),
-            token=gui_cfg.get("token", os.getenv("LLMR_GUI_API_TOKEN", "")),
-        )
-        self._gui_cfg = gui_cfg
+        self._gui_cfg = _load_gui_settings()
         self.last_plan_id = ""
+        self._worker: QThread | None = None
 
-        # ── Layout ────────────────────────────────────────────────────────
+        base_url = self._gui_cfg.get(
+            "base_url", os.getenv("LLMR_GUI_API_URL", "http://127.0.0.1:8787")
+        )
+        token = self._gui_cfg.get("token", os.getenv("LLMR_GUI_API_TOKEN", ""))
+        self._backend, mode = _choose_backend(base_url, token)
+
+        # ── Layout ─────────────────────────────────────────────────────────
         root = QWidget()
         layout = QVBoxLayout()
 
@@ -298,7 +412,7 @@ class MainWindow(QMainWindow):
         self.output = QTextEdit()
         self.output.setReadOnly(True)
 
-        self._status_label = QLabel()
+        self._status_label = QLabel(mode)
 
         layout.addWidget(QLabel("Prompt"))
         layout.addWidget(self.prompt)
@@ -316,96 +430,87 @@ class MainWindow(QMainWindow):
         self.execute_btn.clicked.connect(self.on_execute)
         settings_btn.clicked.connect(self.on_settings)
 
-        # ── Server startup ────────────────────────────────────────────────
-        self._server = ServerManager()
-        self._startup_elapsed = 0
-        self._startup_timer = QTimer(self)
-        self._startup_timer.setInterval(500)
-        self._startup_timer.timeout.connect(self._poll_server)
+        self.execute_btn.setEnabled(False)
 
-        self._set_ready(False)
-        already_up = not self._server.start(self.client.base_url)
-        if already_up:
-            self._set_ready(True)
-        else:
-            self._status_label.setText("Starting server…")
-            self._startup_timer.start()
-
-    # ── Server state ──────────────────────────────────────────────────────────
-
-    def _poll_server(self) -> None:
-        self._startup_elapsed += self._startup_timer.interval()
-
-        if self._server.crashed():
-            self._startup_timer.stop()
-            self._status_label.setText("Server failed to start — check ~/.llmr/server.log")
-            QMessageBox.critical(
-                self, "Server error",
-                f"The server process exited unexpectedly.\n\nSee {_SERVER_LOG_PATH} for details.",
-            )
-            return
-
-        if ServerManager._ping(self.client.base_url):
-            self._startup_timer.stop()
-            self._set_ready(True)
-            return
-
-        if self._startup_elapsed >= _STARTUP_TIMEOUT * 1000:
-            self._startup_timer.stop()
-            self._status_label.setText("Server not responding — check ~/.llmr/server.log")
-            QMessageBox.critical(
-                self, "Server error",
-                f"Server did not respond within {_STARTUP_TIMEOUT}s.\n\nSee {_SERVER_LOG_PATH} for details.",
-            )
-
-    def _set_ready(self, ready: bool) -> None:
-        self.plan_btn.setEnabled(ready)
-        self.execute_btn.setEnabled(ready and bool(self.last_plan_id))
-        if ready:
-            self._status_label.setText("Server ready")
-
-    # ── UI handlers ───────────────────────────────────────────────────────────
+    # ── UI helpers ────────────────────────────────────────────────────────────
 
     def _show_output(self, payload: dict) -> None:
         self.output.setPlainText(json.dumps(payload, indent=2))
+
+    def _set_busy(self, busy: bool) -> None:
+        self.plan_btn.setEnabled(not busy)
+        self.execute_btn.setEnabled(not busy and bool(self.last_plan_id))
+
+    # ── Plan ──────────────────────────────────────────────────────────────────
 
     def on_plan(self) -> None:
         prompt = self.prompt.toPlainText().strip()
         if not prompt:
             QMessageBox.warning(self, "Missing prompt", "Please enter a prompt first.")
             return
-        try:
-            payload = self.client.plan(prompt)
-            self.last_plan_id = payload.get("plan_id", "")
-            self.plan_id.setText(self.last_plan_id)
-            self.execute_btn.setEnabled(bool(self.last_plan_id))
-            self._show_output(payload)
-        except Exception as exc:
-            QMessageBox.critical(self, "Plan failed", str(exc))
+        self._set_busy(True)
+        self._status_label.setText("Planning…")
+        self._worker = _PlanWorker(self._backend, prompt)
+        self._worker.finished.connect(self._on_plan_done)
+        self._worker.error.connect(self._on_error)
+        self._worker.finished.connect(self._worker.deleteLater)
+        self._worker.start()
+
+    def _on_plan_done(self, payload: dict) -> None:
+        self.last_plan_id = payload.get("plan_id", "")
+        self.plan_id.setText(self.last_plan_id)
+        self._show_output(payload)
+        self._set_busy(False)
+        self._status_label.setText("Plan ready — review and execute")
+
+    # ── Execute ───────────────────────────────────────────────────────────────
 
     def on_execute(self) -> None:
         if not self.last_plan_id:
             QMessageBox.warning(self, "Missing plan", "Create a plan first.")
             return
-        try:
-            payload = self.client.execute(self.last_plan_id, dry_run=self.dry_run.isChecked())
-            self._show_output(payload)
-        except Exception as exc:
-            QMessageBox.critical(self, "Execute failed", str(exc))
+        self._set_busy(True)
+        self._status_label.setText("Executing…")
+        self._worker = _ExecuteWorker(
+            self._backend,
+            self.last_plan_id,
+            dry_run=self.dry_run.isChecked(),
+            approved=False,
+        )
+        self._worker.finished.connect(self._on_execute_done)
+        self._worker.error.connect(self._on_error)
+        self._worker.finished.connect(self._worker.deleteLater)
+        self._worker.start()
+
+    def _on_execute_done(self, payload: dict) -> None:
+        self._show_output(payload)
+        self._set_busy(False)
+        label = "Dry run complete" if payload.get("dry_run") else "Executed"
+        self._status_label.setText(label)
+
+    # ── Error ─────────────────────────────────────────────────────────────────
+
+    def _on_error(self, message: str) -> None:
+        self._set_busy(False)
+        self._status_label.setText("Error")
+        QMessageBox.critical(self, "Error", message)
+
+    # ── Settings ──────────────────────────────────────────────────────────────
 
     def on_settings(self) -> None:
-        dlg = SettingsDialog(self.client, self._gui_cfg, parent=self)
+        dlg = SettingsDialog(self._backend, self._gui_cfg, parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         vals = dlg.values()
-
-        self.client.base_url = vals["base_url"]
-        self.client.token = vals["token"]
         self._gui_cfg = {**vals}
         _save_gui_settings(self._gui_cfg)
 
+        # Re-detect backend: if the new URL has a live server, switch to HTTP.
+        self._backend, mode = _choose_backend(vals["base_url"], vals["token"])
+        self._status_label.setText(mode)
+
         try:
-            self.client.patch_settings({
+            self._backend.patch_settings({
                 "modelito_provider": vals["provider"],
                 "modelito_model": vals["model"],
                 "ableton_host": vals["ableton_host"],
@@ -415,15 +520,8 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(
                 self, "Settings",
-                f"Connection settings saved.\n\n"
-                f"Could not push LLM/Ableton settings to the server:\n{exc}",
+                f"Connection settings saved.\n\nCould not push LLM/Ableton settings:\n{exc}",
             )
-
-    def closeEvent(self, event) -> None:
-        self._startup_timer.stop()
-        if self._server.owned:
-            self._server.stop()
-        event.accept()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

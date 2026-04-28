@@ -15,6 +15,7 @@ from pathlib import Path
 from llmr import __version__
 from llmr.ableton_osc import AbletonOSCClient, capabilities
 from llmr.config import settings
+from llmr.executor import execute_actions as _run_actions
 from llmr.macros import (
     delete_runtime_macro,
     init_macro_store,
@@ -212,61 +213,26 @@ def _apply_action_to_live_state(action) -> None:
 
 
 def _execute_actions(actions: list[Any], *, approved: bool, dry_run: bool) -> tuple[list[dict[str, Any]], str | None]:
-    requires_approval = any(a.destructive for a in actions)
-    if requires_approval and not approved:
-        _raise_api_error(
-            status_code=400,
-            code="approval_required",
-            message="Plan includes destructive actions and requires approval",
+    try:
+        report, executed_at = _run_actions(
+            actions,
+            ableton_host=settings.ableton_host,
+            ableton_port=settings.ableton_port,
+            approved=approved,
+            dry_run=dry_run,
         )
+    except PermissionError as exc:
+        _raise_api_error(status_code=400, code="approval_required", message=str(exc))
+        return [], None  # unreachable
+    except RuntimeError as exc:
+        _raise_api_error(status_code=502, code="osc_send_failed", message=str(exc))
+        return [], None  # unreachable
 
-    execution_report: list[dict[str, Any]] = []
-    executed_at: str | None = None
     if not dry_run:
-        ableton = AbletonOSCClient(settings.ableton_host, settings.ableton_port)
-        for index, action in enumerate(actions):
-            try:
-                ableton.send(action)
-                _apply_action_to_live_state(action)
-                execution_report.append(
-                    {
-                        "index": index,
-                        "tool": action.tool.value,
-                        "address": action.address,
-                        "args": action.args,
-                        "status": "sent",
-                    }
-                )
-            except Exception as exc:
-                execution_report.append(
-                    {
-                        "index": index,
-                        "tool": action.tool.value,
-                        "address": action.address,
-                        "args": action.args,
-                        "status": "failed",
-                        "error": str(exc),
-                    }
-                )
-                _raise_api_error(
-                    status_code=502,
-                    code="osc_send_failed",
-                    message="Failed sending one or more OSC actions",
-                    diagnostics={"report": execution_report},
-                )
-        executed_at = datetime.now(timezone.utc).isoformat()
-    else:
-        for index, action in enumerate(actions):
-            execution_report.append(
-                {
-                    "index": index,
-                    "tool": action.tool.value,
-                    "address": action.address,
-                    "args": action.args,
-                    "status": "dry_run",
-                }
-            )
-    return execution_report, executed_at
+        for action in actions:
+            _apply_action_to_live_state(action)
+
+    return report, executed_at
 
 
 def _error_payload(
