@@ -1,4 +1,4 @@
-LLM-r: Ableton Live + LLM bridge powered by Modelito (AbletonOSC automation)
+LLM-r is an Ableton Live LLM bridge (AbletonOSC automation)
 
 Topics: llm, ableton, modelito, osc, music, automation, plugin, python
 # Repository About Box (GitHub)

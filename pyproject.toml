@@ -1,7 +1,7 @@
 [project]
 name = "llm-r"
 version = "1.5.3"
-description = "LLM-r: Ableton Live + LLM bridge powered by modelito"
+description = "LLM-r is an Ableton Live LLM bridge"
 requires-python = ">=3.11"
 authors = [ { name = "Tomas Laurenzo" } ]
 dependencies = [

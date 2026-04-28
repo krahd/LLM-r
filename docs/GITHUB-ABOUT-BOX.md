@@ -2,7 +2,7 @@
 
 Short description (one line):
 
-LLM-r: Ableton Live + LLM bridge powered by Modelito (AbletonOSC automation)
+LLM-r is an Ableton Live LLM bridge (AbletonOSC automation)
 
 Long description (2–3 sentences):
 
@@ -22,7 +22,7 @@ Suggested topics (copy into GitHub topics):
 Usage (quick): paste the short description into the repository About box. To set programmatically with the GitHub CLI:
 
 ```bash
-gh repo edit --description "LLM-r: Ableton Live + LLM bridge powered by Modelito"
+gh repo edit --description "LLM-r is an Ableton Live LLM bridge"
 gh repo edit --add-topic llm --add-topic ableton --add-topic modelito --add-topic osc --add-topic music --add-topic automation --add-topic plugin
 ```
 # GitHub About Box

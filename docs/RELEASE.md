@@ -38,7 +38,7 @@ If you have the GitHub CLI (`gh`) installed and authenticated, you can update th
 
 ```bash
 # set a short description
-gh repo edit --description "LLM-r: Ableton Live + LLM bridge powered by Modelito"
+gh repo edit --description "LLM-r is an Ableton Live LLM bridge"
 
 # add recommended topics (run multiple times or use multiple --add-topic flags)
 gh repo edit --add-topic llm --add-topic ableton --add-topic modelito --add-topic osc --add-topic music --add-topic automation --add-topic plugin
