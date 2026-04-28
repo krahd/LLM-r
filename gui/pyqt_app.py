@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib import request
 
 try:
-    from PyQt6.QtCore import QThread, pyqtSignal
+    from PyQt6.QtCore import QThread, Qt, pyqtSignal
     from PyQt6.QtWidgets import (
         QApplication,
         QCheckBox,
@@ -284,6 +286,27 @@ class _ExecuteWorker(QThread):
             self.error.emit(str(exc))
 
 
+# ── Server start watcher ──────────────────────────────────────────────────────
+
+class _ServerStartWatcher(QThread):
+    ready: pyqtSignal = pyqtSignal()
+    failed: pyqtSignal = pyqtSignal(str)
+
+    def __init__(self, url: str, timeout: int = 20) -> None:
+        super().__init__()
+        self._url = url
+        self._timeout = timeout
+
+    def run(self) -> None:
+        deadline = time.monotonic() + self._timeout
+        while time.monotonic() < deadline:
+            if _ping(self._url):
+                self.ready.emit()
+                return
+            time.sleep(0.4)
+        self.failed.emit("Server did not respond within timeout")
+
+
 # ── Settings dialog ───────────────────────────────────────────────────────────
 
 class SettingsDialog(QDialog):
@@ -381,11 +404,14 @@ class MainWindow(QMainWindow):
         self._gui_cfg = _load_gui_settings()
         self.last_plan_id = ""
         self._worker: QThread | None = None
+        self._server_proc: subprocess.Popen | None = None
+        self._server_watcher: _ServerStartWatcher | None = None
 
         base_url = self._gui_cfg.get(
             "base_url", os.getenv("LLMR_GUI_API_URL", "http://127.0.0.1:8787")
         )
         token = self._gui_cfg.get("token", os.getenv("LLMR_GUI_API_TOKEN", ""))
+        self._server_url = base_url
         self._backend, mode = _choose_backend(base_url, token)
 
         # ── Layout ─────────────────────────────────────────────────────────
@@ -414,6 +440,18 @@ class MainWindow(QMainWindow):
 
         self._status_label = QLabel(mode)
 
+        # ── Server control ─────────────────────────────────────────────────
+        server_box = QGroupBox("Server")
+        server_row = QHBoxLayout()
+        self._server_status = QLabel()
+        self._server_status.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self._start_server_btn = QPushButton("Start Server")
+        self._stop_server_btn = QPushButton("Stop Server")
+        server_row.addWidget(self._server_status, stretch=1)
+        server_row.addWidget(self._start_server_btn)
+        server_row.addWidget(self._stop_server_btn)
+        server_box.setLayout(server_row)
+
         layout.addWidget(QLabel("Prompt"))
         layout.addWidget(self.prompt)
         layout.addLayout(button_row)
@@ -421,6 +459,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.plan_id)
         layout.addWidget(QLabel("Response"))
         layout.addWidget(self.output)
+        layout.addWidget(server_box)
         layout.addWidget(self._status_label)
 
         root.setLayout(layout)
@@ -429,6 +468,9 @@ class MainWindow(QMainWindow):
         self.plan_btn.clicked.connect(self.on_plan)
         self.execute_btn.clicked.connect(self.on_execute)
         settings_btn.clicked.connect(self.on_settings)
+        self._start_server_btn.clicked.connect(self.on_start_server)
+        self._stop_server_btn.clicked.connect(self.on_stop_server)
+        self._update_server_buttons()
 
         self.execute_btn.setEnabled(False)
 
@@ -495,6 +537,68 @@ class MainWindow(QMainWindow):
         self._status_label.setText("Error")
         QMessageBox.critical(self, "Error", message)
 
+    # ── Server control ────────────────────────────────────────────────────────
+
+    def _update_server_buttons(self) -> None:
+        running = self._server_proc is not None and self._server_proc.poll() is None
+        self._start_server_btn.setEnabled(not running)
+        self._stop_server_btn.setEnabled(running)
+        if running:
+            self._server_status.setText(f"Running at {self._server_url}")
+        elif _ping(self._server_url):
+            self._server_status.setText(f"External server at {self._server_url}")
+            self._start_server_btn.setEnabled(False)
+            self._stop_server_btn.setEnabled(False)
+        else:
+            self._server_status.setText("Not running — GUI using embedded mode")
+
+    def on_start_server(self) -> None:
+        self._start_server_btn.setEnabled(False)
+        self._server_status.setText("Starting…")
+        backend_script = _PROJECT_ROOT / "backend" / "main.py"
+        self._server_proc = subprocess.Popen(
+            [sys.executable, str(backend_script)],
+            cwd=str(_PROJECT_ROOT),
+        )
+        self._server_watcher = _ServerStartWatcher(self._server_url)
+        self._server_watcher.ready.connect(self._on_server_ready)
+        self._server_watcher.failed.connect(self._on_server_failed)
+        self._server_watcher.finished.connect(self._server_watcher.deleteLater)
+        self._server_watcher.start()
+
+    def _on_server_ready(self) -> None:
+        self._backend, mode = _choose_backend(self._server_url, self._gui_cfg.get("token", ""))
+        self._status_label.setText(mode)
+        self._update_server_buttons()
+
+    def _on_server_failed(self, message: str) -> None:
+        self._server_status.setText(f"Failed: {message}")
+        if self._server_proc and self._server_proc.poll() is None:
+            self._server_proc.terminate()
+        self._server_proc = None
+        self._update_server_buttons()
+
+    def on_stop_server(self) -> None:
+        if self._server_proc and self._server_proc.poll() is None:
+            self._server_proc.terminate()
+            try:
+                self._server_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._server_proc.kill()
+        self._server_proc = None
+        self._backend, mode = _choose_backend(self._server_url, self._gui_cfg.get("token", ""))
+        self._status_label.setText(mode)
+        self._update_server_buttons()
+
+    def closeEvent(self, event) -> None:
+        if self._server_proc and self._server_proc.poll() is None:
+            self._server_proc.terminate()
+            try:
+                self._server_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._server_proc.kill()
+        super().closeEvent(event)
+
     # ── Settings ──────────────────────────────────────────────────────────────
 
     def on_settings(self) -> None:
@@ -506,8 +610,10 @@ class MainWindow(QMainWindow):
         _save_gui_settings(self._gui_cfg)
 
         # Re-detect backend: if the new URL has a live server, switch to HTTP.
-        self._backend, mode = _choose_backend(vals["base_url"], vals["token"])
+        self._server_url = vals["base_url"]
+        self._backend, mode = _choose_backend(self._server_url, vals["token"])
         self._status_label.setText(mode)
+        self._update_server_buttons()
 
         try:
             self._backend.patch_settings({
