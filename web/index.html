@@ -3,24 +3,29 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LLM-r v1.5</title>
+  <title>LLM-r</title>
   <style>
     body { font-family: Inter, system-ui, sans-serif; background: #0b1020; color: #f8fafc; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
-    textarea, pre { width: 100%; background: #111827; color: #f8fafc; border: 1px solid #374151; border-radius: 8px; padding: 12px; }
-    textarea { min-height: 120px; }
-    .row { display: flex; gap: 10px; align-items: center; margin: .7rem 0; }
+    textarea, pre { width: 100%; background: #111827; color: #f8fafc; border: 1px solid #374151; border-radius: 8px; padding: 12px; box-sizing: border-box; }
+    textarea { min-height: 120px; resize: vertical; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+    .row { display: flex; gap: 10px; align-items: center; margin: .7rem 0; flex-wrap: wrap; }
     button { background: #22c55e; border: 0; color: #052e16; font-weight: 700; padding: .7rem 1rem; border-radius: 8px; cursor: pointer; }
     button.secondary { background: #93c5fd; color: #0c4a6e; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .error { color: #f87171; }
+    .char-count { font-size: .8rem; color: #6b7280; }
   </style>
 </head>
 <body>
-  <h1>LLM-r 1.5</h1>
-  <p>Plan first, inspect/audit, then execute (or dry-run) with safety approval for destructive actions.</p>
+  <h1>LLM-r</h1>
+  <p>Plan first, inspect, then execute (or dry-run). Destructive actions require explicit approval.</p>
 
-  <textarea id="prompt" placeholder="Example: Set tempo to 126, arm track 0, fire scene 1."></textarea>
+  <textarea id="prompt" maxlength="2000" placeholder="Example: Set tempo to 126, arm track 0, fire scene 1."></textarea>
+  <div class="char-count"><span id="charCount">0</span> / 2000</div>
   <div class="row">
     <button id="planBtn">1) Create Plan</button>
-    <button id="execBtn" class="secondary">2) Execute Plan</button>
+    <button id="execBtn" class="secondary" disabled>2) Execute Plan</button>
     <label><input type="checkbox" id="approve" /> Approve destructive actions</label>
     <label><input type="checkbox" id="dry" /> Dry run (no OSC send)</label>
   </div>
@@ -30,50 +35,95 @@
   <h3>Result</h3>
   <pre id="out">(waiting)</pre>
   <h3>Capabilities</h3>
-  <pre id="caps">(loading)</pre>
+  <pre id="caps">(loading…)</pre>
   <h3>Macros</h3>
-  <pre id="macros">(loading)</pre>
+  <pre id="macros">(loading…)</pre>
 
   <script>
     let currentPlanId = null;
     const out = document.getElementById('out');
     const planid = document.getElementById('planid');
+    const planBtn = document.getElementById('planBtn');
+    const execBtn = document.getElementById('execBtn');
+
+    document.getElementById('prompt').addEventListener('input', function () {
+      document.getElementById('charCount').textContent = this.value.length;
+    });
+
+    async function apiFetch(path, options) {
+      try {
+        const r = await fetch(path, options);
+        const data = await r.json();
+        if (!r.ok) {
+          const msg = data?.error?.message || data?.detail || r.statusText;
+          throw new Error(`${r.status} ${msg}`);
+        }
+        return data;
+      } catch (err) {
+        throw err instanceof Error ? err : new Error(String(err));
+      }
+    }
 
     async function loadCaps() {
-      const r = await fetch('/api/capabilities');
-      document.getElementById('caps').textContent = JSON.stringify(await r.json(), null, 2);
+      try {
+        const data = await apiFetch('/api/capabilities');
+        document.getElementById('caps').textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById('caps').innerHTML = `<span class="error">Failed to load: ${err.message}</span>`;
+      }
     }
 
     async function loadMacros() {
-      const r = await fetch('/api/macros');
-      document.getElementById('macros').textContent = JSON.stringify(await r.json(), null, 2);
+      try {
+        const data = await apiFetch('/api/macros');
+        document.getElementById('macros').textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById('macros').innerHTML = `<span class="error">Failed to load: ${err.message}</span>`;
+      }
     }
 
-    document.getElementById('planBtn').addEventListener('click', async () => {
-      out.textContent = 'Planning...';
-      const prompt = document.getElementById('prompt').value;
-      const r = await fetch('/api/plan', {
-        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt })
-      });
-      const data = await r.json();
-      currentPlanId = data.plan_id || null;
-      planid.textContent = currentPlanId || '(none)';
-      out.textContent = JSON.stringify(data, null, 2);
+    planBtn.addEventListener('click', async () => {
+      const prompt = document.getElementById('prompt').value.trim();
+      if (!prompt) { out.textContent = 'Enter a prompt first.'; return; }
+      planBtn.disabled = true;
+      out.textContent = 'Planning…';
+      try {
+        const data = await apiFetch('/api/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        });
+        currentPlanId = data.plan_id || null;
+        planid.textContent = currentPlanId || '(none)';
+        execBtn.disabled = !currentPlanId;
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        out.innerHTML = `<span class="error">Plan failed: ${err.message}</span>`;
+      } finally {
+        planBtn.disabled = false;
+      }
     });
 
-    document.getElementById('execBtn').addEventListener('click', async () => {
-      out.textContent = 'Executing...';
-      if (!currentPlanId) {
-        out.textContent = 'Create a plan first.';
-        return;
+    execBtn.addEventListener('click', async () => {
+      if (!currentPlanId) { out.textContent = 'Create a plan first.'; return; }
+      execBtn.disabled = true;
+      out.textContent = 'Executing…';
+      try {
+        const data = await apiFetch('/api/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            plan_id: currentPlanId,
+            approved: document.getElementById('approve').checked,
+            dry_run: document.getElementById('dry').checked,
+          }),
+        });
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        out.innerHTML = `<span class="error">Execute failed: ${err.message}</span>`;
+      } finally {
+        execBtn.disabled = false;
       }
-      const approved = document.getElementById('approve').checked;
-      const dry_run = document.getElementById('dry').checked;
-      const r = await fetch('/api/execute', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ plan_id: currentPlanId, approved, dry_run })
-      });
-      out.textContent = JSON.stringify(await r.json(), null, 2);
     });
 
     loadCaps();

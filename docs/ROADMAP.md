@@ -1,19 +1,29 @@
-# LLM-r Roadmap
+# Roadmap
+
+## Done
+
+- Editable macros — full CRUD via `POST/PUT/DELETE /api/macros`
+- Optional API token authentication (`LLMR_API_TOKEN`)
+- Settings GUI — provider, model, Ableton host/port editable at runtime
+- Server auto-launch from the desktop GUI (single-app experience)
+- Persistent plan, macro, and session storage
+- Dry-run and destructive-action approval gates
+- SSE streaming endpoint (`POST /api/stream`)
+- Live state introspection (`GET /api/live/*`)
 
 ## Near-term
-- Harden Modelito integration and provider/model configuration
-- Add more tests (API, error cases, macro expansion)
-- Improve documentation (Modelito, macros, security, GitHub repository metadata)
-- Plan and prototype GUI plugin (Ableton/desktop)
+
+- More test coverage (API edge cases, macro expansion, error paths)
+- Community macro contributions
 
 ## Mid-term
-- Editable macros (runtime add/edit/delete)
-- Optional authentication for API endpoints
-- More LLM providers (expand Modelito support)
-- Enhanced error handling and logging
+
+- Full-featured desktop GUI (beyond the current scaffold)
+- Ableton-integrated plugin (Max for Live or Control Surface)
+- Enhanced error reporting and structured logging
 
 ## Long-term
-- Full-featured GUI plugin (Ableton device and/or desktop app)
-- User/session management
-- Advanced automation and composition workflows
-- Community macro sharing
+
+- Advanced composition workflows (multi-step, conditional, context-aware)
+- Session recall and project state snapshots
+- Community macro sharing / registry

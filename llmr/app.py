@@ -10,6 +10,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from pathlib import Path
+
+from llmr import __version__
 from llmr.ableton_osc import AbletonOSCClient, capabilities
 from llmr.config import settings
 from llmr.macros import (
@@ -41,13 +44,13 @@ class ExecuteRequest(BaseModel):
     dry_run: bool = False
 
 
-class ExecuteCallInput(BaseModel):
+class ToolCallInput(BaseModel):
     tool: ToolName
     args: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExecuteBatchRequest(BaseModel):
-    calls: list[ExecuteCallInput] = Field(default_factory=list)
+    calls: list[ToolCallInput] = Field(default_factory=list)
     approved: bool = False
     dry_run: bool = False
 
@@ -56,14 +59,9 @@ class StreamRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
 
 
-class MacroCallInput(BaseModel):
-    tool: ToolName
-    args: dict[str, Any] = Field(default_factory=dict)
-
-
 class MacroMutationRequest(BaseModel):
     name: str = Field(min_length=1, max_length=128)
-    calls: list[MacroCallInput] = Field(default_factory=list)
+    calls: list[ToolCallInput] = Field(default_factory=list)
 
 
 class SettingsPatch(BaseModel):
@@ -74,7 +72,7 @@ class SettingsPatch(BaseModel):
     api_token: str | None = None
 
 
-app = FastAPI(title="LLM-r", version="1.5.0")
+app = FastAPI(title="LLM-r", version=__version__)
 store = PlanStore(persist_path=settings.plan_store_path)
 init_macro_store(settings.macro_store_path)
 session_store = SessionStore(persist_path=settings.session_store_path)
@@ -394,13 +392,18 @@ def _require_auth(authorization: str | None = Header(default=None)) -> None:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "version": "1.5.0"}
+    return {"status": "ok", "version": __version__}
+
+
+_WEB_ROOT = Path(__file__).parent.parent / "web"
 
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
-    with open("web/index.html", "r", encoding="utf-8") as f:
-        return f.read()
+    html = _WEB_ROOT / "index.html"
+    if not html.exists():
+        return "<h1>LLM-r</h1><p>Web UI not found.</p>"
+    return html.read_text(encoding="utf-8")
 
 
 @app.get("/api/capabilities")
@@ -648,24 +651,12 @@ def execute_plan(req: ExecuteRequest) -> dict:
     if plan.executed_at:
         _raise_api_error(status_code=409, code="plan_already_executed", message="Plan already executed")
 
-    execution_report, executed_at = _execute_actions(plan.actions, approved=req.approved, dry_run=req.dry_run)
+    execution_report, _ = _execute_actions(plan.actions, approved=req.approved, dry_run=req.dry_run)
     if not req.dry_run:
-        store.mark_executed(plan.id)
-    else:
-        for index, action in enumerate(plan.actions):
-            execution_report.append(
-                {
-                    "index": index,
-                    "tool": action.tool.value,
-                    "address": action.address,
-                    "args": action.args,
-                    "status": "dry_run",
-                }
-            )
+        plan = store.mark_executed(plan.id) or plan
 
-    session_id = _plan_session_index.get(plan.id)
+    session_id = _plan_session_index.pop(plan.id, None)
     if session_id:
-        updated = store.get(plan.id)
         session_store.add_history(
             session_id,
             plan_id=plan.id,
@@ -673,7 +664,7 @@ def execute_plan(req: ExecuteRequest) -> dict:
             explanation=plan.explanation,
             confidence=plan.confidence,
             created_at=plan.created_at,
-            executed_at=updated.executed_at if updated else None,
+            executed_at=plan.executed_at,
         )
 
     return {
@@ -681,7 +672,7 @@ def execute_plan(req: ExecuteRequest) -> dict:
         "executed_count": len(plan.actions),
         "requires_approval": plan.requires_approval,
         "dry_run": req.dry_run,
-        "executed_at": executed_at if req.dry_run else (store.get(plan.id).executed_at if store.get(plan.id) else None),
+        "executed_at": plan.executed_at,
         "executed_actions": [
             {
                 "tool": a.tool.value,
