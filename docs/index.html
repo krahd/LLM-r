@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LLM-r - pre-release Ableton Live LLM automation</title>
-  <meta name="description" content="LLM-r bridges Ableton Live and large language models. Describe what you want in plain language; LLM-r turns supported requests into validated OSC actions." />
+  <meta name="description" content="LLM-r bridges Ableton Live and large language models, turning supported song, track, clip, MIDI note, audio clip, and device requests into validated OSC actions." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -348,7 +348,7 @@
 <div class="hero">
   <div class="badge">Pre-release | MIT License</div>
   <h1>Talk to <span>Ableton Live</span><br>in plain language</h1>
-  <p>LLM-r connects large language models to Ableton Live via AbletonOSC. Describe what you need; it plans, validates, and executes supported actions.</p>
+  <p>LLM-r connects large language models to Ableton Live via AbletonOSC. Describe what you need; it plans, validates, and executes supported song, track, clip, MIDI, audio-clip, and device actions.</p>
   <div class="hero-actions">
     <a class="btn-primary" href="https://github.com/krahd/LLM-r">Get started</a>
     <a class="btn-secondary" href="#quickstart">See how it works</a>
@@ -399,12 +399,27 @@
     <div class="card">
       <div class="card-icon icon-blue">LS</div>
       <h3>Live state introspection</h3>
-      <p>Inspect the optimistic live-state cache and runtime capability data to build context-aware LLM prompts.</p>
+      <p>Inspect the optimistic live-state cache, including clips and notes created through LLM-r, to build context-aware LLM prompts.</p>
     </div>
     <div class="card">
       <div class="card-icon icon-purple">SSE</div>
       <h3>SSE streaming</h3>
       <p><code style="font-size:.8rem;font-family:monospace">POST /api/stream</code> streams LLM completions as server-sent events, ready to wire into any chat or agent frontend.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon icon-green">MI</div>
+      <h3>MIDI note editing</h3>
+      <p>Add notes with pitch, timing, duration, velocity, and mute state. Remove or clear notes by known pitch/time ranges with approval.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon icon-blue">AU</div>
+      <h3>Audio clip controls</h3>
+      <p>Adjust existing audio clip gain, transpose, detune, warping, warp mode, RAM mode, and clip loop or marker properties.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon icon-purple">DV</div>
+      <h3>Device parameters</h3>
+      <p>Query parameter values and names, set single or bulk parameter values, and delete devices by track/device index.</p>
     </div>
   </div>
 </section>
@@ -513,18 +528,26 @@ curl -s -X POST http://127.0.0.1:<span class="num">8787</span>/api/execute \
         <tr><td>create_midi_track / create_audio_track</td><td><span class="tag tag-green">tracks</span></td><td></td><td>index: int</td></tr>
         <tr><td>track_delete</td><td><span class="tag tag-green">tracks</span></td><td><span class="tag tag-red">yes</span></td><td>track_index: int</td></tr>
         <tr><td>track_duplicate / track_rename</td><td><span class="tag tag-green">tracks</span></td><td></td><td>track_index, name</td></tr>
-        <tr><td>set_track_volume / set_track_pan</td><td><span class="tag tag-green">tracks</span></td><td></td><td>track_index, value</td></tr>
+        <tr><td>set_track_volume / track_set_pan</td><td><span class="tag tag-green">tracks</span></td><td></td><td>track_index, value</td></tr>
         <tr><td>set_track_mute / set_track_solo / arm_track</td><td><span class="tag tag-green">tracks</span></td><td></td><td>track_index, bool</td></tr>
         <tr><td>fire_scene / fire_clip</td><td><span class="tag tag-purple">session</span></td><td></td><td>scene/track/clip index</td></tr>
         <tr><td>stop_all_clips</td><td><span class="tag tag-purple">session</span></td><td><span class="tag tag-red">yes</span></td><td>-</td></tr>
         <tr><td>scene_create / scene_delete / scene_rename</td><td><span class="tag tag-purple">session</span></td><td>delete: <span class="tag tag-red">yes</span></td><td>scene_index</td></tr>
         <tr><td>clip_create / clip_delete</td><td><span class="tag tag-purple">session</span></td><td>delete: <span class="tag tag-red">yes</span></td><td>track_index, clip_index</td></tr>
-        <tr><td>device_get_parameters</td><td><span class="tag tag-blue">devices</span></td><td></td><td>track_index, device_index</td></tr>
-        <tr><td>device_set_parameter</td><td><span class="tag tag-blue">parameters</span></td><td></td><td>track, device, param, value</td></tr>
+        <tr><td>clip_duplicate_loop / clip_duplicate_to</td><td><span class="tag tag-purple">clips</span></td><td></td><td>source and target clip indexes</td></tr>
+        <tr><td>clip_rename / clip_set_color</td><td><span class="tag tag-purple">clips</span></td><td></td><td>track_index, clip_index, value</td></tr>
+        <tr><td>clip_set_loop_* / clip_set_*_marker</td><td><span class="tag tag-purple">clips</span></td><td></td><td>track_index, clip_index, beats</td></tr>
+        <tr><td>midi_notes_get / midi_notes_add</td><td><span class="tag tag-green">midi</span></td><td></td><td>track_index, clip_index, notes</td></tr>
+        <tr><td>midi_notes_remove / midi_notes_clear</td><td><span class="tag tag-green">midi</span></td><td><span class="tag tag-red">yes</span></td><td>track_index, clip_index, optional range</td></tr>
+        <tr><td>clip_set_gain / clip_set_pitch_*</td><td><span class="tag tag-blue">audio</span></td><td></td><td>track_index, clip_index, value</td></tr>
+        <tr><td>clip_set_warping / clip_set_warp_mode</td><td><span class="tag tag-blue">audio</span></td><td></td><td>track_index, clip_index, value</td></tr>
+        <tr><td>device_get_* / device_set_*</td><td><span class="tag tag-blue">devices</span></td><td></td><td>track_index, device_index, parameter index</td></tr>
+        <tr><td>device_delete</td><td><span class="tag tag-blue">devices</span></td><td><span class="tag tag-red">yes</span></td><td>track_index, device_index</td></tr>
         <tr><td>utility_undo / utility_redo</td><td><span class="tag tag-green">utility</span></td><td></td><td>-</td></tr>
       </tbody>
     </table>
   </div>
+  <p class="section-sub" style="margin-top:1.5rem">Browser search/load, plugin-chain loading, warp marker CRUD, render/export, and destructive sample editing still require a deeper AbletonOSC or Remote Script extension.</p>
 </section>
 
 <!-- FOOTER -->

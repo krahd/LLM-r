@@ -56,4 +56,7 @@ OSC messages are sent over unencrypted UDP. An attacker with network access to t
 
 ## Destructive actions
 
-Tools that irreversibly modify a session (track/scene/clip deletion, stop-all-clips) are marked `destructive: true`. They require `"approved": true` in the execute payload. Use `"dry_run": true` to inspect a plan before committing.
+Tools that irreversibly modify a session (track/scene/clip/device deletion,
+MIDI note removal/clear, stop-all-clips) are marked `destructive: true`. They
+require `"approved": true` in the execute payload. Use `"dry_run": true` to
+inspect a plan before committing.

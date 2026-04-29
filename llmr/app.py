@@ -124,6 +124,41 @@ def _ensure_scene(scene_index: int) -> dict[str, Any]:
     return _live_state["scenes"][scene_index]
 
 
+def _new_clip(clip_index: int, length_beats: float = 4.0) -> dict[str, Any]:
+    return {
+        "clip_index": clip_index,
+        "name": f"Clip {clip_index + 1}",
+        "length_beats": length_beats,
+        "notes": [],
+        "color": None,
+        "color_index": None,
+        "gain": None,
+        "pitch_coarse": 0,
+        "pitch_fine": 0.0,
+        "start_marker": 0.0,
+        "end_marker": length_beats,
+        "loop_start": 0.0,
+        "loop_end": length_beats,
+        "looping": False,
+        "position": 0.0,
+        "warping": None,
+        "warp_mode": None,
+        "ram_mode": None,
+        "muted": False,
+        "launch_mode": 0,
+        "launch_quantization": 0,
+        "velocity_amount": 1.0,
+    }
+
+
+def _ensure_clip(track_index: int, clip_index: int, length_beats: float = 4.0) -> dict[str, Any]:
+    track = _ensure_track(track_index)
+    while len(track["clips"]) <= clip_index:
+        idx = len(track["clips"])
+        track["clips"].append(_new_clip(idx, length_beats=4.0))
+    return track["clips"][clip_index]
+
+
 def _apply_action_to_live_state(action) -> None:
     tool = action.tool.value
     args = action.args
@@ -198,21 +233,137 @@ def _apply_action_to_live_state(action) -> None:
     elif tool == "scene_rename":
         _ensure_scene(int(args[0]))["name"] = str(args[1])
     elif tool == "clip_create":
-        track = _ensure_track(int(args[0]))
+        track_index = int(args[0])
         clip_index = int(args[1])
-        while len(track["clips"]) <= clip_index:
-            track["clips"].append({"clip_index": len(track["clips"]), "length_beats": 4.0})
-        track["clips"][clip_index] = {"clip_index": clip_index, "length_beats": float(args[2])}
+        _ensure_track(track_index)
+        _ensure_clip(track_index, clip_index)
+        _live_state["tracks"][track_index]["clips"][clip_index] = _new_clip(clip_index, length_beats=float(args[2]))
     elif tool == "clip_delete":
         track = _ensure_track(int(args[0]))
         clip_index = int(args[1])
         track["clips"] = [c for c in track["clips"] if c["clip_index"] != clip_index]
+    elif tool == "clip_duplicate_to":
+        source = _ensure_clip(int(args[0]), int(args[1]))
+        target_track_index = int(args[2])
+        target_clip_index = int(args[3])
+        _ensure_track(target_track_index)
+        _ensure_clip(target_track_index, target_clip_index)
+        duplicate = dict(source)
+        duplicate["clip_index"] = target_clip_index
+        duplicate["notes"] = [dict(note) for note in source.get("notes", [])]
+        _live_state["tracks"][target_track_index]["clips"][target_clip_index] = duplicate
+    elif tool == "clip_duplicate_loop":
+        clip = _ensure_clip(int(args[0]), int(args[1]))
+        loop_start = float(clip.get("loop_start", 0.0))
+        loop_end = float(clip.get("loop_end", clip.get("length_beats", 4.0)))
+        loop_length = max(loop_end - loop_start, 0.0)
+        if loop_length > 0:
+            new_notes = []
+            for note in clip.get("notes", []):
+                duplicated = dict(note)
+                duplicated["start_time"] = float(duplicated["start_time"]) + loop_length
+                new_notes.append(duplicated)
+            clip["notes"].extend(new_notes)
+            clip["loop_end"] = loop_end + loop_length
+            clip["end_marker"] = max(float(clip.get("end_marker", loop_end)), clip["loop_end"])
+            clip["length_beats"] = clip["loop_end"] - loop_start
+    elif tool == "clip_rename":
+        _ensure_clip(int(args[0]), int(args[1]))["name"] = str(args[2])
+    elif tool in {
+        "clip_set_color",
+        "clip_set_color_index",
+        "clip_set_gain",
+        "clip_set_pitch_coarse",
+        "clip_set_pitch_fine",
+        "clip_set_start_marker",
+        "clip_set_end_marker",
+        "clip_set_loop_start",
+        "clip_set_loop_end",
+        "clip_set_looping",
+        "clip_set_position",
+        "clip_set_warping",
+        "clip_set_warp_mode",
+        "clip_set_ram_mode",
+        "clip_set_muted",
+        "clip_set_launch_mode",
+        "clip_set_launch_quantization",
+        "clip_set_velocity_amount",
+    }:
+        field_map = {
+            "clip_set_color": "color",
+            "clip_set_color_index": "color_index",
+            "clip_set_gain": "gain",
+            "clip_set_pitch_coarse": "pitch_coarse",
+            "clip_set_pitch_fine": "pitch_fine",
+            "clip_set_start_marker": "start_marker",
+            "clip_set_end_marker": "end_marker",
+            "clip_set_loop_start": "loop_start",
+            "clip_set_loop_end": "loop_end",
+            "clip_set_looping": "looping",
+            "clip_set_position": "position",
+            "clip_set_warping": "warping",
+            "clip_set_warp_mode": "warp_mode",
+            "clip_set_ram_mode": "ram_mode",
+            "clip_set_muted": "muted",
+            "clip_set_launch_mode": "launch_mode",
+            "clip_set_launch_quantization": "launch_quantization",
+            "clip_set_velocity_amount": "velocity_amount",
+        }
+        clip = _ensure_clip(int(args[0]), int(args[1]))
+        clip[field_map[tool]] = args[2]
+        if tool == "clip_set_loop_end":
+            clip["length_beats"] = max(float(args[2]) - float(clip.get("loop_start", 0.0)), 0.0)
+        elif tool == "clip_set_loop_start":
+            clip["length_beats"] = max(float(clip.get("loop_end", args[2])) - float(args[2]), 0.0)
+    elif tool == "midi_notes_add":
+        clip = _ensure_clip(int(args[0]), int(args[1]))
+        for offset in range(2, len(args), 5):
+            pitch, start_time, duration, velocity, mute = args[offset:offset + 5]
+            clip["notes"].append(
+                {
+                    "pitch": int(pitch),
+                    "start_time": float(start_time),
+                    "duration": float(duration),
+                    "velocity": float(velocity),
+                    "mute": bool(mute),
+                }
+            )
+    elif tool in {"midi_notes_remove", "midi_notes_clear"}:
+        clip = _ensure_clip(int(args[0]), int(args[1]))
+        if len(args) == 2:
+            clip["notes"] = []
+        else:
+            start_pitch, pitch_span, start_time, time_span = int(args[2]), int(args[3]), float(args[4]), float(args[5])
+            end_pitch = start_pitch + pitch_span
+            end_time = start_time + time_span
+            clip["notes"] = [
+                note
+                for note in clip.get("notes", [])
+                if not (
+                    start_pitch <= int(note["pitch"]) < end_pitch
+                    and start_time <= float(note["start_time"]) < end_time
+                )
+            ]
     elif tool == "device_set_parameter":
         track = _ensure_track(int(args[0]))
         device_index = int(args[1])
         while len(track["devices"]) <= device_index:
             track["devices"].append({"device_index": len(track["devices"]), "name": "Device", "parameters": {}})
         track["devices"][device_index]["parameters"][int(args[2])] = float(args[3])
+    elif tool == "device_set_parameters":
+        track = _ensure_track(int(args[0]))
+        device_index = int(args[1])
+        while len(track["devices"]) <= device_index:
+            track["devices"].append({"device_index": len(track["devices"]), "name": "Device", "parameters": {}})
+        for parameter_index, value in enumerate(args[2:]):
+            track["devices"][device_index]["parameters"][parameter_index] = float(value)
+    elif tool == "device_delete":
+        track = _ensure_track(int(args[0]))
+        device_index = int(args[1])
+        if 0 <= device_index < len(track["devices"]):
+            track["devices"].pop(device_index)
+            for idx, device in enumerate(track["devices"]):
+                device["device_index"] = idx
 
 
 def _execute_actions(actions: list[Any], *, approved: bool, dry_run: bool) -> tuple[list[dict[str, Any]], str | None]:

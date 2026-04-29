@@ -48,23 +48,31 @@ Implemented directly through the capability registry:
   volume, mute, solo, pan, send level.
 - Session operations: create/rename/delete scenes, create/delete clips, fire
   clips and scenes, stop all clips.
-- Device and parameter basics: request device parameters and set a device
-  parameter by known track/device/parameter indexes.
+- Clip operations: duplicate clips, duplicate MIDI loops, rename clips, set clip
+  colors, launch behavior, loop/start/end markers, and muted state.
+- MIDI note basics: request notes, add note lists, clear notes, and remove notes
+  by pitch/time range. Timing or velocity edits are represented as remove/add
+  operations over a known note range.
+- Audio clip properties: gain, transpose/detune, warping toggle, warp mode, RAM
+  mode, and marker/loop controls exposed by AbletonOSC.
+- Device and parameter basics: request device/parameter values and names, set
+  one or more parameter values by index, and delete devices by index.
 - Utility: undo and redo.
 
 Known limits:
 
-- No MIDI note CRUD or transformations yet. Requests such as humanize, quantize,
-  transpose, velocity shaping, or generated note composition can only be
-  prepared structurally unless new MIDI tools are added.
-- No audio editing, warp marker editing, clip gain/transpose, export, render,
-  resampling, or loudness analysis yet.
+- No direct note-ID update API is exposed through the current AbletonOSC
+  mapping. Humanize, quantize, transpose, and velocity shaping require either
+  known note data from LLM-r state or a read/transform/write flow that listens
+  for AbletonOSC replies.
+- No warp marker CRUD, export, render, resampling, destructive sample-file
+  editing, or loudness analysis yet.
 - No browser/device loading, preset browsing, plugin-chain construction, rack
   editing, or return/master-specific controls yet.
 - Live state is an optimistic cache, not a full bidirectional sync with Ableton
   Live.
-- Device parameter writes require known indexes. There is no semantic mapping
-  such as "set compressor threshold" until parameter discovery/naming is richer.
+- Device parameter writes still require known indexes. Semantic mapping such as
+  "set compressor threshold" requires richer parameter readback and naming.
 
 ## Source Notes
 
@@ -91,17 +99,17 @@ AbletonOSC as the DAW control surface. Important references:
 
 3. **Capability expansion for core workflows**
    - Track reorder, color, routing, monitoring, returns, and master controls.
-   - Clip names/colors, loop settings, launch behavior, follow actions, and
-     duplication.
-   - Device enable/bypass, list/load/delete/reorder, and parameter names/ranges.
+   - Clip follow actions, arrangement clips, and richer clip readback.
+   - Device enable/bypass, list/load/reorder, racks, and semantic parameter maps.
    - Browser lookup and loading for instruments, effects, samples, and presets.
 
 4. **MIDI and audio editing**
-   - MIDI note read/create/update/delete.
+   - Add an OSC reply listener for `midi_notes_get` and device/clip queries.
+   - Add note-ID update flows when the bridge exposes IDs.
    - Transformations: quantize, humanize, transpose, velocity shaping, legato,
      chord/rhythm generation.
-   - Audio clip properties where available: warp, transpose, gain, loop/start/end
-     controls.
+   - Extend AbletonOSC or ship a companion Remote Script for warp marker CRUD and
+     arrangement audio clip insertion.
 
 5. **Planner and plan model**
    - Add structured preconditions and expected effects to plans.

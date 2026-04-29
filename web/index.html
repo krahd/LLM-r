@@ -19,9 +19,9 @@
 </head>
 <body>
   <h1>LLM-r</h1>
-  <p>Plan first, inspect, then execute (or dry-run). Destructive actions require explicit approval.</p>
+  <p>Plan first, inspect, then execute (or dry-run). MIDI note removal, clip/device deletion, and stop-all actions require explicit approval.</p>
 
-  <textarea id="prompt" maxlength="2000" placeholder="Example: Set tempo to 126, arm track 0, fire scene 1."></textarea>
+  <textarea id="prompt" maxlength="2000" placeholder="Example: Create a 4 beat MIDI clip on track 0 and add C minor notes with varied velocities."></textarea>
   <div class="char-count"><span id="charCount">0</span> / 2000</div>
   <div class="row">
     <button id="planBtn">1) Create Plan</button>
@@ -35,6 +35,7 @@
   <h3>Result</h3>
   <pre id="out">(waiting)</pre>
   <h3>Capabilities</h3>
+  <p class="char-count">Includes MIDI note add/remove, clip loop/marker properties, audio clip gain/pitch/warp controls, and device parameter tools where AbletonOSC exposes them.</p>
   <pre id="caps">(loading…)</pre>
   <h3>Macros</h3>
   <pre id="macros">(loading…)</pre>

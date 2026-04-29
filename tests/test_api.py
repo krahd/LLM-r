@@ -325,6 +325,78 @@ def test_live_state_endpoints_after_execute(monkeypatch):
     assert params_payload["parameters"][0]["parameter_index"] == 1
 
 
+def test_live_state_tracks_midi_notes_and_clip_audio_properties(monkeypatch):
+    def fake_run_actions(actions, **_kwargs):
+        return (
+            [
+                {
+                    "index": index,
+                    "tool": action.tool.value,
+                    "address": action.address,
+                    "args": action.args,
+                    "status": "sent",
+                }
+                for index, action in enumerate(actions)
+            ],
+            datetime.now(timezone.utc).isoformat(),
+        )
+
+    monkeypatch.setattr(app_module, "_run_actions", fake_run_actions)
+
+    payload = app_module.execute_batch(
+        app_module.ExecuteBatchRequest(
+            approved=True,
+            calls=[
+                app_module.ToolCallInput(tool=ToolName.create_midi_track, args={"index": -1}),
+                app_module.ToolCallInput(
+                    tool=ToolName.clip_create,
+                    args={"track_index": 0, "clip_index": 0, "length_beats": 4},
+                ),
+                app_module.ToolCallInput(
+                    tool=ToolName.midi_notes_add,
+                    args={
+                        "track_index": 0,
+                        "clip_index": 0,
+                        "notes": [
+                            {"pitch": 60, "start_time": 0, "duration": 1, "velocity": 100},
+                            {"pitch": 64, "start_time": 1, "duration": 1, "velocity": 90},
+                        ],
+                    },
+                ),
+                app_module.ToolCallInput(
+                    tool=ToolName.clip_set_gain,
+                    args={"track_index": 0, "clip_index": 0, "gain": 0.7},
+                ),
+                app_module.ToolCallInput(
+                    tool=ToolName.clip_set_warp_mode,
+                    args={"track_index": 0, "clip_index": 0, "warp_mode": 4},
+                ),
+                app_module.ToolCallInput(
+                    tool=ToolName.midi_notes_remove,
+                    args={
+                        "track_index": 0,
+                        "clip_index": 0,
+                        "start_pitch": 60,
+                        "pitch_span": 1,
+                        "start_time": 0,
+                        "time_span": 1,
+                    },
+                ),
+            ],
+        )
+    )
+
+    assert payload["executed_count"] == 6
+
+    clips_payload = app_module.get_live_track_clips(0)
+    clip = clips_payload["clips"][0]
+    assert clip["gain"] == 0.7
+    assert clip["warp_mode"] == 4
+    assert clip["notes"] == [
+        {"pitch": 64, "start_time": 1.0, "duration": 1.0, "velocity": 90.0, "mute": False}
+    ]
+
+
 def test_execute_batch_dry_run():
     payload = app_module.execute_batch(
         app_module.ExecuteBatchRequest(

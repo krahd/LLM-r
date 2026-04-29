@@ -23,6 +23,8 @@ Natural language prompt
 - **Safe execution** — dry-run mode, destructive-action approval step, and a strict capability registry
 - **Macro system** — named sequences of actions (`idea_sketch`, `performance_prep`, …) with full CRUD via the API
 - **Live state introspection** — query song settings, tracks, devices, clips, and parameters at runtime
+- **MIDI and clip editing** — add/remove MIDI notes, set note velocity through note payloads, rename/duplicate clips, and adjust clip loop/marker settings
+- **Audio clip controls** — set clip gain, transpose/detune, warping, warp mode, and RAM mode for existing audio clips
 - **Session history** — plans, executions, and sessions are persisted to disk and survive restarts
 - **SSE streaming** — `POST /api/stream` for streaming LLM completions
 - **Desktop GUI** — PyQt6 app with embedded mode, server attach/start controls, and runtime settings
@@ -100,6 +102,21 @@ The response contains a `plan_id`. Execute it (`"dry_run": true` previews withou
 curl -s -X POST http://127.0.0.1:8787/api/execute \
   -H "Content-Type: application/json" \
   -d '{"plan_id": "<PLAN_ID>", "dry_run": false}'
+```
+
+You can also execute explicit note edits without an LLM plan:
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/api/execute_batch \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false, "calls": [
+    {"tool": "clip_create", "args": {"track_index": 0, "clip_index": 0, "length_beats": 4}},
+    {"tool": "midi_notes_add", "args": {"track_index": 0, "clip_index": 0, "notes": [
+      {"pitch": 60, "start_time": 0, "duration": 1, "velocity": 100},
+      {"pitch": 64, "start_time": 1, "duration": 1, "velocity": 92},
+      {"pitch": 67, "start_time": 2, "duration": 1, "velocity": 96}
+    ]}}
+  ]}'
 ```
 
 ### Optional LLM assistant context
@@ -215,10 +232,18 @@ LLM-r exposes a declarative OSC capability registry. The runtime source of truth
 | `song` | Transport, tempo, time signature, quantization, count-in |
 | `tracks` | Create, delete, rename, mixer controls, sends |
 | `session` | Scene and clip operations |
-| `devices` | Device and parameter inspection |
+| `clips` | Clip duplication, naming, color, launch, loop, and marker properties |
+| `midi` | MIDI note get/add/remove/clear |
+| `audio` | Existing audio clip gain, pitch, warping, warp mode, and RAM mode |
+| `devices` | Device and parameter inspection, device deletion |
 | `parameters` | Parameter writes |
 
 Capabilities marked `destructive: true` require `"approved": true` in `POST /api/execute` (unless `dry_run` is enabled). Full catalog: [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
+
+Current AbletonOSC does not expose browser search/load, plugin-chain loading,
+warp marker CRUD, destructive sample-file edits, render/export, or loudness
+analysis. LLM-r documents those as bridge-extension work instead of pretending
+they are executable tools.
 
 ---
 
@@ -257,7 +282,7 @@ Runtime macros are persisted to `LLMR_MACRO_STORE_PATH` and survive restarts. To
 LLM-r is designed to avoid unintended changes to a live session:
 
 - **Dry-run** — pass `"dry_run": true` to `POST /api/execute` to validate a plan without sending any OSC messages
-- **Destructive approval** — actions flagged `destructive: true` (track/scene/clip deletion, stop-all) require `"approved": true`
+- **Destructive approval** — actions flagged `destructive: true` (track/scene/clip/device deletion, MIDI note removal/clear, stop-all) require `"approved": true`
 - **Capability registry** — the planner is grounded in a strict schema; it cannot generate actions outside the declared capability surface
 - **TTL pruning** — plans expire after 60 minutes; the store is bounded to 256 entries
 - **No double execution** — a plan can only be executed once
