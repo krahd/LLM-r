@@ -1,18 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build the local release package, include plugin bundles if any are present,
-# install VST3 bundles, quit Ableton Live if running, and open the local test set.
+# Build the local GUI package, include a test VST3 bundle, install VST3 bundles,
+# quit Ableton Live if running, and open the local test set.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VST3_TARGET="${1:-$HOME/Library/Audio/Plug-Ins/VST3}"
 VST3_TARGET_EXPANDED="${VST3_TARGET/#\~/$HOME}"
 TEST_SET="$REPO_ROOT/Test Set Project/Test Set.als"
 
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [VST3_TARGET_DIR]
+Builds the GUI package, installs test VST3 bundles, and opens Test Set Project/Test Set.als.
+Defaults to ~/Library/Audio/Plug-Ins/VST3
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
 echo "Building GUI and including VST3 bundles if present..."
+# Prepare a stable test VST3 source (outside of the build/ folder so --clean won't remove it)
+TEST_VST3_SRC="$REPO_ROOT/test_assets/vst3"
+if [[ ! -d "$TEST_VST3_SRC" || -z "$(find "$TEST_VST3_SRC" -name '*.vst3' -type d -print -quit 2>/dev/null)" ]]; then
+  echo "No .vst3 bundles in $TEST_VST3_SRC - creating a dummy TestPlugin.vst3 for test"
+  mkdir -p "$TEST_VST3_SRC/TestPlugin.vst3/Contents/Resources"
+  cat > "$TEST_VST3_SRC/TestPlugin.vst3/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.example.testplugin</string>
+  <key>CFBundleName</key>
+  <string>TestPlugin</string>
+</dict>
+</plist>
+PLIST
+  echo "This is a dummy VST3 bundle used only for testing." > "$TEST_VST3_SRC/TestPlugin.vst3/Contents/Resources/README.txt"
+fi
+
 # Build only the GUI and include any local VST3 bundles for testing
 bash "$REPO_ROOT/scripts/build_plugin.sh" --clean --gui \
-  --vst3-dir "$REPO_ROOT/build/vst3" \
+  --vst3-dir "$TEST_VST3_SRC" \
   --au-dir "$REPO_ROOT/build/au" \
   --vst-dir "$REPO_ROOT/build/vst"
 
@@ -21,11 +54,38 @@ bash "$REPO_ROOT/scripts/install_vst3.sh" "$VST3_TARGET_EXPANDED"
 
 
 echo "Attempting to quit Ableton Live if it's running..."
-# Detect installed Ableton application bundles under /Applications and quit them
+# Detect installed Ableton application bundles under /Applications
 shopt -s nullglob
 apps=(/Applications/Ableton\ Live*.app)
 shopt -u nullglob
+suite_app=""
+suite_app_name=""
 if [[ ${#apps[@]} -gt 0 ]]; then
+  echo "Found Ableton app bundles: ${apps[*]}"
+  # Prefer the explicit Suite build if present
+  for p in "${apps[@]}"; do
+    if [[ "$(basename "$p")" == "Ableton Live 12 Suite.app" ]]; then
+      suite_app="$p"
+      break
+    fi
+  done
+  # If Suite not found, prefer a non-Beta build
+  if [[ -z "$suite_app" ]]; then
+    for p in "${apps[@]}"; do
+      name="$(basename "$p")"
+      if [[ "$name" != *"Beta.app" && "$name" != *"beta.app" ]]; then
+        suite_app="$p"
+        break
+      fi
+    done
+  fi
+  # Fallback: pick the first match
+  if [[ -z "$suite_app" ]]; then
+    suite_app="${apps[0]}"
+  fi
+  suite_app_name="$(basename "$suite_app" .app)"
+
+  # Quit all found Ableton app bundles to ensure a clean restart
   for appPath in "${apps[@]}"; do
     appName="$(basename "$appPath" .app)"
     echo "Quitting: $appName"
@@ -34,17 +94,16 @@ if [[ ${#apps[@]} -gt 0 ]]; then
 else
   echo "No Ableton application bundle found under /Applications"
 fi
+
 # Fallback: try to kill any remaining processes named Ableton Live
 pkill -f "Ableton Live" >/dev/null 2>&1 || true
 
 sleep 1
 
 echo "Opening Test Set: $TEST_SET"
-if [[ ${#apps[@]} -gt 0 ]]; then
-  # Prefer the first matched app bundle
-  appPathToOpen="${apps[0]}"
-  echo "Opening with: $appPathToOpen"
-  open -a "$appPathToOpen" "$TEST_SET" || open "$TEST_SET" || echo "Could not open Test Set in Ableton."
+if [[ -n "$suite_app_name" ]]; then
+  echo "Opening with: $suite_app_name"
+  open -a "$suite_app_name" "$TEST_SET" || open "$TEST_SET" || echo "Could not open Test Set in Ableton."
 else
   open "$TEST_SET" || echo "Could not open Test Set (no Ableton app found)."
 fi
