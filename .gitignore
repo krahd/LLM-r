@@ -11,17 +11,18 @@ venv/
 # Distribution / packaging
 dist/
 build/
+release/
 *.egg-info/
 pip-wheel-metadata/
-
-# Release artifacts
-# Release artifacts
-# Note: `release/` is tracked in this repository so release artifacts can be committed
 
 # PyInstaller
 *.spec
 llm-r-gui
 llm-r-server
+
+# Runtime state and local test assets
+.llmr/
+Test Set Project/
 
 # Testing
 .pytest_cache/
@@ -33,6 +34,7 @@ htmlcov/
 # IDEs and editors
 .vscode/
 .idea/
+.claude/
 *.sublime-workspace
 *.sublime-project
 
@@ -46,4 +48,3 @@ htmlcov/
 
 # Type check / cache
 .mypy_cache/
-

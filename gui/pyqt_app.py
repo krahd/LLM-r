@@ -60,15 +60,6 @@ def _save_gui_settings(data: dict) -> None:
     _GUI_SETTINGS_PATH.write_text(json.dumps(data, indent=2))
 
 
-def _load_planner_extra_prompt(path: str) -> str:
-    if not path:
-        return ""
-    try:
-        return Path(path).expanduser().read_text(encoding="utf-8")
-    except OSError:
-        return ""
-
-
 # ── Backend interface ─────────────────────────────────────────────────────────
 
 class Backend:
@@ -144,12 +135,7 @@ class EmbeddedBackend(Backend):
         from llmr.ableton_osc import AbletonOSCClient
         from llmr.modelito_adapter import ModelitoClient
         from llmr.planner import IntentPlanner
-
-        extra_prompt = ""
-        if self._settings.planner_extra_prompt_enabled:
-            extra_prompt = _load_planner_extra_prompt(
-                self._settings.planner_extra_prompt_path
-            )
+        from llmr.prompts import planner_extra_prompt
 
         return IntentPlanner(
             llm=ModelitoClient(
@@ -160,7 +146,7 @@ class EmbeddedBackend(Backend):
                 self._settings.ableton_host,
                 self._settings.ableton_port,
             ),
-            extra_prompt=extra_prompt,
+            extra_prompt=planner_extra_prompt(self._settings),
         )
 
     def plan(self, prompt: str) -> dict:

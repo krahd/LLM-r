@@ -25,8 +25,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install build pyinstaller
-          pip install -e . || true
-          pip install PyQt6 || true
+          pip install -e ".[gui]"
         shell: bash
 
       - name: Build wheel and sdist
@@ -36,14 +35,14 @@ jobs:
 
       - name: Build GUI binary
         run: |
-          mkdir -p release || true
-          pyinstaller --onefile --name llm-r-gui-${{ runner.os }} gui/pyqt_app.py --distpath release --workpath build/pyinstaller || true
+          mkdir -p release
+          pyinstaller --onefile --name llm-r-gui-${{ runner.os }} gui/pyqt_app.py --distpath release --workpath build/pyinstaller
         shell: bash
 
       - name: Build server binary
         run: |
-          mkdir -p release || true
-          pyinstaller --onefile --name llm-r-server-${{ runner.os }} backend/main.py --distpath release --workpath build/pyinstaller || true
+          mkdir -p release
+          pyinstaller --onefile --name llm-r-server-${{ runner.os }} backend/main.py --distpath release --workpath build/pyinstaller
         shell: bash
 
       - name: List artifacts

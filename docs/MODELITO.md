@@ -16,5 +16,7 @@ python backend/main.py
 API keys and credentials are handled by Modelito. See [Modelito documentation](https://github.com/krahd/modelito) for details on configuring providers and models.
 
 ## Troubleshooting
-- If you see errors about Modelito not being installed, run `pip install modelito`.
+- If you see errors about Modelito not being installed, reinstall LLM-r's project
+  dependencies with `pip install -e .`. The current dependency is pinned in
+  `pyproject.toml`.
 - If you see errors about provider/model, check your environment variables and Modelito documentation.

@@ -34,7 +34,9 @@ API keys for OpenAI, Anthropic, Google, etc. are handled entirely by [Modelito](
 
 ## Local settings file
 
-Runtime settings (provider, model, Ableton host/port, API token) are persisted to `.llmr/settings.json` in the working directory. The API token is stored in plaintext in this file. Restrict its permissions:
+Runtime settings (provider, model, assistant prompt guidance, Ableton host/port,
+API token) are persisted to `.llmr/settings.json` in the working directory. The
+API token is stored in plaintext in this file. Restrict its permissions:
 
 ```bash
 chmod 600 .llmr/settings.json

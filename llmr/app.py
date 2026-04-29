@@ -25,6 +25,7 @@ from llmr.macros import (
 )
 from llmr.modelito_adapter import ModelitoClient
 from llmr.planner import IntentPlanner, PlanStore
+from llmr.prompts import planner_extra_prompt
 from llmr.schemas import PlannedToolCall, ToolName
 from llmr.sessions import SessionStore
 
@@ -48,10 +49,6 @@ class ExecuteRequest(BaseModel):
 class ToolCallInput(BaseModel):
     tool: ToolName
     args: dict[str, Any] = Field(default_factory=dict)
-
-
-MacroCallInput = ToolCallInput
-ExecuteCallInput = ToolCallInput
 
 
 class ExecuteBatchRequest(BaseModel):
@@ -337,23 +334,11 @@ def _serialize_plan(plan) -> dict:
     }
 
 
-def _load_planner_extra_prompt(path: str) -> str:
-    if not path:
-        return ""
-    try:
-        return Path(path).expanduser().read_text(encoding="utf-8")
-    except OSError:
-        return ""
-
-
 def _build_planner() -> IntentPlanner:
-    extra_prompt = ""
-    if settings.planner_extra_prompt_enabled:
-        extra_prompt = _load_planner_extra_prompt(settings.planner_extra_prompt_path)
     return IntentPlanner(
         llm=ModelitoClient(provider=settings.modelito_provider, model=settings.modelito_model),
         ableton=AbletonOSCClient(settings.ableton_host, settings.ableton_port),
-        extra_prompt=extra_prompt,
+        extra_prompt=planner_extra_prompt(settings),
     )
 
 

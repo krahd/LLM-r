@@ -1,6 +1,6 @@
 # LLM-r
 
-**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. Describe what you want in plain language — LLM-r translates it into OSC actions and sends them to Ableton Live via [AbletonOSC](https://github.com/sigabrt/AbletonOSC). LLM connectivity is provided by [Modelito](https://github.com/krahd/modelito), a lightweight adapter that supports OpenAI, Anthropic, Google, Ollama, and other providers.
+**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. Describe what you want in plain language — LLM-r translates it into OSC actions and sends them to Ableton Live via [AbletonOSC](https://github.com/ideoforms/AbletonOSC). LLM connectivity is provided by [Modelito](https://github.com/krahd/modelito), a lightweight adapter that supports OpenAI, Anthropic, Google, Ollama, and other providers.
 
 ```text
 Natural language prompt
@@ -25,7 +25,7 @@ Natural language prompt
 - **Live state introspection** — query song settings, tracks, devices, clips, and parameters at runtime
 - **Session history** — plans, executions, and sessions are persisted to disk and survive restarts
 - **SSE streaming** — `POST /api/stream` for streaming LLM completions
-- **Desktop GUI** — PyQt6 app that auto-starts the server, includes a settings dialog, and requires no env-var setup
+- **Desktop GUI** — PyQt6 app with embedded mode, server attach/start controls, and runtime settings
 - **Multi-provider LLM support** — swap between cloud and local models with two environment variables
 
 ---
@@ -35,7 +35,7 @@ Natural language prompt
 | Requirement | Version |
 | --- | --- |
 | Python | 3.11 or newer |
-| [AbletonOSC](https://github.com/sigabrt/AbletonOSC) | installed and running in Ableton Live |
+| [AbletonOSC](https://github.com/ideoforms/AbletonOSC) | installed and running in Ableton Live |
 | PyQt6 *(optional GUI)* | 6.7 or newer |
 
 ---
@@ -64,7 +64,7 @@ pip install -e .[gui]
 
 ### 1. Start AbletonOSC
 
-Install and enable the [AbletonOSC](https://github.com/sigabrt/AbletonOSC) MIDI Remote Script in Ableton Live. By default it listens on `127.0.0.1:11000`.
+Install and enable the [AbletonOSC](https://github.com/ideoforms/AbletonOSC) MIDI Remote Script in Ableton Live. By default it listens on `127.0.0.1:11000`.
 
 ### 2. Launch
 
@@ -74,7 +74,9 @@ Install and enable the [AbletonOSC](https://github.com/sigabrt/AbletonOSC) MIDI 
 python gui/pyqt_app.py
 ```
 
-The GUI starts the server automatically, and a built-in Settings dialog lets you configure the LLM provider, model, and Ableton connection without touching environment variables.
+The GUI can run in embedded mode, attach to a running server, or start a local
+server from the Server controls. Its Settings dialog configures the LLM provider,
+model, assistant prompt guidance, Ableton connection, server URL, and API token.
 
 #### Option B — Server only (headless / API)
 
@@ -264,7 +266,9 @@ LLM-r is designed to avoid unintended changes to a live session:
 
 ## Desktop GUI
 
-The GUI is a single-app experience: it starts the server as a subprocess on launch and shuts it down on close. No separate server process is needed.
+The GUI can run LLM-r in embedded mode without a separate server process. It can
+also attach to a running server or start/stop a local server from the Server
+controls.
 
 ```bash
 pip install PyQt6
@@ -274,10 +278,13 @@ python gui/pyqt_app.py
 A **Settings** dialog (accessible from the toolbar) lets you configure everything at runtime:
 
 - LLM provider and model
+- Assistant prompt guidance toggle and prompt file path
 - Ableton OSC host and port
 - Server URL and API token
 
-Settings are persisted to `~/.llmr/gui.json` (connection settings) and pushed to the server via `PATCH /api/settings`. Server output is logged to `~/.llmr/server.log`.
+GUI connection settings are persisted to `~/.llmr/gui.json`. Runtime settings are
+pushed to the server via `PATCH /api/settings` when connected to HTTP mode, or
+saved directly by the embedded backend.
 
 If a server is already running when the GUI opens, it attaches to it instead of starting a new one.
 
@@ -306,13 +313,16 @@ To build locally (sdist, wheel, and PyInstaller standalone binary):
 ./scripts/build_release.sh
 ```
 
-PyInstaller binaries are platform-specific and placed in `release/`. See [docs/RELEASE.md](docs/RELEASE.md).
+PyInstaller binaries are platform-specific and placed in the git-ignored
+`release/` directory. See [docs/RELEASE.md](docs/RELEASE.md).
+Local install helpers for generated vendor packages and VST3 bundles live under
+`scripts/`.
 
 ---
 
-## Roadmap
+## Development Plan
 
-See [docs/ROADMAP.md](docs/ROADMAP.md).
+See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
 
 ---
 
@@ -321,10 +331,15 @@ See [docs/ROADMAP.md](docs/ROADMAP.md).
 | Document | Description |
 | --- | --- |
 | [docs/CAPABILITIES.md](docs/CAPABILITIES.md) | Full capability catalog |
+| [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | AbletonOSC and pre-release compatibility notes |
+| [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) | Current pre-release audit and roadmap |
+| [docs/GUI-PLUGIN.md](docs/GUI-PLUGIN.md) | Desktop GUI behavior and settings |
+| [docs/LLM_ASSISTANT_PROMPT.md](docs/LLM_ASSISTANT_PROMPT.md) | Default planner guidance prompt |
 | [docs/MACROS.md](docs/MACROS.md) | Macro authoring guide |
-| [docs/SECURITY.md](docs/SECURITY.md) | Security model and deployment advice |
 | [docs/MODELITO.md](docs/MODELITO.md) | Modelito integration details |
 | [docs/RELEASE.md](docs/RELEASE.md) | Release and build instructions |
+| [docs/SCENARIOS.md](docs/SCENARIOS.md) | Current executable workflow recipes |
+| [docs/SECURITY.md](docs/SECURITY.md) | Security model and deployment advice |
 
 ---
 
@@ -336,4 +351,4 @@ Contributions are welcome. Open an issue to discuss a change, then submit a pull
 
 ## License
 
-No license file is present in this repository. Contact the maintainer or open an issue to clarify the distribution terms.
+See [LICENSE](LICENSE).

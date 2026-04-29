@@ -6,6 +6,7 @@ from llmr.ableton_osc import AbletonAction
 from llmr import app as app_module
 from llmr.macros import init_macro_store
 from llmr.planner import StoredPlan
+from llmr.prompts import default_planner_extra_prompt, load_prompt_text, planner_extra_prompt
 from llmr.schemas import ToolName
 from llmr.sessions import SessionStore
 
@@ -95,12 +96,24 @@ def test_models_and_metadata(monkeypatch):
     assert metadata["available"] is True
 
 
-def test_load_planner_extra_prompt(tmp_path):
+def test_load_prompt_text(tmp_path):
     prompt_path = tmp_path / "prompt.md"
     prompt_path.write_text("extra planner context", encoding="utf-8")
 
-    assert app_module._load_planner_extra_prompt(str(prompt_path)) == "extra planner context"
-    assert app_module._load_planner_extra_prompt(str(tmp_path / "missing.md")) == ""
+    assert load_prompt_text(str(prompt_path)) == "extra planner context"
+    assert load_prompt_text(str(tmp_path / "missing.md")) == ""
+
+
+def test_default_planner_extra_prompt_is_packaged():
+    prompt = default_planner_extra_prompt()
+
+    assert "You are an Ableton Live assistant operating through LLM-r." in prompt
+
+
+def test_planner_extra_prompt_can_be_disabled(monkeypatch):
+    monkeypatch.setattr(app_module.settings, "planner_extra_prompt_enabled", False)
+
+    assert planner_extra_prompt(app_module.settings) == ""
 
 
 def test_settings_include_planner_extra_prompt_toggle(monkeypatch):
@@ -183,7 +196,7 @@ def test_macro_crud():
     created = app_module.create_macro(
         app_module.MacroMutationRequest(
             name="runtime_1",
-            calls=[app_module.MacroCallInput(tool=ToolName.set_tempo, args={"bpm": 123})],
+            calls=[app_module.ToolCallInput(tool=ToolName.set_tempo, args={"bpm": 123})],
         )
     )
     assert created["name"] == "runtime_1"
@@ -195,7 +208,7 @@ def test_macro_crud():
         "runtime_1",
         app_module.MacroMutationRequest(
             name="runtime_1",
-            calls=[app_module.MacroCallInput(tool=ToolName.set_tempo, args={"bpm": 124})],
+            calls=[app_module.ToolCallInput(tool=ToolName.set_tempo, args={"bpm": 124})],
         ),
     )
     assert updated["calls"][0]["args"]["bpm"] == 124
@@ -317,8 +330,8 @@ def test_execute_batch_dry_run():
         app_module.ExecuteBatchRequest(
             dry_run=True,
             calls=[
-                app_module.ExecuteCallInput(tool=ToolName.set_tempo, args={"bpm": 127}),
-                app_module.ExecuteCallInput(tool=ToolName.utility_undo, args={}),
+                app_module.ToolCallInput(tool=ToolName.set_tempo, args={"bpm": 127}),
+                app_module.ToolCallInput(tool=ToolName.utility_undo, args={}),
             ],
         )
     )

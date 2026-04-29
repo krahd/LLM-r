@@ -1,10 +1,11 @@
 [project]
 name = "llm-r"
-version = "1.5.4"
-description = "LLM-r is an Ableton Live LLM bridge"
+version = "0.5.4"
+description = "LLM-r bridges Ableton Live and LLM agents"
 requires-python = ">=3.11"
 authors = [ { name = "Tomas Laurenzo" } ]
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
   "fastapi>=0.115.0",
   "modelito @ git+https://github.com/krahd/modelito.git@f6db8b41a9a31f6e473020f8304cddec8a196252",
@@ -29,6 +30,9 @@ pythonpath = ["."]
 
 [tool.setuptools.packages.find]
 include = ["llmr*"]
+
+[tool.setuptools.package-data]
+llmr = ["LLM_ASSISTANT_PROMPT.md"]
 
 [tool.ruff]
 line-length = 100

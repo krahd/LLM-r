@@ -4,11 +4,12 @@ This repository includes a GitHub Actions workflow that builds and publishes rel
 
 How to create a release via GitHub (recommended):
 
-1. Create a tag locally (bump the version as appropriate):
+1. Create a tag locally after confirming `pyproject.toml` and `llmr/__init__.py`
+   contain the intended version:
 
 ```bash
-git tag v1.5.2
-git push origin v1.5.2
+git tag v0.5.4
+git push origin v0.5.4
 ```
 
 2. The workflow `.github/workflows/release.yml` will run on tag push, build artifacts for multiple platforms, and create a GitHub Release attaching the built files.
@@ -24,7 +25,14 @@ Local build (for testing):
 2. After the script completes, you'll find artifacts in:
 
 - `dist/` — sdist and wheel files
-- `release/` — PyInstaller-built standalone executables (platform-specific)
+- `release/` — PyInstaller-built standalone executables (platform-specific, ignored by git)
+
+Local install helpers:
+
+- `scripts/install_plugin.sh` installs the latest vendor zip from `release/`.
+- `scripts/install_vst3.sh` installs `.vst3` bundles from the vendor package.
+- `scripts/test_install_vst3_and_open.sh` is a local macOS helper for installing
+  VST3 bundles and opening the ignored `Test Set Project/Test Set.als` test set.
 
 Notes and caveats:
 

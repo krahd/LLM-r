@@ -1,4 +1,4 @@
-# Live State Model (v1)
+# Live State Model
 
 `/api/live/*` endpoints expose the internal snapshot model used by LLM-r:
 

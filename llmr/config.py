@@ -4,10 +4,9 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from llmr.prompts import DEFAULT_PLANNER_EXTRA_PROMPT_PATH
+
 _SETTINGS_PATH = Path(os.getenv("LLMR_SETTINGS_PATH", ".llmr/settings.json"))
-_DEFAULT_PLANNER_EXTRA_PROMPT_PATH = (
-    Path(__file__).resolve().parent.parent / "docs" / "LLM_ASSISTANT_PROMPT.md"
-)
 
 
 def _read_file() -> dict:
@@ -86,7 +85,7 @@ settings = Settings(
     planner_extra_prompt_path=_resolve(
         "LLMR_PLANNER_EXTRA_PROMPT_PATH",
         "planner_extra_prompt_path",
-        str(_DEFAULT_PLANNER_EXTRA_PROMPT_PATH),
+        str(DEFAULT_PLANNER_EXTRA_PROMPT_PATH),
     ),
     app_host=os.getenv("LLMR_HOST", "0.0.0.0"),
     app_port=int(os.getenv("LLMR_PORT", "8787")),
