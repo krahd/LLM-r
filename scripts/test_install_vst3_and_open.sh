@@ -12,7 +12,7 @@ TEST_SET="$REPO_ROOT/Test Set Project/Test Set.als"
 echo "Building GUI and including VST3 bundles if present..."
 # Build only the GUI and include any local VST3 bundles for testing
 bash "$REPO_ROOT/scripts/build_plugin.sh" --clean --gui \
-  --vst3-dir "$REPO_ROOT/build/vst3"
+  --vst3-dir "$REPO_ROOT/build/vst3" \
   --au-dir "$REPO_ROOT/build/au" \
   --vst-dir "$REPO_ROOT/build/vst"
 
