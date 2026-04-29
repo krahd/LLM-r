@@ -38,6 +38,8 @@ Local install helpers:
   `LLMR_VST3_BUILD_CMD` to override the default `scripts/build_vst3.sh` build.
   The helper rejects placeholder `.vst3` directories that do not contain an
   executable plugin binary under `Contents/MacOS`.
+- The default local VST3 smoke bundle is named `LLM-r.vst3` and reports
+  `Tomas Laurenzo` as its VST3 factory vendor.
 
 Notes and caveats:
 

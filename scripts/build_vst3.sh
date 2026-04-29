@@ -2,12 +2,12 @@
 set -euo pipefail
 
 # Build the local macOS VST3 bundle used by the install/open smoke task.
-# This currently builds a minimal native VST3 bundle binary so the task installs
-# an actual bundle executable, not a placeholder directory.
+# This builds a minimal native VST3 plug-in with factory metadata so hosts can
+# scan it as a real plug-in.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="${1:-$REPO_ROOT/build/vst3}"
-SRC="$REPO_ROOT/native/vst3/llmr_vst3_stub.c"
+SRC="$REPO_ROOT/native/vst3/llmr_vst3_plugin.cpp"
 BUNDLE_NAME="${LLMR_VST3_BUNDLE_NAME:-LLM-r.vst3}"
 BUNDLE_DIR="$OUT_DIR/$BUNDLE_NAME"
 EXECUTABLE_NAME="${BUNDLE_NAME%.vst3}"
@@ -48,27 +48,45 @@ cat > "$INFO_PLIST" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>NSHumanReadableCopyright</key>
+  <string>Copyright (c) Tomas Laurenzo. All rights reserved.</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>English</string>
   <key>CFBundleExecutable</key>
   <string>$EXECUTABLE_NAME</string>
+  <key>CFBundleIconFile</key>
+  <string></string>
   <key>CFBundleIdentifier</key>
   <string>net.tomaslaurenzo.llm-r.vst3</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
   <key>CFBundleName</key>
   <string>LLM-r</string>
   <key>CFBundlePackageType</key>
   <string>BNDL</string>
+  <key>CFBundleSignature</key>
+  <string>????</string>
   <key>CFBundleShortVersionString</key>
   <string>0.5.4</string>
   <key>CFBundleVersion</key>
   <string>0.5.4</string>
+  <key>CSResourcesFileMapped</key>
+  <true/>
 </dict>
 </plist>
 PLIST
 
 printf "BNDL????" > "$PKG_INFO"
 
-clang -dynamiclib \
+ARCH_ARGS=("-arch" "$(uname -m)")
+if [[ "$(uname -m)" == "arm64" ]]; then
+  ARCH_ARGS=("-arch" "arm64" "-arch" "x86_64")
+fi
+
+clang++ -dynamiclib \
+  -std=c++17 \
   -fvisibility=hidden \
-  -arch "$(uname -m)" \
+  "${ARCH_ARGS[@]}" \
   -mmacosx-version-min=11.0 \
   "$SRC" \
   -o "$BINARY"
