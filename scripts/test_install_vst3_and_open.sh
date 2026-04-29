@@ -6,7 +6,6 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VST3_BUILD_DIR="${VST3_BUILD_DIR:-$REPO_ROOT/build/vst3}"
-TEST_VST3_SRC="${TEST_VST3_SRC:-$REPO_ROOT/test_assets/vst3}"
 VST3_TARGET="${1:-$HOME/Music/Ableton/User Library/Plug-Ins/VST3}"
 VST3_TARGET_EXPANDED="${VST3_TARGET/#\~/$HOME}"
 TEST_SET="$REPO_ROOT/Test Set Project/Test Set.als"
@@ -24,7 +23,6 @@ Defaults:
 Build command selection:
   1. LLMR_VST3_BUILD_CMD, if set
   2. scripts/build_vst3.sh, if present and executable
-  3. test_assets/vst3/*.vst3 copied into build/vst3 as deterministic test bundles
 
 Test switches:
   LLMR_SKIP_ABLETON_QUIT=1 skips quitting Ableton
@@ -53,20 +51,28 @@ build_vst3_bundles() {
     return
   fi
 
-  if [[ -d "$TEST_VST3_SRC" ]]; then
-    echo "Building test VST3 bundles from: $TEST_VST3_SRC"
-    while IFS= read -r -d '' bundle; do
-      cp -a "$bundle" "$VST3_BUILD_DIR/"
-    done < <(find "$TEST_VST3_SRC" -maxdepth 1 -name '*.vst3' -not -name '.*' -type d -print0 2>/dev/null || true)
-    return
-  fi
-
-  echo "No VST3 build command or test VST3 source found." >&2
+  echo "No VST3 build command found." >&2
+  echo "Set LLMR_VST3_BUILD_CMD or add an executable scripts/build_vst3.sh." >&2
   exit 1
 }
 
 find_built_vst3_bundles() {
   find "$VST3_BUILD_DIR" -maxdepth 1 -name '*.vst3' -not -name '.*' -type d -print0 2>/dev/null
+}
+
+validate_vst3_bundle() {
+  local bundle="$1"
+  local macos_dir="$bundle/Contents/MacOS"
+
+  if [[ ! -d "$macos_dir" ]]; then
+    echo "Invalid VST3 bundle: $bundle has no Contents/MacOS directory." >&2
+    return 1
+  fi
+
+  if ! find "$macos_dir" -maxdepth 1 -type f -perm -111 -print -quit | grep -q .; then
+    echo "Invalid VST3 bundle: $bundle has no executable plugin binary in Contents/MacOS." >&2
+    return 1
+  fi
 }
 
 install_vst3_bundles() {
@@ -77,6 +83,7 @@ install_vst3_bundles() {
 
   while IFS= read -r -d '' bundle; do
     local name
+    validate_vst3_bundle "$bundle"
     name="$(basename "$bundle")"
     echo "  $name -> $VST3_TARGET_EXPANDED/"
     rsync -a --delete "$bundle" "$VST3_TARGET_EXPANDED/"

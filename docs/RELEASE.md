@@ -35,8 +35,9 @@ Local install helpers:
 - `scripts/test_install_vst3_and_open.sh` is a local macOS helper that builds
   VST3 bundles, installs them into the Ableton User Library plug-in folder, and
   opens the ignored `Test Set Project/Test Set.als` test set. Set
-  `LLMR_VST3_BUILD_CMD` when a real plugin build command exists; otherwise it
-  uses committed test VST3 bundles as deterministic local fixtures.
+  `LLMR_VST3_BUILD_CMD` or add `scripts/build_vst3.sh` to produce bundles under
+  `build/vst3`. The helper rejects placeholder `.vst3` directories that do not
+  contain an executable plugin binary under `Contents/MacOS`.
 
 Notes and caveats:
 

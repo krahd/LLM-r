@@ -58,6 +58,21 @@ if [[ -z "$vst3_list" ]]; then
   exit 0
 fi
 
+validate_vst3_bundle() {
+  local bundle="$1"
+  local macos_dir="$bundle/Contents/MacOS"
+
+  if [[ ! -d "$macos_dir" ]]; then
+    echo "Invalid VST3 bundle: $bundle has no Contents/MacOS directory." >&2
+    return 1
+  fi
+
+  if ! find "$macos_dir" -maxdepth 1 -type f -perm -111 -print -quit | grep -q .; then
+    echo "Invalid VST3 bundle: $bundle has no executable plugin binary in Contents/MacOS." >&2
+    return 1
+  fi
+}
+
 echo "Installing .vst3 bundles to: $TARGET_DIR_EXPANDED"
 mkdir -p "$TARGET_DIR_EXPANDED"
 
@@ -65,6 +80,7 @@ while IFS= read -r vst3; do
   if [[ -z "$vst3" ]]; then
     continue
   fi
+  validate_vst3_bundle "$vst3"
   echo "Copying: $vst3 -> $TARGET_DIR_EXPANDED/"
   rsync -a "$vst3" "$TARGET_DIR_EXPANDED/"
 done <<< "$vst3_list"
