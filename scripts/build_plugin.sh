@@ -155,11 +155,10 @@ copy_vst3_bundles() {
     echo "Including .vst3 bundles from: $vst3_src"
     vendor_dir="$DIST_DIR/$VENDOR/$PLUGIN_FOLDER"
     mkdir -p "$vendor_dir"
-    # Find .vst3 directories and copy them
     while IFS= read -r -d '' vst3; do
       echo "Copying $vst3 -> $vendor_dir/"
       cp -a "$vst3" "$vendor_dir/"
-    done < <(find "$vst3_src" -name '*.vst3' -type d -print0 2>/dev/null || true)
+    done < <(find "$vst3_src" -maxdepth 1 -name '*.vst3' -not -name '.*' -type d -print0 2>/dev/null || true)
 
     # Recreate vendor zip to include vst3 bundles
     vendor_zip="${VENDOR// /_}-${PLUGIN_FOLDER}-${VERSION}.zip"
@@ -191,7 +190,7 @@ copy_au_bundles() {
     while IFS= read -r -d '' au; do
       echo "Copying $au -> $vendor_dir/"
       cp -a "$au" "$vendor_dir/"
-    done < <(find "$au_src" -name '*.component' -type d -print0 2>/dev/null || true)
+    done < <(find "$au_src" -maxdepth 1 -name '*.component' -not -name '.*' -type d -print0 2>/dev/null || true)
 
     vendor_zip="${VENDOR// /_}-${PLUGIN_FOLDER}-${VERSION}.zip"
     (cd "$DIST_DIR" && zip -r "$vendor_zip" "$VENDOR" >/dev/null)
@@ -210,7 +209,7 @@ copy_vst_bundles() {
     while IFS= read -r -d '' vst; do
       echo "Copying $vst -> $vendor_dir/"
       cp -a "$vst" "$vendor_dir/"
-    done < <(find "$vst_src" -name '*.vst' -type d -print0 2>/dev/null || true)
+    done < <(find "$vst_src" -maxdepth 1 -name '*.vst' -not -name '.*' -type d -print0 2>/dev/null || true)
 
     vendor_zip="${VENDOR// /_}-${PLUGIN_FOLDER}-${VERSION}.zip"
     (cd "$DIST_DIR" && zip -r "$vendor_zip" "$VENDOR" >/dev/null)

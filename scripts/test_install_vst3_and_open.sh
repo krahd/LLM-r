@@ -1,56 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build the local GUI package, include a test VST3 bundle, install VST3 bundles,
+# Install .vst3 bundles from build/vst3/ into the system VST3 folder,
 # quit Ableton Live if running, and open the local test set.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+VST3_SRC="${VST3_SRC:-$REPO_ROOT/build/vst3}"
 VST3_TARGET="${1:-$HOME/Library/Audio/Plug-Ins/VST3}"
 VST3_TARGET_EXPANDED="${VST3_TARGET/#\~/$HOME}"
 TEST_SET="$REPO_ROOT/Test Set Project/Test Set.als"
 
-usage() {
-  cat <<EOF
-Usage: $(basename "$0") [VST3_TARGET_DIR]
-Builds the GUI package, installs test VST3 bundles, and opens Test Set Project/Test Set.als.
-Defaults to ~/Library/Audio/Plug-Ins/VST3
-EOF
-}
-
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
+  echo "Usage: $(basename "$0") [VST3_TARGET_DIR]"
+  echo "Installs .vst3 bundles from build/vst3/ and opens Test Set Project/Test Set.als."
+  echo "Defaults to ~/Library/Audio/Plug-Ins/VST3"
   exit 0
 fi
 
-echo "Building GUI and including VST3 bundles if present..."
-# Prepare a stable test VST3 source (outside of the build/ folder so --clean won't remove it)
-TEST_VST3_SRC="$REPO_ROOT/test_assets/vst3"
-if [[ ! -d "$TEST_VST3_SRC" || -z "$(find "$TEST_VST3_SRC" -name '*.vst3' -type d -print -quit 2>/dev/null)" ]]; then
-  echo "No .vst3 bundles in $TEST_VST3_SRC - creating a dummy TestPlugin.vst3 for test"
-  mkdir -p "$TEST_VST3_SRC/TestPlugin.vst3/Contents/Resources"
-  cat > "$TEST_VST3_SRC/TestPlugin.vst3/Contents/Info.plist" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleIdentifier</key>
-  <string>com.example.testplugin</string>
-  <key>CFBundleName</key>
-  <string>TestPlugin</string>
-</dict>
-</plist>
-PLIST
-  echo "This is a dummy VST3 bundle used only for testing." > "$TEST_VST3_SRC/TestPlugin.vst3/Contents/Resources/README.txt"
+echo "Installing VST3 bundles from: $VST3_SRC"
+mkdir -p "$VST3_TARGET_EXPANDED"
+
+installed=0
+while IFS= read -r -d '' bundle; do
+  name="$(basename "$bundle")"
+  echo "  $name → $VST3_TARGET_EXPANDED/"
+  rsync -a "$bundle" "$VST3_TARGET_EXPANDED/"
+  installed=1
+done < <(find "$VST3_SRC" -maxdepth 1 -name '*.vst3' -not -name '.*' -type d -print0 2>/dev/null || true)
+
+if [[ $installed -eq 0 ]]; then
+  echo "No .vst3 bundles found in $VST3_SRC"
+  echo "Build your plugin first so that $VST3_SRC/YourPlugin.vst3 exists."
 fi
-
-# Build only the GUI and include any local VST3 bundles for testing
-bash "$REPO_ROOT/scripts/build_plugin.sh" --clean --gui \
-  --vst3-dir "$TEST_VST3_SRC" \
-  --au-dir "$REPO_ROOT/build/au" \
-  --vst-dir "$REPO_ROOT/build/vst"
-
-echo "Installing VST3 bundles to: $VST3_TARGET_EXPANDED"
-bash "$REPO_ROOT/scripts/install_vst3.sh" "$VST3_TARGET_EXPANDED"
 
 
 echo "Attempting to quit Ableton Live if it's running..."

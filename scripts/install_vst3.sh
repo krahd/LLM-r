@@ -37,7 +37,7 @@ vst3_list=""
 
 if [[ -d "$vendor_dir" ]]; then
   echo "Searching for .vst3 bundles in $vendor_dir"
-  vst3_list=$(find "$vendor_dir" -name '*.vst3' -type d -print 2>/dev/null || true)
+  vst3_list=$(find "$vendor_dir" -maxdepth 1 -name '*.vst3' -not -name '.*' -type d -print 2>/dev/null || true)
 else
   vendor_zip=$(ls -t "$DIST_DIR/${VENDOR// /_}-${PLUGIN_FOLDER}-*.zip" 2>/dev/null | head -n1 || true)
   if [[ -z "$vendor_zip" ]]; then
@@ -49,7 +49,7 @@ else
   echo "Extracting vendor zip to: $tmpdir"
   unzip -q "$vendor_zip" -d "$tmpdir"
   vendor_dir="$tmpdir/$VENDOR/$PLUGIN_FOLDER"
-  vst3_list=$(find "$vendor_dir" -name '*.vst3' -type d -print 2>/dev/null || true)
+  vst3_list=$(find "$vendor_dir" -maxdepth 1 -name '*.vst3' -not -name '.*' -type d -print 2>/dev/null || true)
 fi
 
 if [[ -z "$vst3_list" ]]; then
