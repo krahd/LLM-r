@@ -13,11 +13,11 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [TARGET_DIR]
 Installs .vst3 bundles from the release vendor package into TARGET_DIR.
-Defaults to ~/Music/Ableton/User Library/Plug-Ins/VST3
+Defaults to ~/Library/Audio/Plug-Ins/VST3
 EOF
 }
 
-TARGET_DIR="${1:-$HOME/Music/Ableton/User Library/Plug-Ins/VST3}"
+TARGET_DIR="${1:-$HOME/Library/Audio/Plug-Ins/VST3}"
 if [[ "${TARGET_DIR}" == "-h" || "${TARGET_DIR}" == "--help" ]]; then
   usage
   exit 0

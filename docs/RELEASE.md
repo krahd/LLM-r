@@ -31,13 +31,13 @@ Local install helpers:
 
 - `scripts/install_plugin.sh` installs the latest vendor zip from `release/`.
 - `scripts/install_vst3.sh` installs `.vst3` bundles from the vendor package
-  into `~/Music/Ableton/User Library/Plug-Ins/VST3` by default.
+  into `~/Library/Audio/Plug-Ins/VST3` by default.
 - `scripts/test_install_vst3_and_open.sh` is a local macOS helper that builds
-  VST3 bundles, installs them into the Ableton User Library plug-in folder, and
+  VST3 bundles, installs them into the user Library VST3 plug-in folder, and
   opens the ignored `Test Set Project/Test Set.als` test set. Set
-  `LLMR_VST3_BUILD_CMD` or add `scripts/build_vst3.sh` to produce bundles under
-  `build/vst3`. The helper rejects placeholder `.vst3` directories that do not
-  contain an executable plugin binary under `Contents/MacOS`.
+  `LLMR_VST3_BUILD_CMD` to override the default `scripts/build_vst3.sh` build.
+  The helper rejects placeholder `.vst3` directories that do not contain an
+  executable plugin binary under `Contents/MacOS`.
 
 Notes and caveats:
 

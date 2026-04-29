@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build local VST3 bundles, install them into Ableton's User Library plug-in
+# Build local VST3 bundles, install them into the user Library VST3 plug-in
 # folder, quit Ableton Live if running, and open the local test set.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VST3_BUILD_DIR="${VST3_BUILD_DIR:-$REPO_ROOT/build/vst3}"
-VST3_TARGET="${1:-$HOME/Music/Ableton/User Library/Plug-Ins/VST3}"
+VST3_TARGET="${1:-$HOME/Library/Audio/Plug-Ins/VST3}"
 VST3_TARGET_EXPANDED="${VST3_TARGET/#\~/$HOME}"
 TEST_SET="$REPO_ROOT/Test Set Project/Test Set.als"
 
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [VST3_TARGET_DIR]
-Builds local VST3 bundles, installs them into Ableton's User Library plug-in
+Builds local VST3 bundles, installs them into the user Library VST3 plug-in
 folder, and opens Test Set Project/Test Set.als.
 
 Defaults:
-  VST3_TARGET_DIR=$HOME/Music/Ableton/User Library/Plug-Ins/VST3
+  VST3_TARGET_DIR=$HOME/Library/Audio/Plug-Ins/VST3
   VST3_BUILD_DIR=$REPO_ROOT/build/vst3
 
 Build command selection:
