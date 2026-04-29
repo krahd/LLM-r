@@ -10,12 +10,13 @@ try:
 except ImportError:  # pragma: no cover
     class SimpleUDPClient:  # type: ignore[override]
         def __init__(self, host: str, port: int) -> None:
+            self.host = host
+            self.port = port
+
+        def send_message(self, address: str, args: list[Any]) -> None:
             raise RuntimeError(
                 "python-osc is required. Install it with: pip install python-osc"
             )
-
-        def send_message(self, address: str, args: list[Any]) -> None:  # pragma: no cover
-            pass
 
 
 @dataclass

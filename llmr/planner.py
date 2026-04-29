@@ -13,13 +13,15 @@ from llmr.modelito_adapter import ModelitoClient
 from llmr.schemas import PlanEnvelope, PlannedToolCall, ToolName, parse_plan_envelope
 
 
-
-def _system_prompt() -> str:
+def _system_prompt(extra_prompt: str = "") -> str:
     available_tools = "\n".join(
-        f'- {cap.tool.value} ({cap.domain}, safety={cap.safety}): {cap.description}; args={cap.args_schema}'
+        (
+            f"- {cap.tool.value} ({cap.domain}, safety={cap.safety}): "
+            f"{cap.description}; args={cap.args_schema}"
+        )
         for cap in capabilities()
     )
-    return f"""You are the LLM-r planner for Ableton Live.
+    prompt = f"""You are the LLM-r planner for Ableton Live.
 Return ONLY valid JSON matching schema:
 {{
   "explanation": "short explanation",
@@ -32,6 +34,9 @@ Return ONLY valid JSON matching schema:
 Available tools:
 {available_tools}
 """
+    if extra_prompt.strip():
+        prompt += f"\nAdditional optional guidance:\n{extra_prompt.strip()}\n"
+    return prompt
 
 
 @dataclass
@@ -157,9 +162,15 @@ class PlanStore:
 
 
 class IntentPlanner:
-    def __init__(self, llm: ModelitoClient, ableton: AbletonOSCClient) -> None:
+    def __init__(
+        self,
+        llm: ModelitoClient,
+        ableton: AbletonOSCClient,
+        extra_prompt: str = "",
+    ) -> None:
         self.llm = llm
         self.ableton = ableton
+        self.extra_prompt = extra_prompt
 
     def plan(self, user_prompt: str) -> StoredPlan:
         macro_calls = _maybe_parse_macro_prompt(user_prompt)
@@ -173,7 +184,9 @@ class IntentPlanner:
                 ableton=self.ableton,
             )
 
-        result = self.llm.complete(f"{_system_prompt()}\nUser request: {user_prompt}")
+        result = self.llm.complete(
+            f"{_system_prompt(self.extra_prompt)}\nUser request: {user_prompt}"
+        )
         envelope = _parse_envelope(result.raw_text)
         return _build_stored_plan(
             prompt=user_prompt,

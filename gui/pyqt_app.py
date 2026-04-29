@@ -60,6 +60,15 @@ def _save_gui_settings(data: dict) -> None:
     _GUI_SETTINGS_PATH.write_text(json.dumps(data, indent=2))
 
 
+def _load_planner_extra_prompt(path: str) -> str:
+    if not path:
+        return ""
+    try:
+        return Path(path).expanduser().read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
 # ── Backend interface ─────────────────────────────────────────────────────────
 
 class Backend:
@@ -136,6 +145,12 @@ class EmbeddedBackend(Backend):
         from llmr.modelito_adapter import ModelitoClient
         from llmr.planner import IntentPlanner
 
+        extra_prompt = ""
+        if self._settings.planner_extra_prompt_enabled:
+            extra_prompt = _load_planner_extra_prompt(
+                self._settings.planner_extra_prompt_path
+            )
+
         return IntentPlanner(
             llm=ModelitoClient(
                 provider=self._settings.modelito_provider,
@@ -145,6 +160,7 @@ class EmbeddedBackend(Backend):
                 self._settings.ableton_host,
                 self._settings.ableton_port,
             ),
+            extra_prompt=extra_prompt,
         )
 
     def plan(self, prompt: str) -> dict:
@@ -209,6 +225,8 @@ class EmbeddedBackend(Backend):
         return {
             "modelito_provider": s.modelito_provider,
             "modelito_model": s.modelito_model,
+            "planner_extra_prompt_enabled": s.planner_extra_prompt_enabled,
+            "planner_extra_prompt_path": s.planner_extra_prompt_path,
             "ableton_host": s.ableton_host,
             "ableton_port": int(s.ableton_port),
         }
@@ -219,6 +237,10 @@ class EmbeddedBackend(Backend):
             s.modelito_provider = data["modelito_provider"]
         if data.get("modelito_model"):
             s.modelito_model = data["modelito_model"]
+        if "planner_extra_prompt_enabled" in data:
+            s.planner_extra_prompt_enabled = bool(data["planner_extra_prompt_enabled"])
+        if "planner_extra_prompt_path" in data:
+            s.planner_extra_prompt_path = data.get("planner_extra_prompt_path") or ""
         if data.get("ableton_host"):
             s.ableton_host = data["ableton_host"]
         if data.get("ableton_port"):
@@ -346,6 +368,22 @@ class SettingsDialog(QDialog):
         llm_form.addRow("Model:", self.model_edit)
         llm_box.setLayout(llm_form)
 
+        planner_box = QGroupBox("Planner Guidance")
+        planner_form = QFormLayout()
+        self.extra_prompt_enabled = QCheckBox("Send LLM-r assistant prompt to the LLM")
+        self.extra_prompt_path_edit = QLineEdit()
+        self.extra_prompt_path_edit.setPlaceholderText("Path to optional planner prompt")
+        planner_note = QLabel(
+            "Enabled by default. Disable this if you want the model to use only"
+            " the generated tool catalog."
+        )
+        planner_note.setWordWrap(True)
+        planner_note.setStyleSheet("color: gray; font-size: 11px;")
+        planner_form.addRow(self.extra_prompt_enabled)
+        planner_form.addRow("Prompt file:", self.extra_prompt_path_edit)
+        planner_form.addRow(planner_note)
+        planner_box.setLayout(planner_form)
+
         abl_box = QGroupBox("Ableton Live (AbletonOSC)")
         abl_form = QFormLayout()
         self.ableton_host_edit = QLineEdit()
@@ -363,6 +401,7 @@ class SettingsDialog(QDialog):
 
         outer.addWidget(conn_box)
         outer.addWidget(llm_box)
+        outer.addWidget(planner_box)
         outer.addWidget(abl_box)
         outer.addWidget(btns)
         self.setLayout(outer)
@@ -372,12 +411,20 @@ class SettingsDialog(QDialog):
     def _populate(self, cached: dict) -> None:
         self.provider_combo.setCurrentText(cached.get("provider", "openai"))
         self.model_edit.setText(cached.get("model", "gpt-4.1-mini"))
+        self.extra_prompt_enabled.setChecked(
+            bool(cached.get("planner_extra_prompt_enabled", True))
+        )
+        self.extra_prompt_path_edit.setText(cached.get("planner_extra_prompt_path", ""))
         self.ableton_host_edit.setText(cached.get("ableton_host", "127.0.0.1"))
         self.ableton_port_spin.setValue(int(cached.get("ableton_port", 11000)))
         try:
             live = self._backend.get_settings()
             self.provider_combo.setCurrentText(live.get("modelito_provider", "openai"))
             self.model_edit.setText(live.get("modelito_model", ""))
+            self.extra_prompt_enabled.setChecked(
+                bool(live.get("planner_extra_prompt_enabled", True))
+            )
+            self.extra_prompt_path_edit.setText(live.get("planner_extra_prompt_path", ""))
             self.ableton_host_edit.setText(live.get("ableton_host", "127.0.0.1"))
             self.ableton_port_spin.setValue(int(live.get("ableton_port", 11000)))
         except Exception:
@@ -389,6 +436,8 @@ class SettingsDialog(QDialog):
             "token": self.token_edit.text().strip(),
             "provider": self.provider_combo.currentText().strip(),
             "model": self.model_edit.text().strip(),
+            "planner_extra_prompt_enabled": self.extra_prompt_enabled.isChecked(),
+            "planner_extra_prompt_path": self.extra_prompt_path_edit.text().strip(),
             "ableton_host": self.ableton_host_edit.text().strip(),
             "ableton_port": self.ableton_port_spin.value(),
         }
@@ -619,6 +668,8 @@ class MainWindow(QMainWindow):
             self._backend.patch_settings({
                 "modelito_provider": vals["provider"],
                 "modelito_model": vals["model"],
+                "planner_extra_prompt_enabled": vals["planner_extra_prompt_enabled"],
+                "planner_extra_prompt_path": vals["planner_extra_prompt_path"],
                 "ableton_host": vals["ableton_host"],
                 "ableton_port": vals["ableton_port"],
                 "api_token": vals["token"] or None,

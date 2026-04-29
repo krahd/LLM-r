@@ -95,6 +95,59 @@ def test_models_and_metadata(monkeypatch):
     assert metadata["available"] is True
 
 
+def test_load_planner_extra_prompt(tmp_path):
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("extra planner context", encoding="utf-8")
+
+    assert app_module._load_planner_extra_prompt(str(prompt_path)) == "extra planner context"
+    assert app_module._load_planner_extra_prompt(str(tmp_path / "missing.md")) == ""
+
+
+def test_settings_include_planner_extra_prompt_toggle(monkeypatch):
+    monkeypatch.setattr(app_module.settings, "planner_extra_prompt_enabled", True)
+    monkeypatch.setattr(app_module.settings, "planner_extra_prompt_path", "docs/prompt.md")
+
+    payload = app_module.get_settings()
+
+    assert payload["planner_extra_prompt_enabled"] is True
+    assert payload["planner_extra_prompt_path"] == "docs/prompt.md"
+
+
+def test_update_settings_can_disable_planner_extra_prompt(monkeypatch):
+    monkeypatch.setattr(app_module.settings, "planner_extra_prompt_enabled", True)
+    monkeypatch.setattr(app_module.settings, "planner_extra_prompt_path", "docs/prompt.md")
+    monkeypatch.setattr(type(app_module.settings), "save", lambda self: None)
+
+    payload = app_module.update_settings(
+        app_module.SettingsPatch(planner_extra_prompt_enabled=False)
+    )
+
+    assert payload["planner_extra_prompt_enabled"] is False
+
+
+def test_build_planner_respects_planner_extra_prompt_toggle(monkeypatch, tmp_path):
+    captured = {}
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("enabled context", encoding="utf-8")
+
+    class DummyPlanner:
+        def __init__(self, llm, ableton, extra_prompt="") -> None:
+            captured["extra_prompt"] = extra_prompt
+
+    monkeypatch.setattr(app_module, "IntentPlanner", DummyPlanner)
+    monkeypatch.setattr(app_module, "ModelitoClient", DummyModelitoClient)
+    monkeypatch.setattr(app_module, "AbletonOSCClient", lambda host, port: object())
+    monkeypatch.setattr(app_module.settings, "planner_extra_prompt_path", str(prompt_path))
+    monkeypatch.setattr(app_module.settings, "planner_extra_prompt_enabled", False)
+
+    app_module._build_planner()
+    assert captured["extra_prompt"] == ""
+
+    monkeypatch.setattr(app_module.settings, "planner_extra_prompt_enabled", True)
+    app_module._build_planner()
+    assert captured["extra_prompt"] == "enabled context"
+
+
 def test_stream_endpoint(monkeypatch):
     monkeypatch.setattr(app_module, "ModelitoClient", DummyModelitoClient)
     response = app_module.stream_completion(app_module.StreamRequest(prompt="hello world"))
@@ -184,7 +237,24 @@ def test_capabilities_v2_filters():
     assert all(item["destructive"] is False for item in payload["capabilities"])
 
 
-def test_live_state_endpoints_after_execute():
+def test_live_state_endpoints_after_execute(monkeypatch):
+    def fake_run_actions(actions, **_kwargs):
+        return (
+            [
+                {
+                    "index": index,
+                    "tool": action.tool.value,
+                    "address": action.address,
+                    "args": action.args,
+                    "status": "sent",
+                }
+                for index, action in enumerate(actions)
+            ],
+            datetime.now(timezone.utc).isoformat(),
+        )
+
+    monkeypatch.setattr(app_module, "_run_actions", fake_run_actions)
+
     plan = StoredPlan(
         id="state-1",
         prompt="state",

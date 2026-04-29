@@ -50,6 +50,10 @@ class ToolCallInput(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
 
 
+MacroCallInput = ToolCallInput
+ExecuteCallInput = ToolCallInput
+
+
 class ExecuteBatchRequest(BaseModel):
     calls: list[ToolCallInput] = Field(default_factory=list)
     approved: bool = False
@@ -68,6 +72,8 @@ class MacroMutationRequest(BaseModel):
 class SettingsPatch(BaseModel):
     modelito_provider: str | None = None
     modelito_model: str | None = None
+    planner_extra_prompt_enabled: bool | None = None
+    planner_extra_prompt_path: str | None = None
     ableton_host: str | None = None
     ableton_port: int | None = None
     api_token: str | None = None
@@ -331,10 +337,23 @@ def _serialize_plan(plan) -> dict:
     }
 
 
+def _load_planner_extra_prompt(path: str) -> str:
+    if not path:
+        return ""
+    try:
+        return Path(path).expanduser().read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
 def _build_planner() -> IntentPlanner:
+    extra_prompt = ""
+    if settings.planner_extra_prompt_enabled:
+        extra_prompt = _load_planner_extra_prompt(settings.planner_extra_prompt_path)
     return IntentPlanner(
         llm=ModelitoClient(provider=settings.modelito_provider, model=settings.modelito_model),
         ableton=AbletonOSCClient(settings.ableton_host, settings.ableton_port),
+        extra_prompt=extra_prompt,
     )
 
 
@@ -458,6 +477,8 @@ def get_settings() -> dict:
     return {
         "modelito_provider": settings.modelito_provider,
         "modelito_model": settings.modelito_model,
+        "planner_extra_prompt_enabled": settings.planner_extra_prompt_enabled,
+        "planner_extra_prompt_path": settings.planner_extra_prompt_path,
         "ableton_host": settings.ableton_host,
         "ableton_port": settings.ableton_port,
     }
@@ -469,6 +490,10 @@ def update_settings(req: SettingsPatch) -> dict:
         settings.modelito_provider = req.modelito_provider
     if req.modelito_model is not None:
         settings.modelito_model = req.modelito_model
+    if req.planner_extra_prompt_enabled is not None:
+        settings.planner_extra_prompt_enabled = req.planner_extra_prompt_enabled
+    if req.planner_extra_prompt_path is not None:
+        settings.planner_extra_prompt_path = req.planner_extra_prompt_path
     if req.ableton_host is not None:
         settings.ableton_host = req.ableton_host
     if req.ableton_port is not None:

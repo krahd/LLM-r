@@ -100,6 +100,23 @@ curl -s -X POST http://127.0.0.1:8787/api/execute \
   -d '{"plan_id": "<PLAN_ID>", "dry_run": false}'
 ```
 
+### Optional LLM assistant context
+
+If you are wiring LLM-r into a custom assistant, agent, or chat UI, you can give
+the model the optional prompt in [docs/LLM_ASSISTANT_PROMPT.md](docs/LLM_ASSISTANT_PROMPT.md).
+It explains the current Ableton Live control surface, the required JSON plan
+format, safe execution behavior, and how to translate broad requests like
+"compose a piano ballad", "mix the live set", or "add a sax solo" into actions
+LLM-r can actually execute.
+
+LLM-r appends this context to the planner prompt by default. You can disable it
+in the GUI Settings dialog, via `PATCH /api/settings`, or when launching the
+server:
+
+```bash
+LLMR_PLANNER_EXTRA_PROMPT_ENABLED=false python backend/main.py
+```
+
 ---
 
 ## Configuration
@@ -110,6 +127,8 @@ Settings are read from environment variables, then from `.llmr/settings.json` (w
 | --- | --- | --- |
 | `LLMR_PROVIDER` | `openai` | Modelito LLM provider |
 | `LLMR_MODEL` | `gpt-4.1-mini` | Model name for the selected provider |
+| `LLMR_PLANNER_EXTRA_PROMPT_ENABLED` | `true` | Whether to append the optional LLM assistant prompt to the planner prompt |
+| `LLMR_PLANNER_EXTRA_PROMPT_PATH` | `docs/LLM_ASSISTANT_PROMPT.md` | Optional file appended to the LLM-r planner prompt |
 | `LLMR_HOST` | `0.0.0.0` | Interface the API server binds to |
 | `LLMR_PORT` | `8787` | Port the API server listens on |
 | `LLMR_ABLETON_HOST` | `127.0.0.1` | AbletonOSC host |

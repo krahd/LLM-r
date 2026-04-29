@@ -7,8 +7,11 @@ from llmr.planner import IntentPlanner, PlanStore, StoredPlan
 class DummyLLM:
     def __init__(self, response: str) -> None:
         self.response = response
+        self.last_prompt = ""
 
     def complete(self, prompt: str):
+        self.last_prompt = prompt
+
         class Result:
             raw_text = ""
 
@@ -125,3 +128,24 @@ def test_system_prompt_reflects_capabilities():
     assert "song_play" in prompt
     assert "song_metronome" in prompt
     assert "track_rename" in prompt
+
+
+def test_system_prompt_can_include_optional_guidance():
+    from llmr.planner import _system_prompt
+
+    prompt = _system_prompt("Prefer staged plans for live performance changes.")
+    assert "Additional optional guidance" in prompt
+    assert "Prefer staged plans" in prompt
+
+
+def test_planner_passes_optional_guidance_to_llm():
+    llm = DummyLLM('{"explanation":"ok","confidence":0.5,"calls":[]}')
+    planner = IntentPlanner(
+        llm=llm,
+        ableton=AbletonOSCClient("127.0.0.1", 11000),
+        extra_prompt="Explain unsupported MIDI note edits.",
+    )
+
+    planner.plan("humanize the drums")
+
+    assert "Explain unsupported MIDI note edits." in llm.last_prompt

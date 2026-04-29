@@ -5,6 +5,9 @@ from pathlib import Path
 from pydantic import BaseModel
 
 _SETTINGS_PATH = Path(os.getenv("LLMR_SETTINGS_PATH", ".llmr/settings.json"))
+_DEFAULT_PLANNER_EXTRA_PROMPT_PATH = (
+    Path(__file__).resolve().parent.parent / "docs" / "LLM_ASSISTANT_PROMPT.md"
+)
 
 
 def _read_file() -> dict:
@@ -30,11 +33,20 @@ def _resolve(env_key: str, file_key: str, default):
     return default
 
 
+def _resolve_bool(env_key: str, file_key: str, default: bool) -> bool:
+    v = _resolve(env_key, file_key, default)
+    if isinstance(v, bool):
+        return v
+    return str(v).strip().lower() not in {"0", "false", "no", "off", ""}
+
+
 class Settings(BaseModel):
     ableton_host: str
     ableton_port: int
     modelito_model: str
     modelito_provider: str
+    planner_extra_prompt_enabled: bool
+    planner_extra_prompt_path: str
     app_host: str
     app_port: int
     plan_store_path: str
@@ -52,6 +64,8 @@ class Settings(BaseModel):
                     "ableton_port": self.ableton_port,
                     "modelito_model": self.modelito_model,
                     "modelito_provider": self.modelito_provider,
+                    "planner_extra_prompt_enabled": self.planner_extra_prompt_enabled,
+                    "planner_extra_prompt_path": self.planner_extra_prompt_path,
                     "api_token": self.api_token,
                 },
                 indent=2,
@@ -64,6 +78,16 @@ settings = Settings(
     ableton_port=int(_resolve("LLMR_ABLETON_PORT", "ableton_port", 11000)),
     modelito_model=_resolve("LLMR_MODEL", "modelito_model", "gpt-4.1-mini"),
     modelito_provider=_resolve("LLMR_PROVIDER", "modelito_provider", "openai"),
+    planner_extra_prompt_enabled=_resolve_bool(
+        "LLMR_PLANNER_EXTRA_PROMPT_ENABLED",
+        "planner_extra_prompt_enabled",
+        True,
+    ),
+    planner_extra_prompt_path=_resolve(
+        "LLMR_PLANNER_EXTRA_PROMPT_PATH",
+        "planner_extra_prompt_path",
+        str(_DEFAULT_PLANNER_EXTRA_PROMPT_PATH),
+    ),
     app_host=os.getenv("LLMR_HOST", "0.0.0.0"),
     app_port=int(os.getenv("LLMR_PORT", "8787")),
     plan_store_path=os.getenv("LLMR_PLAN_STORE_PATH", ".llmr/plans.json"),
