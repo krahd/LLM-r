@@ -169,7 +169,7 @@ Settings are read from environment variables, then from `.llmr/settings.json` (w
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/health` | Health check |
-| `GET` | `/api/capabilities` | Runtime capability registry (tools, argument schemas, destructive flags) |
+| `GET` | `/api/capabilities` | Runtime capability registry with domain/safety/destructive filtering |
 | `GET` | `/api/settings` | Current runtime settings |
 | `PATCH` | `/api/settings` | Update runtime settings and persist to disk |
 | `GET` | `/api/models` | Available models from Modelito |
@@ -205,7 +205,6 @@ Settings are read from environment variables, then from `.llmr/settings.json` (w
 | `GET` | `/api/live/tracks/{id}/devices` | Devices on a track |
 | `GET` | `/api/live/tracks/{id}/clips` | Clips on a track |
 | `GET` | `/api/live/tracks/{id}/parameters` | Parameters on a track |
-| `GET` | `/api/v2/capabilities` | Capabilities with domain/safety/destructive filtering |
 
 ### History
 
@@ -225,7 +224,7 @@ When `LLMR_API_TOKEN` is set, include the token on write requests:
 
 ## Capabilities
 
-LLM-r exposes a declarative OSC capability registry. The runtime source of truth is always `GET /api/capabilities`. Capabilities are organised into domains:
+LLM-r exposes a declarative OSC capability registry. The runtime source of truth is always `GET /api/capabilities`. It accepts optional query parameters: `domain`, `safety`, and `include_destructive=false`. Capabilities are organised into domains:
 
 | Domain | Actions |
 | --- | --- |
@@ -356,7 +355,7 @@ See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
 | Document | Description |
 | --- | --- |
 | [docs/CAPABILITIES.md](docs/CAPABILITIES.md) | Full capability catalog |
-| [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | AbletonOSC and pre-release compatibility notes |
+| [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | Current AbletonOSC runtime contract notes |
 | [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) | Current pre-release audit and roadmap |
 | [docs/GUI-PLUGIN.md](docs/GUI-PLUGIN.md) | Desktop GUI behavior and settings |
 | [docs/LLM_ASSISTANT_PROMPT.md](docs/LLM_ASSISTANT_PROMPT.md) | Default planner guidance prompt |

@@ -13,8 +13,9 @@ Ableton Live actions. You must work through LLM-r's available capabilities, not
 invent Ableton operations that are not present in the capability registry.
 
 Runtime source of truth:
-- Prefer GET /api/capabilities, or GET /api/v2/capabilities, for the current tool
-  catalog.
+- Prefer GET /api/capabilities for the current tool catalog. Use its `domain`,
+  `safety`, and `include_destructive` query filters when you only need part of
+  the catalog.
 - Prefer GET /api/live/song and GET /api/live/tracks when you need current set
   context before planning.
 - If a capability appears in runtime output, you may use it. If it is absent, do

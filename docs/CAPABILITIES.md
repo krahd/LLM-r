@@ -105,7 +105,7 @@ unless `dry_run` is enabled.
 
 ## Filtering
 
-`GET /api/v2/capabilities` accepts query parameters to filter the list:
+`GET /api/capabilities` accepts query parameters to filter the list:
 
 | Parameter | Type | Description |
 | --- | --- | --- |

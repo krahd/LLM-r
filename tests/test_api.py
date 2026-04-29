@@ -239,15 +239,21 @@ def test_capabilities_include_transport():
     names = {item["tool"] for item in payload["capabilities"]}
     assert "song_play" in names
     assert "song_stop" in names
+    assert payload["count"] == len(payload["capabilities"])
     by_tool = {item["tool"]: item for item in payload["capabilities"]}
     assert by_tool["song_play"]["domain"] == "song"
 
 
-def test_capabilities_v2_filters():
-    payload = app_module.get_capabilities_v2(domain="song", include_destructive=False)
+def test_capabilities_filters_on_single_endpoint():
+    payload = app_module.get_capabilities(domain="song", include_destructive=False)
     assert payload["count"] >= 1
     assert all(item["domain"] == "song" for item in payload["capabilities"])
     assert all(item["destructive"] is False for item in payload["capabilities"])
+
+
+def test_capabilities_has_single_route():
+    capability_paths = [route.path for route in app_module.app.routes if route.path.endswith("/capabilities")]
+    assert capability_paths == ["/api/capabilities"]
 
 
 def test_live_state_endpoints_after_execute(monkeypatch):

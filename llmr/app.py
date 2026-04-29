@@ -528,24 +528,7 @@ def index() -> str:
 
 
 @app.get("/api/capabilities")
-def get_capabilities() -> dict:
-    return {
-        "capabilities": [
-            {
-                "tool": c.tool.value,
-                "description": c.description,
-                "args_schema": c.args_schema,
-                "destructive": c.destructive,
-                "domain": c.domain,
-                "safety": c.safety,
-            }
-            for c in capabilities()
-        ]
-    }
-
-
-@app.get("/api/v2/capabilities")
-def get_capabilities_v2(
+def get_capabilities(
     domain: str | None = None,
     safety: str | None = None,
     include_destructive: bool = True,
