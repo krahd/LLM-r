@@ -57,6 +57,13 @@ constexpr TUID kIPluginFactory3IID = {
     static_cast<char>(0x9B), 0x12, 0x29, 0x10,
     0x36, static_cast<char>(0x87), static_cast<char>(0x89), 0x31,
 };
+constexpr TUID kIEditControllerIID = {
+    static_cast<char>(0xDC), static_cast<char>(0xD7), static_cast<char>(0xBB),
+    static_cast<char>(0xE3),
+    0x77, 0x42, 0x44, static_cast<char>(0x8D),
+    static_cast<char>(0xA8), 0x74, static_cast<char>(0xAA), static_cast<char>(0xCC),
+    static_cast<char>(0x97), static_cast<char>(0x9C), 0x75, static_cast<char>(0x9E),
+};
 
 inline bool iidEqual(const TUID a, const TUID b)
 {
@@ -169,6 +176,19 @@ public:
     virtual tresult setHostContext(FUnknown *context) = 0;
 };
 
+constexpr TUID kLlmrProcessorCID = {
+    0x4C, 0x4C, 0x4D, 0x52,
+    0x54, 0x4F, 0x4D, 0x41,
+    0x53, 0x4C, 0x41, 0x55,
+    0x52, 0x45, 0x4E, 0x5A,
+};
+constexpr TUID kLlmrControllerCID = {
+    0x4C, 0x4C, 0x4D, 0x52,
+    0x43, 0x54, 0x52, 0x4C,
+    0x54, 0x4F, 0x4D, 0x41,
+    0x53, 0x4C, 0x41, 0x55,
+};
+
 namespace Vst {
 
 constexpr TUID kIComponentIID = {
@@ -190,6 +210,10 @@ using BusDirection = int32;
 using BusType = int32;
 using IoMode = int32;
 using String128 = char16_t[128];
+using ParamID = uint32;
+using ParamValue = double;
+using UnitID = int32;
+using TChar = char16_t;
 
 constexpr MediaType kAudio = 0;
 constexpr MediaType kEvent = 1;
@@ -219,6 +243,19 @@ struct RoutingInfo {
 
 struct ProcessSetup;
 struct ProcessData;
+class IComponentHandler;
+class IPlugView;
+
+struct ParameterInfo {
+    ParamID id;
+    String128 title;
+    String128 shortTitle;
+    String128 units;
+    int32 stepCount;
+    ParamValue defaultNormalizedValue;
+    UnitID unitId;
+    int32 flags;
+};
 
 class IComponent : public IPluginBase {
 public:
@@ -244,6 +281,25 @@ public:
     virtual tresult setProcessing(TBool state) = 0;
     virtual tresult process(ProcessData &data) = 0;
     virtual uint32 getTailSamples() = 0;
+};
+
+class IEditController : public IPluginBase {
+public:
+    virtual tresult setComponentState(IBStream *state) = 0;
+    virtual tresult setState(IBStream *state) = 0;
+    virtual tresult getState(IBStream *state) = 0;
+    virtual int32 getParameterCount() = 0;
+    virtual tresult getParameterInfo(int32 paramIndex, ParameterInfo &info) = 0;
+    virtual tresult getParamStringByValue(ParamID id, ParamValue valueNormalized,
+                                          String128 string) = 0;
+    virtual tresult getParamValueByString(ParamID id, TChar *string,
+                                          ParamValue &valueNormalized) = 0;
+    virtual ParamValue normalizedParamToPlain(ParamID id, ParamValue valueNormalized) = 0;
+    virtual ParamValue plainParamToNormalized(ParamID id, ParamValue plainValue) = 0;
+    virtual ParamValue getParamNormalized(ParamID id) = 0;
+    virtual tresult setParamNormalized(ParamID id, ParamValue value) = 0;
+    virtual tresult setComponentHandler(IComponentHandler *handler) = 0;
+    virtual IPlugView *createView(FIDString name) = 0;
 };
 
 class LlmrComponent final : public IComponent, public IAudioProcessor {
@@ -290,9 +346,9 @@ public:
     tresult getControllerClassId(TUID classId) override
     {
         if (classId) {
-            std::memset(classId, 0, 16);
+            copyTuid(classId, kLlmrControllerCID);
         }
-        return kResultFalse;
+        return kResultOk;
     }
 
     tresult setIoMode(IoMode mode) override
@@ -418,14 +474,132 @@ private:
     std::atomic<uint32> refCount_{1};
 };
 
-} // namespace Vst
+class LlmrController final : public IEditController {
+public:
+    LlmrController() = default;
 
-constexpr TUID kLlmrProcessorCID = {
-    0x4C, 0x4C, 0x4D, 0x52,
-    0x54, 0x4F, 0x4D, 0x41,
-    0x53, 0x4C, 0x41, 0x55,
-    0x52, 0x45, 0x4E, 0x5A,
+    tresult queryInterface(const TUID iid, void **obj) override
+    {
+        if (!obj) {
+            return kInvalidArgument;
+        }
+        if (iidEqual(iid, kFUnknownIID) || iidEqual(iid, kIPluginBaseIID) ||
+            iidEqual(iid, kIEditControllerIID)) {
+            addRef();
+            *obj = static_cast<IEditController *>(this);
+            return kResultOk;
+        }
+        *obj = nullptr;
+        return kNoInterface;
+    }
+
+    uint32 addRef() override { return ++refCount_; }
+    uint32 release() override
+    {
+        const auto count = --refCount_;
+        if (count == 0) {
+            delete this;
+        }
+        return count;
+    }
+
+    tresult initialize(FUnknown *context) override
+    {
+        (void)context;
+        return kResultOk;
+    }
+
+    tresult terminate() override { return kResultOk; }
+
+    tresult setComponentState(IBStream *state) override
+    {
+        (void)state;
+        return kResultOk;
+    }
+
+    tresult setState(IBStream *state) override
+    {
+        (void)state;
+        return kResultOk;
+    }
+
+    tresult getState(IBStream *state) override
+    {
+        (void)state;
+        return kResultOk;
+    }
+
+    int32 getParameterCount() override { return 0; }
+
+    tresult getParameterInfo(int32 paramIndex, ParameterInfo &info) override
+    {
+        (void)paramIndex;
+        std::memset(&info, 0, sizeof(info));
+        return kInvalidArgument;
+    }
+
+    tresult getParamStringByValue(ParamID id, ParamValue valueNormalized,
+                                  String128 string) override
+    {
+        (void)id;
+        (void)valueNormalized;
+        if (string) {
+            string[0] = 0;
+        }
+        return kResultFalse;
+    }
+
+    tresult getParamValueByString(ParamID id, TChar *string,
+                                  ParamValue &valueNormalized) override
+    {
+        (void)id;
+        (void)string;
+        valueNormalized = 0.0;
+        return kResultFalse;
+    }
+
+    ParamValue normalizedParamToPlain(ParamID id, ParamValue valueNormalized) override
+    {
+        (void)id;
+        return valueNormalized;
+    }
+
+    ParamValue plainParamToNormalized(ParamID id, ParamValue plainValue) override
+    {
+        (void)id;
+        return plainValue;
+    }
+
+    ParamValue getParamNormalized(ParamID id) override
+    {
+        (void)id;
+        return 0.0;
+    }
+
+    tresult setParamNormalized(ParamID id, ParamValue value) override
+    {
+        (void)id;
+        (void)value;
+        return kResultFalse;
+    }
+
+    tresult setComponentHandler(IComponentHandler *handler) override
+    {
+        (void)handler;
+        return kResultOk;
+    }
+
+    IPlugView *createView(FIDString name) override
+    {
+        (void)name;
+        return nullptr;
+    }
+
+private:
+    std::atomic<uint32> refCount_{1};
 };
+
+} // namespace Vst
 
 class LlmrPluginFactory final : public IPluginFactory3 {
 public:
@@ -464,33 +638,33 @@ public:
         return kResultOk;
     }
 
-    int32 countClasses() override { return 1; }
+    int32 countClasses() override { return 2; }
 
     tresult getClassInfo(int32 index, PClassInfo *info) override
     {
-        if (index != 0 || !info) {
+        if ((index != 0 && index != 1) || !info) {
             return kInvalidArgument;
         }
         std::memset(info, 0, sizeof(*info));
-        copyTuid(info->cid, kLlmrProcessorCID);
+        copyTuid(info->cid, index == 0 ? kLlmrProcessorCID : kLlmrControllerCID);
         info->cardinality = kManyInstances;
-        copyString(info->category, "Audio Module Class");
-        copyString(info->name, "LLM-r");
+        copyString(info->category, index == 0 ? "Audio Module Class" : "Component Controller Class");
+        copyString(info->name, index == 0 ? "LLM-r" : "LLM-r Controller");
         return kResultOk;
     }
 
     tresult getClassInfo2(int32 index, PClassInfo2 *info) override
     {
-        if (index != 0 || !info) {
+        if ((index != 0 && index != 1) || !info) {
             return kInvalidArgument;
         }
         std::memset(info, 0, sizeof(*info));
-        copyTuid(info->cid, kLlmrProcessorCID);
+        copyTuid(info->cid, index == 0 ? kLlmrProcessorCID : kLlmrControllerCID);
         info->cardinality = kManyInstances;
-        copyString(info->category, "Audio Module Class");
-        copyString(info->name, "LLM-r");
+        copyString(info->category, index == 0 ? "Audio Module Class" : "Component Controller Class");
+        copyString(info->name, index == 0 ? "LLM-r" : "LLM-r Controller");
         info->classFlags = 0;
-        copyString(info->subCategories, "Instrument|Synth");
+        copyString(info->subCategories, index == 0 ? "Instrument|Synth" : "");
         copyString(info->vendor, "Tomas Laurenzo");
         copyString(info->version, "0.5.4");
         copyString(info->sdkVersion, "VST 3.8");
@@ -499,16 +673,16 @@ public:
 
     tresult getClassInfoUnicode(int32 index, PClassInfoW *info) override
     {
-        if (index != 0 || !info) {
+        if ((index != 0 && index != 1) || !info) {
             return kInvalidArgument;
         }
         std::memset(info, 0, sizeof(*info));
-        copyTuid(info->cid, kLlmrProcessorCID);
+        copyTuid(info->cid, index == 0 ? kLlmrProcessorCID : kLlmrControllerCID);
         info->cardinality = kManyInstances;
-        copyString(info->category, "Audio Module Class");
-        copyString16(info->name, "LLM-r");
+        copyString(info->category, index == 0 ? "Audio Module Class" : "Component Controller Class");
+        copyString16(info->name, index == 0 ? "LLM-r" : "LLM-r Controller");
         info->classFlags = 0;
-        copyString(info->subCategories, "Instrument|Synth");
+        copyString(info->subCategories, index == 0 ? "Instrument|Synth" : "");
         copyString16(info->vendor, "Tomas Laurenzo");
         copyString16(info->version, "0.5.4");
         copyString16(info->sdkVersion, "VST 3.8");
@@ -527,14 +701,19 @@ public:
             return kInvalidArgument;
         }
         *obj = nullptr;
-        if (std::memcmp(cid, kLlmrProcessorCID, 16) != 0) {
-            return kNoInterface;
+        if (std::memcmp(cid, kLlmrProcessorCID, 16) == 0) {
+            auto *component = new Vst::LlmrComponent();
+            const auto result = component->queryInterface(iid, obj);
+            component->release();
+            return result;
         }
-
-        auto *component = new Vst::LlmrComponent();
-        const auto result = component->queryInterface(iid, obj);
-        component->release();
-        return result;
+        if (std::memcmp(cid, kLlmrControllerCID, 16) == 0) {
+            auto *controller = new Vst::LlmrController();
+            const auto result = controller->queryInterface(iid, obj);
+            controller->release();
+            return result;
+        }
+        return kNoInterface;
     }
 
 private:
