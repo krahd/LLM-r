@@ -192,6 +192,7 @@ using IoMode = int32;
 using String128 = char16_t[128];
 
 constexpr MediaType kAudio = 0;
+constexpr MediaType kEvent = 1;
 constexpr BusDirection kInput = 0;
 constexpr BusDirection kOutput = 1;
 constexpr BusType kMain = 0;
@@ -302,22 +303,37 @@ public:
 
     int32 getBusCount(MediaType type, BusDirection dir) override
     {
-        return (type == kAudio && (dir == kInput || dir == kOutput)) ? 1 : 0;
+        if (type == kAudio && dir == kOutput) {
+            return 1;
+        }
+        if (type == kEvent && dir == kInput) {
+            return 1;
+        }
+        return 0;
     }
 
     tresult getBusInfo(MediaType type, BusDirection dir, int32 index, BusInfo &bus) override
     {
-        if (type != kAudio || index != 0 || (dir != kInput && dir != kOutput)) {
+        if (index != 0) {
             return kInvalidArgument;
         }
         std::memset(&bus, 0, sizeof(bus));
         bus.mediaType = type;
         bus.direction = dir;
-        bus.channelCount = 2;
         bus.busType = kMain;
         bus.flags = kDefaultActive;
-        copyString16(bus.name, dir == kInput ? "Stereo In" : "Stereo Out");
-        return kResultOk;
+
+        if (type == kAudio && dir == kOutput) {
+            bus.channelCount = 2;
+            copyString16(bus.name, "Stereo Out");
+            return kResultOk;
+        }
+        if (type == kEvent && dir == kInput) {
+            bus.channelCount = 16;
+            copyString16(bus.name, "MIDI In");
+            return kResultOk;
+        }
+        return kInvalidArgument;
     }
 
     tresult getRoutingInfo(RoutingInfo &inInfo, RoutingInfo &outInfo) override
@@ -358,12 +374,12 @@ public:
     {
         (void)inputs;
         (void)outputs;
-        return (numIns == 1 && numOuts == 1) ? kResultTrue : kResultFalse;
+        return (numIns == 0 && numOuts == 1) ? kResultTrue : kResultFalse;
     }
 
     tresult getBusArrangement(BusDirection dir, int32 index, SpeakerArrangement &arr) override
     {
-        if (index != 0 || (dir != kInput && dir != kOutput)) {
+        if (index != 0 || dir != kOutput) {
             return kInvalidArgument;
         }
         arr = kStereo;
@@ -474,7 +490,7 @@ public:
         copyString(info->category, "Audio Module Class");
         copyString(info->name, "LLM-r");
         info->classFlags = 0;
-        copyString(info->subCategories, "Fx|Tools");
+        copyString(info->subCategories, "Instrument|Synth");
         copyString(info->vendor, "Tomas Laurenzo");
         copyString(info->version, "0.5.4");
         copyString(info->sdkVersion, "VST 3.8");
@@ -492,7 +508,7 @@ public:
         copyString(info->category, "Audio Module Class");
         copyString16(info->name, "LLM-r");
         info->classFlags = 0;
-        copyString(info->subCategories, "Fx|Tools");
+        copyString(info->subCategories, "Instrument|Synth");
         copyString16(info->vendor, "Tomas Laurenzo");
         copyString16(info->version, "0.5.4");
         copyString16(info->sdkVersion, "VST 3.8");
