@@ -331,7 +331,7 @@ A **Settings** dialog (accessible from the toolbar) lets you configure everythin
 - Dry-run and destructive-execution defaults
 - Ableton OSC host and port
 - Server URL and API token
-- Ollama status, local model serving, online model download, and local model deletion
+- Ollama status, local model serving/stop-serving, online model download, and local model deletion
 
 GUI connection settings are persisted to `~/.llmr/gui.json`. Runtime settings are
 pushed to the server via `PATCH /api/settings` when connected to HTTP mode, or

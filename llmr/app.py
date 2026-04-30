@@ -31,10 +31,12 @@ from llmr.modelito_adapter import (
     ollama_install,
     ollama_local_models,
     ollama_remote_models,
+    ollama_running_models,
     ollama_serve,
     ollama_start,
     ollama_status,
     ollama_stop,
+    ollama_stop_serving,
 )
 from llmr.planner import IntentPlanner, PlanStore
 from llmr.prompts import planner_extra_prompt
@@ -675,6 +677,11 @@ def get_ollama_remote_models() -> dict:
     return ollama_remote_models()
 
 
+@app.get("/api/ollama/running_models")
+def get_ollama_running_models() -> dict:
+    return ollama_running_models()
+
+
 @app.post("/api/ollama/start", dependencies=[Depends(_require_auth)])
 def post_ollama_start() -> dict:
     return ollama_start()
@@ -703,6 +710,11 @@ def post_ollama_delete(req: OllamaModelRequest) -> dict:
 @app.post("/api/ollama/serve", dependencies=[Depends(_require_auth)])
 def post_ollama_serve(req: OllamaModelRequest) -> dict:
     return ollama_serve(req.model)
+
+
+@app.post("/api/ollama/stop_serving", dependencies=[Depends(_require_auth)])
+def post_ollama_stop_serving(req: OllamaModelRequest) -> dict:
+    return ollama_stop_serving(req.model)
 
 
 @app.get("/api/model_metadata")

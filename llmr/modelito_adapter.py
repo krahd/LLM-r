@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import subprocess
 from dataclasses import dataclass
 from typing import Any, Iterator
 from urllib.request import urlopen
@@ -255,6 +256,53 @@ def ollama_local_models() -> dict[str, Any]:
     return _ollama_payload(True, f"Loaded {len(models)} local model(s).", models=models)
 
 
+def ollama_running_models() -> dict[str, Any]:
+    """Return models currently loaded by Ollama.
+
+    Modelito has changed helper names across versions, so use it when available
+    and fall back to the stable Ollama CLI command.
+    """
+    models: list[str] = []
+    try:
+        modelito = _modelito_module()
+    except RuntimeError:
+        modelito = None
+
+    for method_name in ("list_running_models", "list_loaded_models", "running_models"):
+        method = getattr(modelito, method_name, None) if modelito else None
+        if callable(method):
+            try:
+                models = _clean_model_names(list(method()))
+                return _ollama_payload(
+                    True,
+                    f"{len(models)} Ollama model(s) currently served.",
+                    models=models,
+                )
+            except Exception:
+                break
+
+    try:
+        proc = subprocess.run(
+            ["ollama", "ps"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    except FileNotFoundError:
+        return _ollama_payload(False, "Ollama CLI is not installed.", models=[])
+    except Exception as exc:
+        return _ollama_payload(False, f"Unable to inspect served Ollama models: {exc}", models=[])
+
+    if proc.returncode != 0:
+        message = (proc.stderr or proc.stdout or "ollama ps failed").strip()
+        return _ollama_payload(False, message, models=[])
+
+    rows = proc.stdout.splitlines()[1:]
+    models = _clean_model_names(rows)
+    return _ollama_payload(True, f"{len(models)} Ollama model(s) currently served.", models=models)
+
+
 def ollama_remote_models() -> dict[str, Any]:
     modelito = _modelito_module()
     try:
@@ -330,3 +378,45 @@ def ollama_serve(model: str) -> dict[str, Any]:
     except Exception as exc:
         return _ollama_payload(False, f"Unable to serve {name}: {exc}", model=name)
     return _ollama_payload(ok, f"Serving {name}." if ok else f"Could not serve {name}.", model=name)
+
+
+def ollama_stop_serving(model: str) -> dict[str, Any]:
+    name = model.strip()
+    if not name:
+        return _ollama_payload(False, "Choose a served model to stop.", model=name)
+
+    try:
+        modelito = _modelito_module()
+    except RuntimeError:
+        modelito = None
+
+    for method_name in ("stop_model", "stop_serving_model", "unserve_model"):
+        method = getattr(modelito, method_name, None) if modelito else None
+        if callable(method):
+            try:
+                ok = bool(method(name))
+                return _ollama_payload(
+                    ok,
+                    f"Stopped serving {name}." if ok else f"Could not stop serving {name}.",
+                    model=name,
+                )
+            except Exception:
+                break
+
+    try:
+        proc = subprocess.run(
+            ["ollama", "stop", name],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except FileNotFoundError:
+        return _ollama_payload(False, "Ollama CLI is not installed.", model=name)
+    except Exception as exc:
+        return _ollama_payload(False, f"Unable to stop serving {name}: {exc}", model=name)
+
+    if proc.returncode != 0:
+        message = (proc.stderr or proc.stdout or f"Could not stop serving {name}.").strip()
+        return _ollama_payload(False, message, model=name)
+    return _ollama_payload(True, f"Stopped serving {name}.", model=name)

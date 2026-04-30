@@ -61,8 +61,9 @@ All Ollama management operations are available directly in the Settings panel:
 | Stop Ollama | Kills the running Ollama process |
 | Install Ollama | Opens [ollama.ai](https://ollama.ai) in your browser |
 | ↺ Refresh List | Runs `ollama list` and populates the installed-models picker |
-| Installed models combo | Shows all locally installed models; select to use |
-| Download model | Enter a model name (e.g. `llama3`, `mistral`) and click ⬇ Download |
+| Installed models combo | Shows all locally installed models; select one as the active planner model |
+| Served models combo | Shows models currently loaded by Ollama; stop a served model without stopping the service |
+| Download model | Choose from the downloadable-model pull-down or type a model name (e.g. `llama3`, `mistral`) |
 
 ## Other approaches
 

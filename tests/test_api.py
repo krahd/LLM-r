@@ -109,16 +109,19 @@ def test_ollama_management_endpoints_delegate(monkeypatch):
     monkeypatch.setattr(app_module, "ollama_status", lambda: {"ok": True, "running": False})
     monkeypatch.setattr(app_module, "ollama_local_models", lambda: {"ok": True, "models": ["llama3"]})
     monkeypatch.setattr(app_module, "ollama_remote_models", lambda: {"ok": True, "models": ["mistral"]})
+    monkeypatch.setattr(app_module, "ollama_running_models", lambda: {"ok": True, "models": ["llama3"]})
     monkeypatch.setattr(app_module, "ollama_start", lambda: {"ok": True, "message": "started"})
     monkeypatch.setattr(app_module, "ollama_stop", lambda: {"ok": True, "message": "stopped"})
     monkeypatch.setattr(app_module, "ollama_install", lambda: {"ok": True, "message": "installed"})
     monkeypatch.setattr(app_module, "ollama_download", lambda model: {"ok": True, "model": model})
     monkeypatch.setattr(app_module, "ollama_delete", lambda model: {"ok": True, "model": model})
     monkeypatch.setattr(app_module, "ollama_serve", lambda model: {"ok": True, "model": model})
+    monkeypatch.setattr(app_module, "ollama_stop_serving", lambda model: {"ok": True, "model": model})
 
     assert app_module.get_ollama_status()["ok"] is True
     assert app_module.get_ollama_local_models()["models"] == ["llama3"]
     assert app_module.get_ollama_remote_models()["models"] == ["mistral"]
+    assert app_module.get_ollama_running_models()["models"] == ["llama3"]
     assert app_module.post_ollama_start()["message"] == "started"
     assert app_module.post_ollama_stop()["message"] == "stopped"
     assert app_module.post_ollama_install()["message"] == "installed"
@@ -126,6 +129,7 @@ def test_ollama_management_endpoints_delegate(monkeypatch):
     assert app_module.post_ollama_download(req)["model"] == "llama3"
     assert app_module.post_ollama_delete(req)["model"] == "llama3"
     assert app_module.post_ollama_serve(req)["model"] == "llama3"
+    assert app_module.post_ollama_stop_serving(req)["model"] == "llama3"
 
 
 def test_load_prompt_text(tmp_path):
