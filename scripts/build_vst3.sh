@@ -85,6 +85,7 @@ fi
 
 clang++ -dynamiclib \
   -std=c++17 \
+  -fblocks \
   -fvisibility=hidden \
   "${ARCH_ARGS[@]}" \
   -mmacosx-version-min=11.0 \

@@ -40,8 +40,9 @@ Local install helpers:
   executable plugin binary under `Contents/MacOS`.
 - The default local VST3 smoke bundle is named `LLM-r.vst3` and reports
   `Tomas Laurenzo` as its VST3 factory vendor. It is advertised as a minimal
-  VST3 instrument with a native Cocoa editor view so it can be opened on the
-  test set's MIDI track and its plug-in window can be shown in Ableton Live.
+  VST3 instrument with a native Cocoa editor view. The editor is self-contained:
+  it exposes LLM provider/model/endpoint settings, prompt entry, plan review,
+  dry-run, destructive-action approval, and direct AbletonOSC execution.
 
 Notes and caveats:
 

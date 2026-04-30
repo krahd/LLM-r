@@ -1,12 +1,12 @@
 # LLM-r
 
-**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. Describe what you want in plain language — LLM-r translates it into OSC actions and sends them to Ableton Live via [AbletonOSC](https://github.com/ideoforms/AbletonOSC). LLM connectivity is provided by [Modelito](https://github.com/krahd/modelito), a lightweight adapter that supports OpenAI, Anthropic, Google, Ollama, and other providers.
+**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. Describe what you want in plain language inside the VST3 plug-in; LLM-r translates it into OSC actions and sends them to Ableton Live via [AbletonOSC](https://github.com/ideoforms/AbletonOSC). The desktop app, server, and API are optional companion surfaces for the same workflow.
 
 ```text
-Natural language prompt
+Natural language prompt in the VST3
         │
         ▼
-   LLM-r planner  ──── Modelito ────►  LLM (OpenAI / Anthropic / Ollama / …)
+   LLM-r planner  ────────────────►  LLM (OpenAI-compatible / Anthropic / Ollama)
         │
         ▼
    Action plan  (dry-run or execute)
@@ -19,7 +19,8 @@ Natural language prompt
 
 ## Features
 
-- **Natural-language planner** — `POST /api/plan` converts a free-text prompt into a typed, validated action plan
+- **Self-contained VST3 plug-in** — configure the LLM, write prompts, review plans, dry-run, and execute from inside Ableton Live
+- **Natural-language planner** — the plug-in and `POST /api/plan` convert a free-text prompt into a typed, validated action plan
 - **Safe execution** — dry-run mode, destructive-action approval step, and a strict capability registry
 - **Macro system** — named sequences of actions (`idea_sketch`, `performance_prep`, …) with full CRUD via the API
 - **Live state introspection** — query song settings, tracks, devices, clips, and parameters at runtime
@@ -27,8 +28,8 @@ Natural language prompt
 - **Audio clip controls** — set clip gain, transpose/detune, warping, warp mode, and RAM mode for existing audio clips
 - **Session history** — plans, executions, and sessions are persisted to disk and survive restarts
 - **SSE streaming** — `POST /api/stream` for streaming LLM completions
-- **Desktop GUI** — PyQt6 app with embedded mode, server attach/start controls, and runtime settings
-- **Multi-provider LLM support** — swap between cloud and local models with two environment variables
+- **Desktop GUI** — optional PyQt6 companion app with embedded mode, server attach/start controls, and runtime settings
+- **Multi-provider LLM support** — use cloud or local models from the plug-in, GUI, or API
 
 ---
 
@@ -70,7 +71,19 @@ Install and enable the [AbletonOSC](https://github.com/ideoforms/AbletonOSC) MID
 
 ### 2. Launch
 
-#### Option A — Desktop GUI (recommended)
+#### Option A — VST3 plug-in (primary)
+
+Build/install the local VST3 bundle, then open the Ableton test set:
+
+```bash
+bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
+```
+
+Open the `LLM-r` plug-in window in Ableton Live. The plug-in GUI includes LLM
+provider, model, endpoint/API-key, assistant guidance, AbletonOSC host/port,
+prompt, dry-run, destructive-action approval, plan, and execute controls.
+
+#### Option B — Desktop GUI (optional)
 
 ```bash
 python gui/pyqt_app.py
@@ -80,7 +93,7 @@ The GUI can run in embedded mode, attach to a running server, or start a local
 server from the Server controls. Its Settings dialog configures the LLM provider,
 model, assistant prompt guidance, Ableton connection, server URL, and API token.
 
-#### Option B — Server only (headless / API)
+#### Option C — Server only (headless / API)
 
 ```bash
 python backend/main.py
@@ -288,11 +301,23 @@ LLM-r is designed to avoid unintended changes to a live session:
 
 ---
 
+## VST3 Plug-in
+
+The VST3 plug-in is the primary self-contained control surface. It does not
+require the desktop GUI or FastAPI server for normal use. The plug-in stores its
+own runtime settings in macOS user defaults and can:
+
+- choose provider/model/endpoint and API key
+- send the built-in LLM-r tool catalog and optional guidance to the LLM
+- parse the returned JSON plan
+- dry-run or execute the resulting AbletonOSC actions
+- block destructive actions unless explicitly allowed
+
 ## Desktop GUI
 
-The GUI can run LLM-r in embedded mode without a separate server process. It can
-also attach to a running server or start/stop a local server from the Server
-controls.
+The GUI is an optional companion. It can run LLM-r in embedded mode without a
+separate server process, attach to a running server, or start/stop a local server
+from the Server controls.
 
 ```bash
 pip install PyQt6

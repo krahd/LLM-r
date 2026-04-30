@@ -34,6 +34,9 @@ LLM-r currently provides:
 - Session history and persisted plan/macro/session stores.
 - Optimistic live-state cache exposed through `/api/live/*`, updated after
   executed actions.
+- Self-contained native VST3 editor with LLM provider/model/endpoint settings,
+  prompt entry, plan review, dry-run, destructive-action approval, and direct
+  AbletonOSC execution.
 - PyQt desktop GUI that can connect to a running server or operate in embedded
   mode, with settings for provider, model, prompt guidance, AbletonOSC, server
   URL, and API token.

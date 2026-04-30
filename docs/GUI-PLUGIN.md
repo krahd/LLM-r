@@ -1,4 +1,12 @@
-# Desktop GUI
+# Plug-in and Desktop GUI
+
+The VST3 plug-in is the primary LLM-r UI. It is self-contained inside Ableton
+Live: provider/model settings, endpoint/API key, assistant guidance, AbletonOSC
+host/port, prompt entry, plan review, dry-run, destructive-action approval, and
+OSC execution are all available in the plug-in editor window.
+
+The desktop GUI is an optional companion for users who want a standalone window
+or an HTTP/server workflow.
 
 LLM-r includes a PyQt6 desktop client at `gui/pyqt_app.py`.
 
