@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LLM-r - pre-release Ableton Live LLM automation</title>
-  <meta name="description" content="LLM-r bridges Ableton Live and large language models, turning supported song, track, clip, MIDI note, audio clip, and device requests into validated OSC actions." />
+  <title>LLM-r - AI assistant VST3 plug-in for Ableton Live</title>
+  <meta name="description" content="LLM-r is a self-contained VST3 plug-in that brings large-language-model control directly inside Ableton Live. Chat interface, settings panel, Ollama support, and full AbletonOSC execution — no server required." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -346,9 +346,9 @@
 
 <!-- HERO -->
 <div class="hero">
-  <div class="badge">Pre-release | MIT License</div>
-  <h1>Talk to <span>Ableton Live</span><br>in plain language</h1>
-  <p>LLM-r connects large language models to Ableton Live via AbletonOSC. Describe what you need; it plans, validates, and executes supported song, track, clip, MIDI, audio-clip, and device actions.</p>
+  <div class="badge">Pre-release · v0.6 · MIT License</div>
+  <h1>AI assistant <span>inside</span><br>Ableton Live</h1>
+  <p>LLM-r is a self-contained VST3 plug-in. Load it in any track, type what you want, and it plans and executes AbletonOSC actions — all from a chat interface built right into the plug-in editor. No server required.</p>
   <div class="hero-actions">
     <a class="btn-primary" href="https://github.com/krahd/LLM-r">Get started</a>
     <a class="btn-secondary" href="#quickstart">See how it works</a>
@@ -357,16 +357,18 @@
 
 <!-- ARCHITECTURE -->
 <div class="arch">
-  <div class="arch-box"><span class="hl-green">Natural language prompt</span>
+  <div class="arch-box">  <span class="hl-green">VST3 plug-in</span>  (primary surface — lives inside Ableton Live)
+        |  chat interface · settings panel · Ollama controls
+        v
+  <span class="hl-purple">LLM-r planner</span>  ────<span class="hl-blue"> Modelito </span>────▶  LLM  (OpenAI / Anthropic / <span class="hl-blue">Ollama</span> / …)
         |
         v
-  <span class="hl-purple">LLM-r planner</span>  ---- <span class="hl-blue">Modelito</span> ----&gt;  LLM (OpenAI / Anthropic / Ollama / ...)
+  Action plan  (dry-run preview or execute)
         |
         v
-  Action plan  (dry-run or execute)
-        |
-        v
-  <span class="hl-green">AbletonOSC</span>  ---------------------&gt;  <span class="hl-green">Ableton Live</span></div>
+  <span class="hl-green">AbletonOSC</span>  ──────────────────────▶  <span class="hl-green">Ableton Live</span>
+
+  <span style="color:#64748b">Alternatives: desktop GUI (PyQt6) · HTTP API · web UI</span></div>
 </div>
 
 <!-- FEATURES -->
@@ -388,8 +390,8 @@
     </div>
     <div class="card">
       <div class="card-icon icon-purple">UI</div>
-      <h3>Desktop GUI</h3>
-      <p>PyQt6 app with embedded mode, server attach/start controls, and a Settings dialog for everyday use.</p>
+      <h3>VST3 plug-in GUI</h3>
+      <p>Self-contained chat interface living inside Ableton Live. Settings panel, Ollama management, persistent API keys — no server or terminal needed.</p>
     </div>
     <div class="card">
       <div class="card-icon icon-green">M</div>
@@ -442,36 +444,36 @@
 <section id="quickstart">
   <div class="section-label">Quick Start</div>
   <h2>Up and running in minutes</h2>
-  <p class="section-sub">Install AbletonOSC, then run LLM-r from the GUI or headless. Three commands to your first automated action.</p>
+  <p class="section-sub">Build the VST3 plug-in, load it in Live, and start chatting with your session. Or use the desktop GUI or HTTP API for headless workflows.</p>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;align-items:start;flex-wrap:wrap">
     <div class="steps">
       <div class="step">
         <div class="step-num">1</div>
         <div class="step-body">
-          <h4>Install LLM-r</h4>
-          <p>Clone the repo and install into a virtual environment. Add <code>[gui]</code> for the desktop app.</p>
+          <h4>Build &amp; install the plug-in</h4>
+          <p>Run the two build scripts. Requires macOS and Xcode CLI tools.</p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">2</div>
         <div class="step-body">
           <h4>Enable AbletonOSC</h4>
-          <p>Install <a href="https://github.com/ideoforms/AbletonOSC">AbletonOSC</a> as a MIDI Remote Script in Ableton Live. It listens on <code>127.0.0.1:11000</code> by default.</p>
+          <p>Install <a href="https://github.com/ideoforms/AbletonOSC">AbletonOSC</a> as a MIDI Remote Script. It listens on <code>127.0.0.1:11000</code> by default.</p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-body">
-          <h4>Set your LLM provider</h4>
-          <p>Set <code>LLMR_PROVIDER</code> and <code>LLMR_MODEL</code> env vars (or use the GUI Settings dialog).</p>
+          <h4>Load LLM-r in Ableton</h4>
+          <p>Add LLM-r as a VST3 instrument on any track. Open ⚙ Settings inside the plug-in and enter your LLM provider and API key.</p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">4</div>
         <div class="step-body">
-          <h4>Send a prompt</h4>
-          <p>Open the GUI or POST to <code>/api/plan</code>. LLM-r returns a plan you can inspect before executing.</p>
+          <h4>Chat with your session</h4>
+          <p>Type a request and press Send. Review the plan, then click ▶ Execute — or keep Dry run on to preview first.</p>
         </div>
       </div>
     </div>
@@ -480,29 +482,27 @@
       <div class="code-block">
         <div class="code-header">
           <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
-          <span style="margin-left:.4rem">install</span>
+          <span style="margin-left:.4rem">build VST3 plug-in</span>
         </div>
-        <pre class="code"><span class="cm"># clone and install</span>
+        <pre class="code"><span class="cm"># build and install the plug-in</span>
 git clone https://github.com/krahd/LLM-r.git
 cd LLM-r
-python -m venv .venv
-source .venv/bin/activate
-pip install -e <span class="st">".[gui]"</span></pre>
+bash scripts/build_vst3.sh
+bash scripts/install_vst3.sh</pre>
       </div>
       <div class="code-block">
         <div class="code-header">
           <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
-          <span style="margin-left:.4rem">plan &amp; execute</span>
+          <span style="margin-left:.4rem">or: HTTP API (headless)</span>
         </div>
-        <pre class="code"><span class="cm"># create a plan</span>
+        <pre class="code"><span class="cm"># install and start the server</span>
+pip install -e <span class="st">".[gui]"</span>
+llmr serve
+
+<span class="cm"># plan &amp; execute</span>
 curl -s -X POST http://127.0.0.1:<span class="num">8787</span>/api/plan \
   -H <span class="st">"Content-Type: application/json"</span> \
-  -d <span class="st">'{"prompt": "Set tempo to 120 and arm track 0"}'</span>
-
-<span class="cm"># execute it (use the returned plan_id)</span>
-curl -s -X POST http://127.0.0.1:<span class="num">8787</span>/api/execute \
-  -H <span class="st">"Content-Type: application/json"</span> \
-  -d <span class="st">'{"plan_id": "&lt;ID&gt;", "dry_run": false}'</span></pre>
+  -d <span class="st">'{"prompt": "Set tempo to 120"}'</span></pre>
       </div>
     </div>
   </div>
