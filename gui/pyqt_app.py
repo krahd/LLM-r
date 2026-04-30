@@ -103,7 +103,11 @@ QPushButton[role="primary"] {
 }
 QPushButton[role="primary"]:hover  { background-color: #1d4ed8; }
 QPushButton[role="primary"]:pressed { background-color: #1e40af; }
-QPushButton[role="primary"]:disabled { background-color: #93c5fd; }
+QPushButton[role="primary"]:disabled {
+    background-color: #f0f0f0;
+    color: #9a9a9a;
+    border: 1px solid #d0d0d0;
+}
 
 QPushButton[role="danger"] {
     background-color: #dc2626;
@@ -111,6 +115,11 @@ QPushButton[role="danger"] {
     border: none;
 }
 QPushButton[role="danger"]:hover  { background-color: #b91c1c; }
+QPushButton[role="danger"]:disabled {
+    background-color: #f0f0f0;
+    color: #9a9a9a;
+    border: 1px solid #d0d0d0;
+}
 
 QLineEdit, QSpinBox {
     background-color: #ffffff;
@@ -174,7 +183,17 @@ QComboBox {
     min-width: 60px;
 }
 QComboBox:focus { border-color: #2563eb; }
-QComboBox::drop-down { border: none; width: 22px; }
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border-left: 1px solid #d5dde8;
+}
+QComboBox::down-arrow {
+    image: url(:/qt-project.org/styles/commonstyle/images/downarrow-16.png);
+    width: 10px;
+    height: 10px;
+}
 QComboBox QAbstractItemView {
     background-color: #ffffff;
     color: #1c1c1e;
@@ -183,8 +202,19 @@ QComboBox QAbstractItemView {
     border: 1px solid #c8d0dc;
 }
 
-QCheckBox { color: #1c1c1e; spacing: 6px; }
-QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; }
+QCheckBox { color: #1c1c1e; spacing: 8px; }
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid #94a3b8;
+    background-color: #ffffff;
+}
+QCheckBox::indicator:hover { border-color: #2563eb; }
+QCheckBox::indicator:checked {
+    background-color: #2563eb;
+    border-color: #2563eb;
+}
 
 QLabel { color: #1c1c1e; }
 
@@ -337,6 +367,11 @@ def _json_text(value) -> str:
 
 def _short_id(value: str) -> str:
     return f"{value[:8]}..." if value else ""
+
+
+def _configure_tabs(tabs: QTabWidget) -> None:
+    tabs.tabBar().setUsesScrollButtons(False)
+    tabs.tabBar().setElideMode(Qt.TextElideMode.ElideNone)
 
 
 # ── Backend interface ─────────────────────────────────────────────────────────
@@ -651,6 +686,7 @@ class SettingsDialog(QDialog):
         header.setLayout(header_layout)
 
         self._tabs = QTabWidget()
+        _configure_tabs(self._tabs)
         self._build_model_tab()
         self._build_ollama_tab()
         self._build_runtime_tab()
@@ -802,8 +838,9 @@ class SettingsDialog(QDialog):
         svc_grp.setLayout(svc_layout)
 
         local_grp = QGroupBox("Local and Served Models")
-        local_form = QFormLayout()
-        local_form.setSpacing(9)
+        local_grp.setMinimumHeight(185)
+        local_layout = QVBoxLayout()
+        local_layout.setSpacing(7)
         self.local_models_combo = self._new_combo(
             editable=True,
             placeholder="Local Ollama models appear here",
@@ -813,35 +850,52 @@ class SettingsDialog(QDialog):
             placeholder="Served Ollama models appear here",
         )
 
-        local_btns = QHBoxLayout()
-        self.set_ollama_model_btn = QPushButton("Set as Active Model")
-        self.serve_model_btn = QPushButton("Serve Selected")
+        self.set_ollama_model_btn = QPushButton("Set Active")
+        self.set_ollama_model_btn.setToolTip("Use the selected local Ollama model for planning after Save.")
+        self.serve_model_btn = QPushButton("Serve")
+        self.serve_model_btn.setToolTip("Load the selected local model in Ollama.")
         self.serve_model_btn.setProperty("role", "primary")
         self.serve_model_btn.setStyle(self.serve_model_btn.style())
-        self.delete_model_btn = QPushButton("Delete Local")
+        self.delete_model_btn = QPushButton("Delete")
+        self.delete_model_btn.setToolTip("Delete the selected local Ollama model.")
         self.delete_model_btn.setProperty("role", "danger")
         self.delete_model_btn.setStyle(self.delete_model_btn.style())
-        self.refresh_local_btn = QPushButton("Refresh Local")
-        local_btns.addWidget(self.set_ollama_model_btn)
-        local_btns.addWidget(self.serve_model_btn)
-        local_btns.addWidget(self.delete_model_btn)
-        local_btns.addWidget(self.refresh_local_btn)
-        local_btns.addStretch()
+        self.refresh_local_btn = QPushButton("Refresh")
+        self.refresh_local_btn.setToolTip("Reload local Ollama models.")
 
-        running_btns = QHBoxLayout()
-        self.stop_serving_btn = QPushButton("Stop Served Model")
+        self.stop_serving_btn = QPushButton("Stop")
+        self.stop_serving_btn.setToolTip("Stop serving the selected loaded Ollama model.")
         self.stop_serving_btn.setProperty("role", "danger")
         self.stop_serving_btn.setStyle(self.stop_serving_btn.style())
-        self.refresh_running_btn = QPushButton("Refresh Served")
-        running_btns.addWidget(self.stop_serving_btn)
-        running_btns.addWidget(self.refresh_running_btn)
-        running_btns.addStretch()
+        self.refresh_running_btn = QPushButton("Refresh")
+        self.refresh_running_btn.setToolTip("Reload served Ollama models.")
 
-        local_form.addRow("Local model", self.local_models_combo)
-        local_form.addRow("", local_btns)
-        local_form.addRow("Served model", self.running_models_combo)
-        local_form.addRow("", running_btns)
-        local_grp.setLayout(local_form)
+        local_model_lbl = QLabel("Local model")
+        local_model_lbl.setStyleSheet("font-weight: 600; color: #374151;")
+        local_model_lbl.setMinimumWidth(90)
+        served_model_lbl = QLabel("Served model")
+        served_model_lbl.setStyleSheet("font-weight: 600; color: #374151;")
+        served_model_lbl.setMinimumWidth(90)
+
+        local_row = QHBoxLayout()
+        local_row.setSpacing(8)
+        local_row.addWidget(local_model_lbl)
+        local_row.addWidget(self.local_models_combo, stretch=1)
+        local_row.addWidget(self.set_ollama_model_btn)
+        local_row.addWidget(self.serve_model_btn)
+        local_row.addWidget(self.delete_model_btn)
+        local_row.addWidget(self.refresh_local_btn)
+
+        served_row = QHBoxLayout()
+        served_row.setSpacing(8)
+        served_row.addWidget(served_model_lbl)
+        served_row.addWidget(self.running_models_combo, stretch=1)
+        served_row.addWidget(self.stop_serving_btn)
+        served_row.addWidget(self.refresh_running_btn)
+
+        local_layout.addLayout(local_row)
+        local_layout.addLayout(served_row)
+        local_grp.setLayout(local_layout)
 
         remote_grp = QGroupBox("Downloadable Ollama Models")
         remote_layout = QVBoxLayout()
@@ -1545,6 +1599,7 @@ class MainWindow(QMainWindow):
         response_hdr.addWidget(self._current_model_lbl)
 
         self._response_tabs = QTabWidget()
+        _configure_tabs(self._response_tabs)
         self._summary_tab = QWidget()
         summary_layout = QVBoxLayout()
         summary_layout.setContentsMargins(12, 12, 12, 12)

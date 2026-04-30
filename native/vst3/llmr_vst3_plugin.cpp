@@ -2096,7 +2096,7 @@ public:
         info->classFlags = 0;
         copyString(info->subCategories, index == 0 ? "Instrument|Synth" : "");
         copyString(info->vendor, "Tomas Laurenzo");
-        copyString(info->version, "0.6.0");
+        copyString(info->version, "0.6.1");
         copyString(info->sdkVersion, "VST 3.8");
         return kResultOk;
     }
@@ -2114,7 +2114,7 @@ public:
         info->classFlags = 0;
         copyString(info->subCategories, index == 0 ? "Instrument|Synth" : "");
         copyString16(info->vendor, "Tomas Laurenzo");
-        copyString16(info->version, "0.6.0");
+        copyString16(info->version, "0.6.1");
         copyString16(info->sdkVersion, "VST 3.8");
         return kResultOk;
     }
