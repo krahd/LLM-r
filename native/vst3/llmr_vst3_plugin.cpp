@@ -2,10 +2,15 @@
 #include <cstdint>
 #include <cstring>
 
+#if defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
+#endif
+
 namespace Steinberg {
 
 using char8 = char;
 using char16 = char16_t;
+using int16 = int16_t;
 using int32 = int32_t;
 using uint32 = uint32_t;
 using uint64 = uint64_t;
@@ -63,6 +68,12 @@ constexpr TUID kIEditControllerIID = {
     0x77, 0x42, 0x44, static_cast<char>(0x8D),
     static_cast<char>(0xA8), 0x74, static_cast<char>(0xAA), static_cast<char>(0xCC),
     static_cast<char>(0x97), static_cast<char>(0x9C), 0x75, static_cast<char>(0x9E),
+};
+constexpr TUID kIPlugViewIID = {
+    0x5B, static_cast<char>(0xC3), 0x25, 0x07,
+    static_cast<char>(0xD0), 0x60, 0x49, static_cast<char>(0xEA),
+    static_cast<char>(0xA6), 0x15, 0x1B, 0x52,
+    0x2B, 0x75, 0x5B, 0x29,
 };
 
 inline bool iidEqual(const TUID a, const TUID b)
@@ -176,6 +187,38 @@ public:
     virtual tresult setHostContext(FUnknown *context) = 0;
 };
 
+struct ViewRect {
+    int32 left;
+    int32 top;
+    int32 right;
+    int32 bottom;
+};
+
+class IPlugView;
+
+class IPlugFrame : public FUnknown {
+public:
+    virtual tresult resizeView(IPlugView *view, ViewRect *newSize) = 0;
+};
+
+class IPlugView : public FUnknown {
+public:
+    virtual tresult isPlatformTypeSupported(FIDString type) = 0;
+    virtual tresult attached(void *parent, FIDString type) = 0;
+    virtual tresult removed() = 0;
+    virtual tresult onWheel(float distance) = 0;
+    virtual tresult onKeyDown(char16 key, int16 keyCode, int16 modifiers) = 0;
+    virtual tresult onKeyUp(char16 key, int16 keyCode, int16 modifiers) = 0;
+    virtual tresult getSize(ViewRect *size) = 0;
+    virtual tresult onSize(ViewRect *newSize) = 0;
+    virtual tresult onFocus(TBool state) = 0;
+    virtual tresult setFrame(IPlugFrame *frame) = 0;
+    virtual tresult canResize() = 0;
+    virtual tresult checkSizeConstraint(ViewRect *rect) = 0;
+};
+
+constexpr FIDString kPlatformTypeNSView = "NSView";
+
 constexpr TUID kLlmrProcessorCID = {
     0x4C, 0x4C, 0x4D, 0x52,
     0x54, 0x4F, 0x4D, 0x41,
@@ -244,7 +287,6 @@ struct RoutingInfo {
 struct ProcessSetup;
 struct ProcessData;
 class IComponentHandler;
-class IPlugView;
 
 struct ParameterInfo {
     ParamID id;
@@ -474,6 +516,197 @@ private:
     std::atomic<uint32> refCount_{1};
 };
 
+class LlmrEditorView final : public IPlugView {
+public:
+    LlmrEditorView() = default;
+    ~LlmrEditorView() { removed(); }
+
+    tresult queryInterface(const TUID iid, void **obj) override
+    {
+        if (!obj) {
+            return kInvalidArgument;
+        }
+        if (iidEqual(iid, kFUnknownIID) || iidEqual(iid, kIPlugViewIID)) {
+            addRef();
+            *obj = static_cast<IPlugView *>(this);
+            return kResultOk;
+        }
+        *obj = nullptr;
+        return kNoInterface;
+    }
+
+    uint32 addRef() override { return ++refCount_; }
+    uint32 release() override
+    {
+        const auto count = --refCount_;
+        if (count == 0) {
+            delete this;
+        }
+        return count;
+    }
+
+    tresult isPlatformTypeSupported(FIDString type) override
+    {
+        return isNsViewType(type) ? kResultTrue : kResultFalse;
+    }
+
+    tresult attached(void *parent, FIDString type) override
+    {
+        if (!parent || !isNsViewType(type)) {
+            return kInvalidArgument;
+        }
+
+#if defined(__APPLE__)
+        @autoreleasepool {
+            auto *parentView = static_cast<NSView *>(parent);
+            removed();
+
+            const CGFloat width = static_cast<CGFloat>(rect_.right - rect_.left);
+            const CGFloat height = static_cast<CGFloat>(rect_.bottom - rect_.top);
+            NSRect frame = NSMakeRect(0.0, 0.0, width, height);
+
+            view_ = [[NSView alloc] initWithFrame:frame];
+            [view_ setAutoresizingMask:(NSViewWidthSizable | NSViewHeightSizable)];
+            [view_ setWantsLayer:YES];
+            view_.layer.backgroundColor = [NSColor colorWithCalibratedRed:0.10
+                                                                    green:0.11
+                                                                     blue:0.12
+                                                                    alpha:1.0]
+                                             .CGColor;
+
+            auto addLabel = [this](NSString *text, NSRect labelFrame, NSFont *font, NSColor *color) {
+                NSTextField *label = [[NSTextField alloc] initWithFrame:labelFrame];
+                [label setStringValue:text];
+                [label setBezeled:NO];
+                [label setDrawsBackground:NO];
+                [label setEditable:NO];
+                [label setSelectable:NO];
+                [label setLineBreakMode:NSLineBreakByWordWrapping];
+                [label setFont:font];
+                [label setTextColor:color];
+                [view_ addSubview:label];
+                [label release];
+            };
+
+            NSColor *primary = [NSColor colorWithCalibratedWhite:0.96 alpha:1.0];
+            NSColor *secondary = [NSColor colorWithCalibratedWhite:0.72 alpha:1.0];
+            NSColor *accent = [NSColor colorWithCalibratedRed:0.43 green:0.76 blue:0.96 alpha:1.0];
+
+            addLabel(@"LLM-r", NSMakeRect(24.0, height - 62.0, width - 48.0, 34.0),
+                     [NSFont boldSystemFontOfSize:28.0], primary);
+            addLabel(@"Ableton Live LLM bridge",
+                     NSMakeRect(26.0, height - 91.0, width - 52.0, 22.0),
+                     [NSFont systemFontOfSize:14.0], accent);
+            addLabel(@"Vendor: Tomas Laurenzo",
+                     NSMakeRect(26.0, height - 128.0, width - 52.0, 22.0),
+                     [NSFont systemFontOfSize:13.0], secondary);
+            addLabel(@"Loaded as a VST3 instrument. Use the LLM-r desktop app or API for control.",
+                     NSMakeRect(26.0, height - 166.0, width - 52.0, 44.0),
+                     [NSFont systemFontOfSize:13.0], secondary);
+
+            [parentView addSubview:view_];
+        }
+        return kResultOk;
+#else
+        return kNotImplemented;
+#endif
+    }
+
+    tresult removed() override
+    {
+#if defined(__APPLE__)
+        if (view_) {
+            [view_ removeFromSuperview];
+            [view_ release];
+            view_ = nullptr;
+        }
+#endif
+        return kResultOk;
+    }
+
+    tresult onWheel(float distance) override
+    {
+        (void)distance;
+        return kResultFalse;
+    }
+
+    tresult onKeyDown(char16 key, int16 keyCode, int16 modifiers) override
+    {
+        (void)key;
+        (void)keyCode;
+        (void)modifiers;
+        return kResultFalse;
+    }
+
+    tresult onKeyUp(char16 key, int16 keyCode, int16 modifiers) override
+    {
+        (void)key;
+        (void)keyCode;
+        (void)modifiers;
+        return kResultFalse;
+    }
+
+    tresult getSize(ViewRect *size) override
+    {
+        if (!size) {
+            return kInvalidArgument;
+        }
+        *size = rect_;
+        return kResultOk;
+    }
+
+    tresult onSize(ViewRect *newSize) override
+    {
+        if (!newSize) {
+            return kInvalidArgument;
+        }
+        rect_ = *newSize;
+#if defined(__APPLE__)
+        if (view_) {
+            const CGFloat width = static_cast<CGFloat>(rect_.right - rect_.left);
+            const CGFloat height = static_cast<CGFloat>(rect_.bottom - rect_.top);
+            [view_ setFrame:NSMakeRect(0.0, 0.0, width, height)];
+        }
+#endif
+        return kResultOk;
+    }
+
+    tresult onFocus(TBool state) override
+    {
+        (void)state;
+        return kResultOk;
+    }
+
+    tresult setFrame(IPlugFrame *frame) override
+    {
+        (void)frame;
+        return kResultOk;
+    }
+
+    tresult canResize() override { return kResultFalse; }
+
+    tresult checkSizeConstraint(ViewRect *rect) override
+    {
+        if (!rect) {
+            return kInvalidArgument;
+        }
+        *rect = rect_;
+        return kResultOk;
+    }
+
+private:
+    static bool isNsViewType(FIDString type)
+    {
+        return type && std::strcmp(type, kPlatformTypeNSView) == 0;
+    }
+
+    std::atomic<uint32> refCount_{1};
+    ViewRect rect_{0, 0, 420, 220};
+#if defined(__APPLE__)
+    NSView *view_{nullptr};
+#endif
+};
+
 class LlmrController final : public IEditController {
 public:
     LlmrController() = default;
@@ -591,7 +824,9 @@ public:
 
     IPlugView *createView(FIDString name) override
     {
-        (void)name;
+        if (!name || std::strcmp(name, "editor") == 0) {
+            return new LlmrEditorView();
+        }
         return nullptr;
     }
 

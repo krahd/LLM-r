@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Build the local macOS VST3 bundle used by the install/open smoke task.
-# This builds a minimal native VST3 plug-in with factory metadata so hosts can
-# scan it as a real plug-in.
+# This builds a minimal native VST3 plug-in with factory metadata and a Cocoa
+# editor view so hosts can scan and open it as a real plug-in.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="${1:-$REPO_ROOT/build/vst3}"
@@ -88,7 +88,9 @@ clang++ -dynamiclib \
   -fvisibility=hidden \
   "${ARCH_ARGS[@]}" \
   -mmacosx-version-min=11.0 \
+  -x objective-c++ \
   "$SRC" \
+  -framework Cocoa \
   -o "$BINARY"
 
 chmod +x "$BINARY"
