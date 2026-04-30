@@ -39,7 +39,8 @@ Local install helpers:
   The helper rejects placeholder `.vst3` directories that do not contain an
   executable plugin binary under `Contents/MacOS`.
 - The default local VST3 smoke bundle is named `LLM-r.vst3` and reports
-  `Tomas Laurenzo` as its VST3 factory vendor.
+  `Tomas Laurenzo` as its VST3 factory vendor. It is advertised as a minimal
+  VST3 instrument so it can be opened on the test set's MIDI track.
 
 Notes and caveats:
 
