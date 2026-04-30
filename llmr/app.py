@@ -23,7 +23,19 @@ from llmr.macros import (
     serialize_macro,
     upsert_runtime_macro,
 )
-from llmr.modelito_adapter import ModelitoClient
+from llmr.modelito_adapter import (
+    ModelitoClient,
+    modelito_models,
+    ollama_delete,
+    ollama_download,
+    ollama_install,
+    ollama_local_models,
+    ollama_remote_models,
+    ollama_serve,
+    ollama_start,
+    ollama_status,
+    ollama_stop,
+)
 from llmr.planner import IntentPlanner, PlanStore
 from llmr.prompts import planner_extra_prompt
 from llmr.schemas import PlannedToolCall, ToolName
@@ -74,6 +86,10 @@ class SettingsPatch(BaseModel):
     ableton_host: str | None = None
     ableton_port: int | None = None
     api_token: str | None = None
+
+
+class OllamaModelRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=256)
 
 
 app = FastAPI(title="LLM-r", version=__version__)
@@ -631,6 +647,62 @@ def get_models() -> dict:
         "default_model": settings.modelito_model,
         "models": client.list_models(),
     }
+
+
+@app.get("/api/modelito/models")
+def get_modelito_model_ids(provider: str | None = None, model: str | None = None) -> dict:
+    current_provider = (provider or settings.modelito_provider).strip()
+    current_model = (model or settings.modelito_model).strip()
+    return {
+        "provider": current_provider,
+        "default_model": current_model,
+        "models": modelito_models(current_provider, current_model),
+    }
+
+
+@app.get("/api/ollama/status")
+def get_ollama_status() -> dict:
+    return ollama_status()
+
+
+@app.get("/api/ollama/local_models")
+def get_ollama_local_models() -> dict:
+    return ollama_local_models()
+
+
+@app.get("/api/ollama/remote_models")
+def get_ollama_remote_models() -> dict:
+    return ollama_remote_models()
+
+
+@app.post("/api/ollama/start", dependencies=[Depends(_require_auth)])
+def post_ollama_start() -> dict:
+    return ollama_start()
+
+
+@app.post("/api/ollama/stop", dependencies=[Depends(_require_auth)])
+def post_ollama_stop() -> dict:
+    return ollama_stop()
+
+
+@app.post("/api/ollama/install", dependencies=[Depends(_require_auth)])
+def post_ollama_install() -> dict:
+    return ollama_install()
+
+
+@app.post("/api/ollama/download", dependencies=[Depends(_require_auth)])
+def post_ollama_download(req: OllamaModelRequest) -> dict:
+    return ollama_download(req.model)
+
+
+@app.post("/api/ollama/delete", dependencies=[Depends(_require_auth)])
+def post_ollama_delete(req: OllamaModelRequest) -> dict:
+    return ollama_delete(req.model)
+
+
+@app.post("/api/ollama/serve", dependencies=[Depends(_require_auth)])
+def post_ollama_serve(req: OllamaModelRequest) -> dict:
+    return ollama_serve(req.model)
 
 
 @app.get("/api/model_metadata")

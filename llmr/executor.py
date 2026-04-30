@@ -17,10 +17,10 @@ def execute_actions(
     """Send a list of AbletonActions over OSC, returning (report, executed_at).
 
     Raises:
-        PermissionError: any action is destructive and approved is False.
+        PermissionError: any non-dry-run action is destructive and approved is False.
         RuntimeError: an OSC send fails.
     """
-    if any(a.destructive for a in actions) and not approved:
+    if not dry_run and any(a.destructive for a in actions) and not approved:
         raise PermissionError("Plan includes destructive actions and requires approval")
 
     report: list[dict[str, Any]] = []

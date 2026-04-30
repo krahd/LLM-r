@@ -328,8 +328,10 @@ A **Settings** dialog (accessible from the toolbar) lets you configure everythin
 
 - LLM provider and model
 - Assistant prompt guidance toggle and prompt file path
+- Dry-run and destructive-execution defaults
 - Ableton OSC host and port
 - Server URL and API token
+- Ollama status, local model serving, online model download, and local model deletion
 
 GUI connection settings are persisted to `~/.llmr/gui.json`. Runtime settings are
 pushed to the server via `PATCH /api/settings` when connected to HTTP mode, or

@@ -1,0 +1,78 @@
+qt.core.plugin.factoryloader: checking directory path "/Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/platforms" ...
+qt.core.plugin.factoryloader: looking at "libqoffscreen.dylib"
+qt.core.plugin.loader: Found metadata in lib /Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/platforms/libqoffscreen.dylib, metadata=
+{
+    "IID": "org.qt-project.Qt.QPA.QPlatformIntegrationFactoryInterface.5.3",
+    "MetaData": {
+        "Keys": [
+            "offscreen"
+        ]
+    },
+    "archlevel": 0,
+    "className": "QOffscreenIntegrationPlugin",
+    "debug": false,
+    "version": 396032
+}
+
+
+qt.core.plugin.factoryloader: Got keys from plugin meta data QList("offscreen")
+qt.core.plugin.factoryloader: looking at "libqminimal.dylib"
+qt.core.plugin.loader: Found metadata in lib /Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/platforms/libqminimal.dylib, metadata=
+{
+    "IID": "org.qt-project.Qt.QPA.QPlatformIntegrationFactoryInterface.5.3",
+    "MetaData": {
+        "Keys": [
+            "minimal"
+        ]
+    },
+    "archlevel": 0,
+    "className": "QMinimalIntegrationPlugin",
+    "debug": false,
+    "version": 396032
+}
+
+
+qt.core.plugin.factoryloader: Got keys from plugin meta data QList("minimal")
+qt.core.plugin.factoryloader: looking at "libqcocoa.dylib"
+qt.core.plugin.loader: Found metadata in lib /Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/platforms/libqcocoa.dylib, metadata=
+{
+    "IID": "org.qt-project.Qt.QPA.QPlatformIntegrationFactoryInterface.5.3",
+    "MetaData": {
+        "Keys": [
+            "cocoa"
+        ]
+    },
+    "archlevel": 0,
+    "className": "QCocoaIntegrationPlugin",
+    "debug": false,
+    "version": 396032
+}
+
+
+qt.core.plugin.factoryloader: Got keys from plugin meta data QList("cocoa")
+qt.core.plugin.factoryloader: checking directory path "/opt/homebrew/Cellar/python@3.14/3.14.4/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/platforms" ...
+qt.core.library: "/Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/platforms/libqcocoa.dylib" loaded library
+qt.core.plugin.factoryloader: checking directory path "/Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/platformthemes" ...
+qt.core.plugin.factoryloader: checking directory path "/opt/homebrew/Cellar/python@3.14/3.14.4/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/platformthemes" ...
+qt.core.plugin.factoryloader: checking directory path "/Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/styles" ...
+qt.core.plugin.factoryloader: looking at "libqmacstyle.dylib"
+qt.core.plugin.loader: Found metadata in lib /Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/styles/libqmacstyle.dylib, metadata=
+{
+    "IID": "org.qt-project.Qt.QStyleFactoryInterface",
+    "MetaData": {
+        "Keys": [
+            "macOS"
+        ]
+    },
+    "archlevel": 0,
+    "className": "QMacStylePlugin",
+    "debug": false,
+    "version": 396032
+}
+
+
+qt.core.plugin.factoryloader: Got keys from plugin meta data QList("macos")
+qt.core.plugin.factoryloader: checking directory path "/opt/homebrew/Cellar/python@3.14/3.14.4/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/styles" ...
+qt.core.library: "/Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/styles/libqmacstyle.dylib" loaded library
+qt.core.library: "/Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/styles/libqmacstyle.dylib" unloaded library 
+qt.core.library: "/Users/tom/devel/ml-llm/llm/LLM-r/.venv/lib/python3.14/site-packages/PyQt6/Qt6/plugins/platforms/libqcocoa.dylib" unloaded library 

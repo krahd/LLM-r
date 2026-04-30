@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Iterator
+from urllib.request import urlopen
 
 
 @dataclass
@@ -161,3 +163,170 @@ class ModelitoClient:
                 else {"value": normalized_metadata}
             ),
         }
+
+
+def modelito_models(provider: str, model: str) -> list[str]:
+    """Return normalized model ids for a provider."""
+    models = ModelitoClient(provider=provider, model=model).list_models()
+    ids: list[str] = []
+    for item in models:
+        if isinstance(item, dict):
+            model_id = str(item.get("id") or item.get("model") or "").strip()
+        else:
+            model_id = str(item).strip()
+        if model_id and model_id not in ids:
+            ids.append(model_id)
+    if model and model not in ids:
+        ids.insert(0, model)
+    return ids
+
+
+def _modelito_module():
+    try:
+        import modelito  # type: ignore
+    except Exception as exc:
+        raise RuntimeError("modelito is not installed. Install modelito to manage Ollama.") from exc
+    return modelito
+
+
+def _ollama_payload(ok: bool, message: str, **extra: Any) -> dict[str, Any]:
+    return {"ok": ok, "message": message, **extra}
+
+
+_MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*(?::[A-Za-z0-9._/-]+)?$")
+_OLLAMA_LIBRARY_CARD_RE = re.compile(
+    r'<a href="/library/([^"/:?#]+)"\s+class="group w-full space-y-5">',
+    re.S,
+)
+
+
+def _clean_model_names(values: list[Any]) -> list[str]:
+    models: list[str] = []
+    for value in values:
+        raw = str(value).strip()
+        if not raw:
+            continue
+        lowered = raw.lower()
+        if any(token in lowered for token in (
+            "warning:", "traceback", "exception", "backtrace", "sigabrt",
+            "corefoundation", "libc++abi", "libobjc", "dylib",
+        )):
+            continue
+        name = raw.split()[0]
+        if not name or not _MODEL_NAME_RE.match(name):
+            continue
+        if name.isdigit() or name.lower() in {
+            "name", "model", "models", "warning", "error", "traceback", "see",
+        }:
+            continue
+        if name not in models:
+            models.append(name)
+    return models
+
+
+def _ollama_library_models() -> list[str]:
+    with urlopen("https://ollama.com/library", timeout=12) as response:
+        html = response.read().decode("utf-8", errors="replace")
+    return _clean_model_names(_OLLAMA_LIBRARY_CARD_RE.findall(html))
+
+
+def ollama_status() -> dict[str, Any]:
+    modelito = _modelito_module()
+    service = getattr(modelito, "ollama_service", None)
+    try:
+        state = service.inspect_service_state() if service else {}
+    except Exception as exc:
+        return _ollama_payload(False, f"Unable to inspect Ollama: {exc}")
+
+    installed = bool(state.get("installed"))
+    running = bool(state.get("running"))
+    message = "Ollama is running." if running else (
+        "Ollama is installed but not running." if installed else "Ollama is not installed."
+    )
+    return _ollama_payload(True, message, **state)
+
+
+def ollama_local_models() -> dict[str, Any]:
+    modelito = _modelito_module()
+    try:
+        models = _clean_model_names(list(getattr(modelito, "list_local_models")()))
+    except Exception as exc:
+        return _ollama_payload(False, f"Unable to list local Ollama models: {exc}", models=[])
+    return _ollama_payload(True, f"Loaded {len(models)} local model(s).", models=models)
+
+
+def ollama_remote_models() -> dict[str, Any]:
+    modelito = _modelito_module()
+    try:
+        models = _clean_model_names(list(getattr(modelito, "list_remote_models")()))
+        if not models:
+            models = _ollama_library_models()
+    except Exception as exc:
+        try:
+            models = _ollama_library_models()
+        except Exception:
+            return _ollama_payload(False, f"Unable to list online Ollama models: {exc}", models=[])
+    return _ollama_payload(True, f"Loaded {len(models)} online model(s).", models=models)
+
+
+def ollama_start() -> dict[str, Any]:
+    modelito = _modelito_module()
+    try:
+        ok = bool(getattr(modelito, "start_ollama")())
+    except Exception as exc:
+        return _ollama_payload(False, f"Unable to start Ollama: {exc}")
+    return _ollama_payload(ok, "Ollama started." if ok else "Ollama did not start.")
+
+
+def ollama_stop() -> dict[str, Any]:
+    modelito = _modelito_module()
+    try:
+        ok = bool(getattr(modelito, "stop_ollama")(force=True))
+    except Exception as exc:
+        return _ollama_payload(False, f"Unable to stop Ollama: {exc}")
+    return _ollama_payload(ok, "Ollama stopped." if ok else "Ollama did not stop.")
+
+
+def ollama_install() -> dict[str, Any]:
+    modelito = _modelito_module()
+    try:
+        ok = bool(getattr(modelito, "install_ollama")(allow_install=True))
+    except Exception as exc:
+        return _ollama_payload(False, f"Unable to install Ollama: {exc}")
+    return _ollama_payload(ok, "Ollama is installed." if ok else "Ollama install did not complete.")
+
+
+def ollama_download(model: str) -> dict[str, Any]:
+    modelito = _modelito_module()
+    name = model.strip()
+    if not name:
+        return _ollama_payload(False, "Choose a model to download.")
+    try:
+        ok = bool(getattr(modelito, "download_model")(name))
+    except Exception as exc:
+        return _ollama_payload(False, f"Unable to download {name}: {exc}", model=name)
+    return _ollama_payload(ok, f"Downloaded {name}." if ok else f"Download failed for {name}.", model=name)
+
+
+def ollama_delete(model: str) -> dict[str, Any]:
+    modelito = _modelito_module()
+    name = model.strip()
+    if not name:
+        return _ollama_payload(False, "Choose a local model to delete.")
+    try:
+        ok = bool(getattr(modelito, "delete_model")(name))
+    except Exception as exc:
+        return _ollama_payload(False, f"Unable to delete {name}: {exc}", model=name)
+    return _ollama_payload(ok, f"Deleted {name}." if ok else f"Delete failed for {name}.", model=name)
+
+
+def ollama_serve(model: str) -> dict[str, Any]:
+    modelito = _modelito_module()
+    name = model.strip()
+    if not name:
+        return _ollama_payload(False, "Choose a local model to serve.")
+    try:
+        ok = bool(getattr(modelito, "serve_model")(name))
+    except Exception as exc:
+        return _ollama_payload(False, f"Unable to serve {name}: {exc}", model=name)
+    return _ollama_payload(ok, f"Serving {name}." if ok else f"Could not serve {name}.", model=name)
