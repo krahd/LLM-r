@@ -47,6 +47,41 @@ Notes and caveats:
 - PyInstaller builds are platform-specific and may require additional tooling on each platform; CI builds run on `ubuntu-latest`, `macos-latest`, and `windows-latest` to produce per-platform artifacts.
 - If the GitHub Actions job fails to upload an asset automatically, you can also create a release manually and upload the files from `dist/` and `release/`.
 
+## Troubleshooting: "This VST3 plug-in could not be opened" in Ableton Live
+
+If Ableton shows `LLM-r: This VST3 plug-in could not be opened`, verify these items:
+
+1. **Install path and bundle shape**
+   - Install to the user VST3 folder: `~/Library/Audio/Plug-Ins/VST3`.
+   - The bundle must contain an executable at `LLM-r.vst3/Contents/MacOS/LLM-r`.
+   - Use `scripts/install_vst3.sh` or `scripts/test_install_vst3_and_open.sh` to avoid copying an incomplete placeholder bundle.
+
+2. **Remove duplicate old copies**
+   - Keep only one `LLM-r.vst3` (user folder recommended).
+   - Remove stale copies from `/Library/Audio/Plug-Ins/VST3` and re-scan plug-ins in Live.
+
+3. **Clear macOS quarantine on downloaded bundles**
+   - If the bundle came from a zip download, clear quarantine:
+
+   ```bash
+   xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/LLM-r.vst3
+   ```
+
+4. **Check architecture and minimum OS**
+   - Local builds are universal on Apple Silicon (`arm64` + `x86_64`) and use `-mmacosx-version-min=11.0`.
+   - On Intel Macs older than macOS 11, this test bundle will fail to load.
+
+5. **Restart Live after reinstall**
+   - Quit Live completely, reinstall the bundle, then reopen Live and run plug-in rescan.
+
+Quick validation commands:
+
+```bash
+file ~/Library/Audio/Plug-Ins/VST3/LLM-r.vst3/Contents/MacOS/LLM-r
+codesign -dv --verbose=4 ~/Library/Audio/Plug-Ins/VST3/LLM-r.vst3
+spctl -a -vv ~/Library/Audio/Plug-Ins/VST3/LLM-r.vst3
+```
+
 Update GitHub "About" box programmatically (optional):
 
 If you have the GitHub CLI (`gh`) installed and authenticated, you can update the repository description and topics from the command line. Example:
