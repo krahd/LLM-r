@@ -15,6 +15,7 @@ entirely from within the host — no terminal, no server, no extra windows requi
   Basic provider/model choices stay on the first settings screen. API keys,
   endpoint, AbletonOSC, and Ollama service/model controls are in Advanced
   Settings so the normal workflow stays clean.
+- **Explicit settings commit** — Save applies changes; Cancel discards edits.
 - **Persistent settings** — API keys, ports, model names, and checkboxes are
   saved to macOS `NSUserDefaults` and restored across sessions.
 - **Dry-run by default** — every plan is previewed before execution; toggle
@@ -33,15 +34,16 @@ entirely from within the host — no terminal, no server, no extra windows requi
 
 ## Settings panel
 
-Open with the ⚙ Settings button; close with ✓ Done (saves automatically).
+Open with the ⚙ Settings button. Use Save to apply changes, or Cancel to leave
+the current runtime settings unchanged.
 Use Advanced for provider keys, endpoint, AbletonOSC, and Ollama management.
 
 ### LLM Provider
 
 | Field | Description |
 | --- | --- |
-| Provider | openai / anthropic / ollama / custom |
-| Model | e.g. `gpt-4.1-mini`, `claude-3-sonnet`, `llama3` |
+| Provider | openai / anthropic / google / ollama / custom |
+| Model | Provider-specific pull-down; Ollama uses installed local models |
 | Endpoint | Leave blank for provider default |
 | API Key | Securely stored; used for cloud providers |
 | LLM-r guidance prompt | Adds extra planning context (recommended on) |
@@ -63,12 +65,14 @@ Ollama management operations are available from Advanced Settings:
 | --- | --- |
 | Start Ollama | Launches `ollama serve` in the background |
 | Stop Ollama | Kills the running Ollama process |
-| Install Ollama | Opens [ollama.ai](https://ollama.ai) in your browser |
-| Refresh Local | Runs `ollama list` and populates the installed-models picker |
-| Installed models combo | Shows all locally installed models; select one as the active planner model |
+| Install Ollama | Opens the Ollama download page in your browser |
+| Refresh Status | Reads the local Ollama API and shows service/model status |
+| Installed models combo | Shows locally installed models from `/api/tags` |
 | Serve | Loads the selected installed model and sets it as the active planner model |
 | Stop Serving | Unloads the selected model without stopping the Ollama service |
-| Download model | Choose from the downloadable-model pull-down |
+| Test | Sends a tiny prompt to the selected local model |
+| Refresh Online | Loads the downloadable-model pull-down from the Ollama online library |
+| Download model | Pulls the selected downloadable model through the local Ollama API |
 
 ## Other approaches
 
@@ -101,7 +105,7 @@ python gui/pyqt_app.py
 Desktop Advanced Settings includes an Ollama screen for status refresh,
 install/start/stop, local model selection, serving a model, stopping a served
 model, deleting a local model, and downloading from a downloadable-model
-pull-down. The toolbar Open Help button opens this manual on GitHub.
+pull-down. The toolbar Open Help button opens the user manual on GitHub.
 
 ### HTTP API (headless / scripting)
 

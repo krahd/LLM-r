@@ -4,7 +4,7 @@ This is the single planning and audit document for the current pre-release LLM-r
 codebase. Older roadmap, audit, and patch-plan documents have been removed so
 the project has one source of truth.
 
-Current package version: `0.6.3`
+Current package version: `0.6.4`
 
 ## Product Stance
 
@@ -34,9 +34,10 @@ LLM-r currently provides:
 - Session history and persisted plan/macro/session stores.
 - Optimistic live-state cache exposed through `/api/live/*`, updated after
   executed actions.
-- Self-contained native VST3 editor with LLM provider/model/endpoint settings,
-  prompt entry, plan review, dry-run, destructive-action approval, and direct
-  AbletonOSC execution.
+- Self-contained native VST3 editor with Chat/Raw JSON tabs, provider-specific
+  model pickers, Save/Cancel settings, Advanced Settings for provider keys and
+  Ollama status/model control, prompt entry, plan review, dry-run,
+  destructive-action approval, and direct AbletonOSC execution.
 - PyQt desktop GUI that can connect to a running server or operate in embedded
   mode, with settings for provider, model, prompt guidance, AbletonOSC, server
   URL, and API token.

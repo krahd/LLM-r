@@ -80,8 +80,9 @@ bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
 ```
 
 Open the `LLM-r` plug-in window in Ableton Live. The plug-in GUI includes LLM
-provider, model, endpoint/API-key, assistant guidance, AbletonOSC host/port,
-prompt, dry-run, destructive-action approval, plan, and execute controls.
+provider/model selection, Chat and Raw JSON response tabs, explicit Save/Cancel
+settings, Advanced Settings for API keys and Ollama, prompt, dry-run,
+destructive-action approval, plan, and execute controls.
 
 #### Option B — Desktop GUI (optional)
 
@@ -315,6 +316,9 @@ own runtime settings in macOS user defaults and can:
 - copy/select text from the response panel
 - keep provider/model on the basic settings screen while API keys, AbletonOSC,
   and Ollama controls live under Advanced Settings
+- show Ollama status, installed models, and currently served models
+- load the downloadable-model pull-down from the Ollama online model library
+- save or cancel settings changes explicitly
 - send the built-in LLM-r tool catalog and optional guidance to the LLM
 - parse the returned JSON plan
 - dry-run or execute the resulting AbletonOSC actions
@@ -390,7 +394,8 @@ See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
 | [docs/CAPABILITIES.md](docs/CAPABILITIES.md) | Full capability catalog |
 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | Current AbletonOSC runtime contract notes |
 | [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) | Current pre-release audit and roadmap |
-| [docs/GUI-PLUGIN.md](docs/GUI-PLUGIN.md) | Desktop GUI behavior and settings |
+| [docs/USER_MANUAL.md](docs/USER_MANUAL.md) | User-facing guide for the VST3 workflow |
+| [docs/GUI-PLUGIN.md](docs/GUI-PLUGIN.md) | Technical GUI behavior and settings |
 | [docs/LLM_ASSISTANT_PROMPT.md](docs/LLM_ASSISTANT_PROMPT.md) | Default planner guidance prompt |
 | [docs/MACROS.md](docs/MACROS.md) | Macro authoring guide |
 | [docs/MODELITO.md](docs/MODELITO.md) | Modelito integration details |

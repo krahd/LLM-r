@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define LLMR_VERSION "0.6.3"
+#define LLMR_VERSION "0.6.4"
 
 #if defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
@@ -29,6 +29,10 @@ enum LlmrEditorAction : NSInteger {
     kLlmrEditorActionOllamaServeModel = 15,
     kLlmrEditorActionOllamaStopServingModel = 16,
     kLlmrEditorActionOpenHelp = 17,
+    kLlmrEditorActionCancelSettings = 18,
+    kLlmrEditorActionOllamaRefreshOnlineModels = 19,
+    kLlmrEditorActionProviderChanged = 20,
+    kLlmrEditorActionOllamaTestModel = 21,
 };
 
 static void llmrEditorHandleAction(void *owner, NSInteger action);
@@ -755,7 +759,7 @@ public:
         case kLlmrEditorActionExecute:       executeLastPlan(); break;
         case kLlmrEditorActionSaveSettings:  saveSettings(); hideSettings(); break;
         case kLlmrEditorActionOpenSettings:  showSettings(); break;
-        case kLlmrEditorActionCloseSettings: saveSettings(); hideSettings(); break;
+        case kLlmrEditorActionCloseSettings: cancelSettings(); break;
         case kLlmrEditorActionOllamaStart:   ollamaStart(); break;
         case kLlmrEditorActionOllamaStop:    ollamaStop(); break;
         case kLlmrEditorActionOllamaInstall: ollamaInstall(); break;
@@ -768,6 +772,10 @@ public:
         case kLlmrEditorActionOllamaServeModel:      ollamaServeModel(); break;
         case kLlmrEditorActionOllamaStopServingModel: ollamaStopServingModel(); break;
         case kLlmrEditorActionOpenHelp:       openHelp(); break;
+        case kLlmrEditorActionCancelSettings: cancelSettings(); break;
+        case kLlmrEditorActionOllamaRefreshOnlineModels: ollamaRefreshOnlineModels(true); break;
+        case kLlmrEditorActionProviderChanged: providerChanged(); break;
+        case kLlmrEditorActionOllamaTestModel: ollamaTestModel(); break;
         default: break;
         }
     }
@@ -789,7 +797,46 @@ private:
         if ([p isEqualToString:@"anthropic"]) {
             return @"https://api.anthropic.com/v1/messages";
         }
+        if ([p isEqualToString:@"google"]) {
+            return @"https://generativelanguage.googleapis.com/v1beta";
+        }
+        if ([p isEqualToString:@"custom"]) {
+            return @"";
+        }
         return @"https://api.openai.com/v1/chat/completions";
+    }
+
+    static NSArray *providers()
+    {
+        return @[@"openai", @"anthropic", @"google", @"ollama", @"custom"];
+    }
+
+    static NSArray *defaultModelsForProvider(NSString *provider)
+    {
+        NSString *p = [provider lowercaseString];
+        if ([p isEqualToString:@"anthropic"]) {
+            return @[@"claude-3-5-sonnet-latest", @"claude-3-5-haiku-latest", @"claude-3-opus-latest"];
+        }
+        if ([p isEqualToString:@"google"]) {
+            return @[@"gemini-2.5-flash", @"gemini-2.5-pro", @"gemini-1.5-flash", @"gemini-1.5-pro"];
+        }
+        if ([p isEqualToString:@"ollama"]) {
+            return @[];
+        }
+        if ([p isEqualToString:@"custom"]) {
+            return @[];
+        }
+        return @[@"gpt-4.1-mini", @"gpt-4.1", @"gpt-4o-mini", @"gpt-4o"];
+    }
+
+    static NSArray *fallbackOllamaDownloadModels()
+    {
+        return @[
+            @"llama3.1", @"deepseek-r1", @"llama3.2", @"gemma3", @"qwen3", @"qwen2.5",
+            @"mistral", @"gpt-oss", @"phi4", @"gemma2", @"codellama", @"llava",
+            @"qwen2.5-coder", @"mistral-nemo", @"llama3.3", @"tinyllama", @"mixtral",
+            @"smollm2", @"devstral", @"codestral", @"dolphin3", @"granite3.3"
+        ];
     }
 
     static NSString *controlString(NSTextField *field)
@@ -863,12 +910,24 @@ private:
         [v setFont:[NSFont systemFontOfSize:12.0]];
         [p addSubview:v]; [v release]; return v;
     }
+    void setButtonTextColor(NSButton *button, NSColor *color)
+    {
+        if (!button) return;
+        NSDictionary *attrs = @{
+            NSFontAttributeName: [button font] ?: [NSFont systemFontOfSize:12.0],
+            NSForegroundColorAttributeName: color ?: cPri(),
+        };
+        NSAttributedString *title = [[NSAttributedString alloc] initWithString:[button title] attributes:attrs];
+        [button setAttributedTitle:title];
+        [title release];
+    }
     NSButton *checkIn(NSView *p, NSRect f, NSString *title, bool on)
     {
         NSButton *v = [[NSButton alloc] initWithFrame:f];
         [v setButtonType:NSButtonTypeSwitch]; [v setTitle:title];
         [v setState:on ? NSControlStateValueOn : NSControlStateValueOff];
         [v setFont:[NSFont systemFontOfSize:12.0]];
+        setButtonTextColor(v, cPri());
         [p addSubview:v]; [v release]; return v;
     }
     NSButton *btnIn(NSView *p, NSRect f, NSString *title, NSInteger action)
@@ -891,6 +950,12 @@ private:
         [tv setSelectable:YES];
         [tv setAllowsUndo:NO];
         [tv setBackgroundColor:cChatBg()];
+        [tv setTextColor:cPri()];
+        [tv setFont:[NSFont systemFontOfSize:12.0]];
+        [tv setTypingAttributes:@{
+            NSFontAttributeName: [NSFont systemFontOfSize:12.0],
+            NSForegroundColorAttributeName: cPri(),
+        }];
         [tv setDrawsBackground:YES];
         [tv setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
         [tv setHorizontallyResizable:NO]; [tv setVerticallyResizable:YES];
@@ -963,6 +1028,8 @@ private:
             NSMakeRect(0, kBtm, width, height - kHdr - kTabs - kBtm));
         [[rawResponseView_ enclosingScrollView] setHidden:YES];
         [rawResponseView_ setRichText:NO];
+        [rawResponseView_ setTextColor:cPri()];
+        [rawResponseView_ setFont:[NSFont userFixedPitchFontOfSize:11.0]];
         [rawResponseView_ setString:@"Raw JSON will appear here after the model returns a response."];
         if (lastRawResponse_) {
             [rawResponseView_ setString:lastRawResponse_];
@@ -1006,6 +1073,8 @@ private:
     {
         static const CGFloat kHdr = 44.0, kPad = 16.0, kLblW = 104.0, kGap = 8.0;
         const CGFloat fldW = width - 2.0*kPad - kLblW - kGap;
+        CGFloat mainFldW = fldW;
+        if (mainFldW > 440.0) mainFldW = 440.0;
 
         // Header
         NSView *hdr = [[NSView alloc] initWithFrame:NSMakeRect(0, height - kHdr, width, kHdr)];
@@ -1015,16 +1084,19 @@ private:
 
         labelIn(hdr, @"Settings", NSMakeRect(kPad, 9, 160, 26),
                 [NSFont boldSystemFontOfSize:16.0], cPri());
-        settingsAdvancedButton_ = btnIn(hdr, NSMakeRect(width - 218, 8, 112, 28),
+        settingsAdvancedButton_ = btnIn(hdr, NSMakeRect(width - 320, 8, 112, 28),
                                         @"Advanced", kLlmrEditorActionOpenAdvancedSettings);
         [settingsAdvancedButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
-        settingsBasicButton_ = btnIn(hdr, NSMakeRect(width - 218, 8, 112, 28),
+        settingsBasicButton_ = btnIn(hdr, NSMakeRect(width - 320, 8, 112, 28),
                                      @"Basic Settings", kLlmrEditorActionCloseAdvancedSettings);
         [settingsBasicButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
         [settingsBasicButton_ setHidden:YES];
-        NSButton *backBtn = btnIn(hdr, NSMakeRect(width - 96, 8, 80, 28),
-                                  @"✓ Done", kLlmrEditorActionCloseSettings);
-        [backBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
+        NSButton *cancelBtn = btnIn(hdr, NSMakeRect(width - 198, 8, 86, 28),
+                                    @"Cancel", kLlmrEditorActionCancelSettings);
+        [cancelBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
+        NSButton *saveBtn = btnIn(hdr, NSMakeRect(width - 104, 8, 88, 28),
+                                  @"Save", kLlmrEditorActionSaveSettings);
+        [saveBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
 
         settingsMainView_ = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
         [settingsMainView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
@@ -1038,19 +1110,24 @@ private:
         labelIn(settingsMainView_, @"Provider", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
                 [NSFont systemFontOfSize:12.0], cSec());
         settingsProviderCombo_ = comboIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 28.0, fldW, 28.0),
-            @[@"openai", @"anthropic", @"ollama", @"custom"]);
-        [settingsProviderCombo_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+            NSMakeRect(kPad + kLblW + kGap, y - 28.0, mainFldW, 28.0),
+            providers());
+        LlmrEditorTarget *providerTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionProviderChanged];
+        [targets_ addObject:providerTarget];
+        [settingsProviderCombo_ setTarget:providerTarget];
+        [settingsProviderCombo_ setAction:@selector(performAction:)];
+        [providerTarget release];
+        [settingsProviderCombo_ setAutoresizingMask:NSViewMaxYMargin];
         y -= 42.0;
         labelIn(settingsMainView_, @"Model", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
                 [NSFont systemFontOfSize:12.0], cSec());
         settingsModelField_ = comboIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 28.0, fldW, 28.0),
-            @[@"gpt-4.1-mini", @"gpt-4.1", @"claude-3-5-sonnet-latest", @"llama3:latest", @"mistral:latest", @"codellama:latest"]);
-        [settingsModelField_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+            NSMakeRect(kPad + kLblW + kGap, y - 28.0, mainFldW, 28.0),
+            defaultModelsForProvider(@"openai"));
+        [settingsModelField_ setAutoresizingMask:NSViewMaxYMargin];
         y -= 32.0;
         labelIn(settingsMainView_, @"For Ollama, use Advanced Settings to refresh installed models, serve a model, or stop a served model.",
-                NSMakeRect(kPad + kLblW + kGap, y - 32.0, fldW, 32.0),
+                NSMakeRect(kPad + kLblW + kGap, y - 32.0, mainFldW, 32.0),
                 [NSFont systemFontOfSize:11.0], cSec());
         y -= 56.0;
         settingsDryRunButton_ = checkIn(settingsMainView_,
@@ -1068,7 +1145,7 @@ private:
         [settingsAdvancedView_ setHidden:YES];
         [settingsView_ addSubview:settingsAdvancedView_]; [settingsAdvancedView_ release];
 
-        static const CGFloat kContentH = 620.0;
+        static const CGFloat kContentH = 720.0;
         NSScrollView *sc = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
         [sc setHasVerticalScroller:YES]; [sc setBorderType:NSNoBorder];
         [sc setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
@@ -1123,34 +1200,43 @@ private:
 
         SECT(@"Ollama")
         ollamaStatusLabel_ = labelIn(cv,
-            @"Status unknown. Refresh local models to check Ollama.",
-            NSMakeRect(kPad, ay - 22.0, width - 2*kPad, 22.0),
+            @"Ollama: status unknown. Open Advanced Settings or click Refresh Status.",
+            NSMakeRect(kPad, ay - 36.0, width - 2*kPad, 36.0),
             [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 34.0;
+        ay -= 48.0;
         btnIn(cv, NSMakeRect(kPad,          ay - 28.0, 108, 28), @"Start Ollama",   kLlmrEditorActionOllamaStart);
         btnIn(cv, NSMakeRect(kPad + 116,    ay - 28.0, 108, 28), @"Stop Ollama",    kLlmrEditorActionOllamaStop);
         btnIn(cv, NSMakeRect(kPad + 232,    ay - 28.0, 112, 28), @"Install", kLlmrEditorActionOllamaInstall);
-        btnIn(cv, NSMakeRect(kPad + 352,    ay - 28.0, 124, 28), @"Refresh Local", kLlmrEditorActionOllamaListModels);
+        btnIn(cv, NSMakeRect(kPad + 352,    ay - 28.0, 124, 28), @"Refresh Status", kLlmrEditorActionOllamaListModels);
         ay -= 44.0;
 
         labelIn(cv, @"Installed model", NSMakeRect(kPad, ay - 20.0, 160, 20.0),
                 [NSFont systemFontOfSize:11.0], cSec());
         ay -= 24.0;
+        CGFloat ollamaComboW = width - 2.0*kPad - 244.0;
+        if (ollamaComboW > 420.0) ollamaComboW = 420.0;
+        if (ollamaComboW < 240.0) ollamaComboW = 240.0;
+        CGFloat ollamaBtnX = kPad + ollamaComboW + 10.0;
         ollamaModelsCombo_ = comboIn(cv,
-            NSMakeRect(kPad, ay - 28.0, fldW + kLblW - 160, 28.0), @[]);
-        [ollamaModelsCombo_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
-        btnIn(cv, NSMakeRect(width - 250, ay - 28.0, 78, 28), @"Serve", kLlmrEditorActionOllamaServeModel);
-        btnIn(cv, NSMakeRect(width - 164, ay - 28.0, 140, 28), @"Stop Serving", kLlmrEditorActionOllamaStopServingModel);
+            NSMakeRect(kPad, ay - 28.0, ollamaComboW, 28.0), @[]);
+        [ollamaModelsCombo_ setEditable:NO];
+        [ollamaModelsCombo_ setAutoresizingMask:NSViewMaxYMargin];
+        btnIn(cv, NSMakeRect(ollamaBtnX, ay - 28.0, 64, 28), @"Serve", kLlmrEditorActionOllamaServeModel);
+        btnIn(cv, NSMakeRect(ollamaBtnX + 72, ay - 28.0, 112, 28), @"Stop Serving", kLlmrEditorActionOllamaStopServingModel);
+        btnIn(cv, NSMakeRect(ollamaBtnX + 192, ay - 28.0, 52, 28), @"Test", kLlmrEditorActionOllamaTestModel);
         ay -= 44.0;
 
         labelIn(cv, @"Downloadable model", NSMakeRect(kPad, ay - 20.0, 160, 20.0),
                 [NSFont systemFontOfSize:11.0], cSec());
         ay -= 24.0;
         ollamaModelField_ = comboIn(cv,
-            NSMakeRect(kPad, ay - 28.0, fldW + kLblW - 120, 28.0),
-            @[@"llama3:latest", @"llama3.1:latest", @"mistral:latest", @"codellama:latest", @"qwen2.5:latest", @"gemma2:latest", @"phi3:latest"]);
-        [ollamaModelField_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
-        btnIn(cv, NSMakeRect(width - 164, ay - 28.0, 140, 28),
+            NSMakeRect(kPad, ay - 28.0, ollamaComboW, 28.0),
+            fallbackOllamaDownloadModels());
+        [ollamaModelField_ setEditable:NO];
+        [ollamaModelField_ setAutoresizingMask:NSViewMaxYMargin];
+        btnIn(cv, NSMakeRect(ollamaBtnX, ay - 28.0, 118, 28),
+              @"Refresh Online", kLlmrEditorActionOllamaRefreshOnlineModels);
+        btnIn(cv, NSMakeRect(ollamaBtnX + 126, ay - 28.0, 118, 28),
               @"Download", kLlmrEditorActionOllamaDownloadModel);
 
         (void)ay;
@@ -1176,6 +1262,7 @@ private:
     void showSettings()
     {
         if (!settingsView_) return;
+        loadSettings();
         showBasicSettings();
         [settingsView_ setHidden:NO];
         [chatView_ setHidden:YES];
@@ -1202,6 +1289,10 @@ private:
         if (settingsAdvancedView_) [settingsAdvancedView_ setHidden:NO];
         if (settingsAdvancedButton_) [settingsAdvancedButton_ setHidden:YES];
         if (settingsBasicButton_) [settingsBasicButton_ setHidden:NO];
+        ollamaListModels();
+        if (!ollamaOnlineModelsLoaded_) {
+            ollamaRefreshOnlineModels(false);
+        }
     }
 
     void showResponseTab(bool raw)
@@ -1220,6 +1311,12 @@ private:
         [lastRawResponse_ release];
         lastRawResponse_ = [text ? text : @"" retain];
         if (rawResponseView_) {
+            [rawResponseView_ setTextColor:cPri()];
+            [rawResponseView_ setFont:[NSFont userFixedPitchFontOfSize:11.0]];
+            [rawResponseView_ setTypingAttributes:@{
+                NSFontAttributeName: [NSFont userFixedPitchFontOfSize:11.0],
+                NSForegroundColorAttributeName: cPri(),
+            }];
             [rawResponseView_ setString:lastRawResponse_ ?: @""];
         }
     }
@@ -1227,7 +1324,7 @@ private:
     void openHelp()
     {
         [[NSWorkspace sharedWorkspace] openURL:
-            [NSURL URLWithString:@"https://github.com/krahd/LLM-r/blob/main/docs/GUI-PLUGIN.md"]];
+            [NSURL URLWithString:@"https://github.com/krahd/LLM-r/blob/main/docs/USER_MANUAL.md"]];
     }
 
     void appendToChat(NSString *role, NSString *text)
@@ -1274,7 +1371,7 @@ private:
         NSInteger port = [d integerForKey:@"llmr.vst3.osc_port"];
         if (port <= 0) port = 11000;
         [settingsProviderCombo_ setStringValue:prov];
-        [settingsModelField_    setStringValue:mdl];
+        rebuildModelChoices(prov, mdl);
         [settingsEndpointField_ setStringValue:ep];
         [settingsApiKeyField_   setStringValue:key];
         [settingsOscHostField_  setStringValue:host];
@@ -1289,6 +1386,56 @@ private:
         [settingsDryRunButton_      setState:dryOn  ? NSControlStateValueOn : NSControlStateValueOff];
         if (chatDryRunButton_) {
             [chatDryRunButton_ setState:dryOn ? NSControlStateValueOn : NSControlStateValueOff];
+        }
+    }
+
+    void rebuildModelChoices(NSString *provider, NSString *preferred)
+    {
+        if (!settingsModelField_) return;
+        NSString *p = [(provider ? provider : @"openai") lowercaseString];
+        NSMutableArray *models = [NSMutableArray array];
+        if ([p isEqualToString:@"ollama"] && ollamaModelsCombo_) {
+            for (NSInteger i = 0; i < [ollamaModelsCombo_ numberOfItems]; ++i) {
+                NSString *item = [ollamaModelsCombo_ itemObjectValueAtIndex:i];
+                if ([item length] > 0) [models addObject:item];
+            }
+        }
+        if ([models count] == 0) {
+            [models addObjectsFromArray:defaultModelsForProvider(p)];
+        }
+        [settingsModelField_ removeAllItems];
+        [settingsModelField_ addItemsWithObjectValues:models];
+        if ([preferred length] > 0) {
+            [settingsModelField_ setStringValue:preferred];
+        } else if ([models count] > 0) {
+            [settingsModelField_ selectItemAtIndex:0];
+        } else {
+            [settingsModelField_ setStringValue:@""];
+        }
+    }
+
+    bool endpointLooksDefault(NSString *endpoint)
+    {
+        NSString *value = [endpoint stringByTrimmingCharactersInSet:
+                           [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([value length] == 0) return true;
+        for (NSString *provider in providers()) {
+            if ([value isEqualToString:defaultEndpointForProvider(provider)]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void providerChanged()
+    {
+        NSString *provider = controlString(settingsProviderCombo_);
+        rebuildModelChoices(provider, nil);
+        if (settingsEndpointField_ && endpointLooksDefault(controlString(settingsEndpointField_))) {
+            [settingsEndpointField_ setStringValue:defaultEndpointForProvider(provider)];
+        }
+        if ([[provider lowercaseString] isEqualToString:@"ollama"]) {
+            ollamaListModels();
         }
     }
 
@@ -1313,21 +1460,167 @@ private:
         }
     }
 
+    void cancelSettings()
+    {
+        loadSettings();
+        hideSettings();
+    }
+
     // ─── Ollama operations ────────────────────────────────────
+    NSString *httpRequest(NSString *urlString, NSString *method, NSDictionary *body,
+                          NSDictionary *headers, NSTimeInterval timeout,
+                          NSInteger *statusCode, NSString **error)
+    {
+        NSURL *url = [NSURL URLWithString:urlString];
+        if (!url) {
+            if (error) *error = @"Invalid URL.";
+            return nil;
+        }
+        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url
+                                                               cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
+                                                           timeoutInterval:timeout];
+        [request setHTTPMethod:method ?: @"GET"];
+        for (NSString *key in headers) {
+            [request setValue:[headers objectForKey:key] forHTTPHeaderField:key];
+        }
+        if (body) {
+            [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+            NSData *data = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+            [request setHTTPBody:data];
+        }
+
+        __block NSData *responseData = nil;
+        __block NSError *requestError = nil;
+        __block NSHTTPURLResponse *httpResponse = nil;
+        dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+        NSURLSessionDataTask *task = [[NSURLSession sharedSession]
+            dataTaskWithRequest:request
+              completionHandler:^(NSData *data, NSURLResponse *response, NSError *err) {
+                  responseData = [data retain];
+                  requestError = [err retain];
+                  httpResponse = [(NSHTTPURLResponse *)response retain];
+                  dispatch_semaphore_signal(semaphore);
+              }];
+        [task resume];
+        dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+
+        if (statusCode) *statusCode = httpResponse ? [httpResponse statusCode] : 0;
+        NSString *text = responseData
+            ? [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding]
+            : [@"" retain];
+        if (requestError && error) {
+            *error = [requestError localizedDescription];
+        } else if (httpResponse && ([httpResponse statusCode] < 200 || [httpResponse statusCode] >= 300) && error) {
+            *error = [NSString stringWithFormat:@"HTTP %ld: %@",
+                      static_cast<long>([httpResponse statusCode]), text ?: @""];
+        }
+        [responseData release];
+        [requestError release];
+        [httpResponse release];
+        return [text autorelease];
+    }
+
+    NSString *cleanModelName(id value)
+    {
+        NSString *raw = [[NSString stringWithFormat:@"%@", value ?: @""]
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([raw length] == 0) return @"";
+        NSArray *parts = [raw componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        NSString *name = [parts count] > 0 ? [parts objectAtIndex:0] : raw;
+        if ([name length] == 0 || [name isEqualToString:@"NAME"] || [name isEqualToString:@"MODEL"]) {
+            return @"";
+        }
+        return name;
+    }
+
+    NSArray *modelNamesFromOllamaJSON(NSString *jsonText)
+    {
+        if ([jsonText length] == 0) return @[];
+        NSData *data = [jsonText dataUsingEncoding:NSUTF8StringEncoding];
+        id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        NSArray *items = [json isKindOfClass:[NSDictionary class]] ? [json objectForKey:@"models"] : nil;
+        NSMutableArray *models = [NSMutableArray array];
+        for (NSDictionary *item in items) {
+            if (![item isKindOfClass:[NSDictionary class]]) continue;
+            NSString *name = cleanModelName([item objectForKey:@"name"] ?: [item objectForKey:@"model"]);
+            if ([name length] > 0 && ![models containsObject:name]) {
+                [models addObject:name];
+            }
+        }
+        return models;
+    }
+
+    NSArray *modelNamesFromOllamaLibraryHTML(NSString *html)
+    {
+        if ([html length] == 0) return @[];
+        NSRegularExpression *re = [NSRegularExpression
+            regularExpressionWithPattern:@"href=\"/library/([A-Za-z0-9._-]+)\""
+                                 options:0 error:nil];
+        NSArray *matches = [re matchesInString:html options:0 range:NSMakeRange(0, [html length])];
+        NSMutableArray *models = [NSMutableArray array];
+        for (NSTextCheckingResult *match in matches) {
+            if ([match numberOfRanges] < 2) continue;
+            NSString *name = [html substringWithRange:[match rangeAtIndex:1]];
+            if ([name length] > 0 && ![models containsObject:name]) {
+                [models addObject:name];
+            }
+        }
+        return models;
+    }
+
+    void setComboItems(NSComboBox *combo, NSArray *items, NSString *preferred)
+    {
+        if (!combo) return;
+        [combo removeAllItems];
+        [combo addItemsWithObjectValues:items ?: @[]];
+        if ([preferred length] > 0 && [items containsObject:preferred]) {
+            [combo setStringValue:preferred];
+        } else if ([items count] > 0) {
+            [combo selectItemAtIndex:0];
+        } else {
+            [combo setStringValue:@""];
+        }
+    }
+
+    NSString *ollamaExecutablePath()
+    {
+        NSArray *candidates = @[
+            @"/opt/homebrew/bin/ollama",
+            @"/usr/local/bin/ollama",
+            @"/Applications/Ollama.app/Contents/Resources/ollama",
+            @"/usr/bin/ollama",
+        ];
+        NSFileManager *fm = [NSFileManager defaultManager];
+        for (NSString *path in candidates) {
+            if ([fm isExecutableFileAtPath:path]) return path;
+        }
+        return nil;
+    }
+
     void ollamaStart()
     {
-        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Starting Ollama…"];
+        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Ollama: starting..."];
+        NSString *exe = [ollamaExecutablePath() retain];
+        BOOL openApp = (!exe && [[NSFileManager defaultManager] fileExistsAtPath:@"/Applications/Ollama.app"]);
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
             @autoreleasepool {
-                NSTask *task = [[NSTask alloc] init];
-                [task setLaunchPath:@"/bin/sh"];
-                [task setArguments:@[@"-l", @"-c", @"ollama serve >/dev/null 2>&1 &"]];
-                @try { [task launch]; } @catch (NSException *) {}
-                [task release];
-                [NSThread sleepForTimeInterval:1.2];
+                if (exe) {
+                    NSTask *task = [[NSTask alloc] init];
+                    [task setLaunchPath:exe];
+                    [task setArguments:@[@"serve"]];
+                    [task setStandardOutput:[NSFileHandle fileHandleWithNullDevice]];
+                    [task setStandardError:[NSFileHandle fileHandleWithNullDevice]];
+                    @try { [task launch]; } @catch (NSException *) {}
+                    [task release];
+                } else if (openApp) {
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        [[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:@"/Applications/Ollama.app"]];
+                    });
+                }
+                [exe release];
+                [NSThread sleepForTimeInterval:1.5];
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    if (ollamaStatusLabel_)
-                        [ollamaStatusLabel_ setStringValue:@"Ollama launched. Use List Models to verify."];
+                    ollamaListModels();
                 });
             }
         });
@@ -1335,16 +1628,17 @@ private:
 
     void ollamaStop()
     {
-        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Stopping Ollama…"];
+        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Ollama: stopping..."];
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
             @autoreleasepool {
                 NSTask *task = [[NSTask alloc] init];
-                [task setLaunchPath:@"/bin/sh"];
-                [task setArguments:@[@"-l", @"-c", @"pkill -x ollama || true"]];
+                [task setLaunchPath:@"/usr/bin/pkill"];
+                [task setArguments:@[@"-x", @"ollama"]];
                 @try { [task launch]; [task waitUntilExit]; } @catch (NSException *) {}
                 [task release];
+                [NSThread sleepForTimeInterval:0.8];
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Ollama stopped."];
+                    ollamaListModels();
                 });
             }
         });
@@ -1352,66 +1646,87 @@ private:
 
     void ollamaInstall()
     {
-        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://ollama.ai"]];
+        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://ollama.com/download"]];
         if (ollamaStatusLabel_)
-            [ollamaStatusLabel_ setStringValue:@"Opening ollama.ai — install, then click Start Ollama."];
+            [ollamaStatusLabel_ setStringValue:@"Ollama: opening installer page. Install, then click Start Ollama."];
     }
 
     void ollamaListModels()
     {
-        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Listing installed models…"];
+        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Ollama: checking local service..."];
         addRef();
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
             @autoreleasepool {
-                NSTask *task = [[NSTask alloc] init];
-                [task setLaunchPath:@"/bin/sh"];
-                [task setArguments:@[@"-l", @"-c", @"ollama list 2>&1"]];
-                NSPipe *pipe = [NSPipe pipe];
-                [task setStandardOutput:pipe];
-                [task setStandardError:pipe];
-                NSString *output = nil;
-                @try {
-                    [task launch];
-                    [task waitUntilExit];
-                    NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
-                    output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-                } @catch (NSException *) {
-                    output = [@"ollama not found. Install from ollama.ai." retain];
-                }
-                [task release];
-                if (!output) output = [@"" retain];
+                NSString *error = nil;
+                NSInteger code = 0;
+                NSString *tags = httpRequest(@"http://127.0.0.1:11434/api/tags", @"GET", nil, nil, 8.0, &code, &error);
+                BOOL running = (code >= 200 && code < 300 && !error);
+                NSArray *installed = running ? modelNamesFromOllamaJSON(tags) : @[];
 
-                NSMutableArray *models = [NSMutableArray array];
-                for (NSString *line in [output componentsSeparatedByCharactersInSet:
-                        [NSCharacterSet newlineCharacterSet]]) {
-                    NSString *t = [line stringByTrimmingCharactersInSet:
-                                   [NSCharacterSet whitespaceCharacterSet]];
-                    if ([t length] == 0 || [t hasPrefix:@"NAME"]) continue;
-                    NSArray *parts = [t componentsSeparatedByString:@" "];
-                    if ([parts count] > 0 && [[parts objectAtIndex:0] length] > 0)
-                        [models addObject:[parts objectAtIndex:0]];
+                NSString *psError = nil;
+                NSInteger psCode = 0;
+                NSString *ps = running ? httpRequest(@"http://127.0.0.1:11434/api/ps", @"GET", nil, nil, 8.0, &psCode, &psError) : nil;
+                NSArray *served = (psCode >= 200 && psCode < 300 && !psError) ? modelNamesFromOllamaJSON(ps) : @[];
+
+                NSString *status = nil;
+                if (running) {
+                    NSString *serving = [served count] > 0 ? [served componentsJoinedByString:@", "] : @"none";
+                    status = [NSString stringWithFormat:@"Ollama: running. Installed: %lu. Serving: %@.",
+                              (unsigned long)[installed count], serving];
+                } else {
+                    NSString *reason = [error length] > 0 ? error : @"local API did not respond";
+                    status = [NSString stringWithFormat:@"Ollama: not running (%@). Start Ollama to list installed models.", reason];
                 }
-                NSString *status = [models count] > 0
-                    ? [NSString stringWithFormat:@"%lu model(s) installed.", (unsigned long)[models count]]
-                    : @"No models found or Ollama not running.";
-                __block NSArray *rm = [models retain];
+
+                __block NSArray *rm = [installed retain];
                 __block NSString *rs = [status retain];
-                [output release];
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    if (ollamaModelsCombo_) {
-                        [ollamaModelsCombo_ removeAllItems];
-                        [ollamaModelsCombo_ addItemsWithObjectValues:rm];
-                        if ([rm count] > 0) [ollamaModelsCombo_ selectItemAtIndex:0];
-                    }
-                    if (settingsModelField_ && settingsProviderCombo_ &&
+                    NSString *preferred = ollamaModelsCombo_ ? controlString(ollamaModelsCombo_) : @"";
+                    setComboItems(ollamaModelsCombo_, rm, preferred);
+                    if (settingsProviderCombo_ &&
                         [[controlString(settingsProviderCombo_) lowercaseString] isEqualToString:@"ollama"]) {
-                        [settingsModelField_ removeAllItems];
-                        [settingsModelField_ addItemsWithObjectValues:rm];
-                        if ([rm count] > 0 && [[settingsModelField_ stringValue] length] == 0) {
-                            [settingsModelField_ selectItemAtIndex:0];
-                        }
+                        rebuildModelChoices(@"ollama", controlString(settingsModelField_));
                     }
                     if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:rs];
+                    [rm release]; [rs release];
+                    this->release();
+                });
+            }
+        });
+    }
+
+    void ollamaRefreshOnlineModels(bool userInitiated)
+    {
+        if (ollamaOnlineLoadInFlight_) return;
+        ollamaOnlineLoadInFlight_ = true;
+        if (userInitiated && ollamaStatusLabel_) {
+            [ollamaStatusLabel_ setStringValue:@"Ollama: loading online model catalog..."];
+        }
+        addRef();
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            @autoreleasepool {
+                NSString *error = nil;
+                NSInteger code = 0;
+                NSString *html = httpRequest(@"https://ollama.com/library", @"GET", nil, nil, 18.0, &code, &error);
+                NSArray *models = modelNamesFromOllamaLibraryHTML(html);
+                BOOL fromNetwork = ([models count] > 0);
+                if (!fromNetwork) {
+                    models = fallbackOllamaDownloadModels();
+                }
+                NSString *status = fromNetwork
+                    ? [NSString stringWithFormat:@"Ollama: loaded %lu online downloadable model(s).",
+                       (unsigned long)[models count]]
+                    : (userInitiated
+                        ? @"Ollama: online catalog unavailable; showing built-in fallback models."
+                        : @"Ollama: showing built-in fallback downloadable models.");
+                __block NSArray *rm = [models retain];
+                __block NSString *rs = [status retain];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    NSString *preferred = ollamaModelField_ ? controlString(ollamaModelField_) : @"";
+                    setComboItems(ollamaModelField_, rm, preferred);
+                    ollamaOnlineModelsLoaded_ = fromNetwork;
+                    ollamaOnlineLoadInFlight_ = false;
+                    if (userInitiated && ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:rs];
                     [rm release]; [rs release];
                     this->release();
                 });
@@ -1423,44 +1738,31 @@ private:
     {
         NSString *name = ollamaModelField_ ? [controlString(ollamaModelField_) copy] : nil;
         if (!name || [name length] == 0) {
-            if (ollamaModelsCombo_) name = [[ollamaModelsCombo_ stringValue] copy];
-        }
-        if (!name || [name length] == 0) {
-            if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Enter a model name to download."];
+            if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Choose a downloadable Ollama model first."];
             [name release]; return;
         }
         if (ollamaStatusLabel_)
-            [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Pulling %@…", name]];
+            [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Ollama: pulling %@...", name]];
         addRef();
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
             @autoreleasepool {
-                NSTask *task = [[NSTask alloc] init];
-                [task setLaunchPath:@"/bin/sh"];
-                [task setArguments:@[@"-l", @"-c",
-                    [NSString stringWithFormat:@"ollama pull %@", name]]];
-                NSPipe *pipe = [NSPipe pipe];
-                [task setStandardOutput:pipe]; [task setStandardError:pipe];
-                NSString *out = nil;
-                @try {
-                    [task launch]; [task waitUntilExit];
-                    NSData *d = [[pipe fileHandleForReading] readDataToEndOfFile];
-                    out = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
-                } @catch (NSException *) {
-                    out = [@"ollama not found. Install from ollama.ai." retain];
+                NSDictionary *body = @{@"model": name, @"stream": @NO};
+                NSString *error = nil;
+                NSInteger code = 0;
+                NSString *out = httpRequest(@"http://127.0.0.1:11434/api/pull", @"POST", body, nil, 3600.0, &code, &error);
+                BOOL ok = (code >= 200 && code < 300 && !error);
+                if (ok && [out length] > 0 && ![out containsString:@"success"]) {
+                    ok = NO;
                 }
-                [task release];
-                if (!out) out = [@"" retain];
-                BOOL ok = [out containsString:@"success"] || [out containsString:@"up to date"];
                 NSString *status = ok
-                    ? [NSString stringWithFormat:@"%@ downloaded successfully.", name]
-                    : [NSString stringWithFormat:@"Pull %@: %@", name,
-                        [[out stringByTrimmingCharactersInSet:[NSCharacterSet newlineCharacterSet]]
-                         substringToIndex:MIN((NSUInteger)80, [out length])]];
+                    ? [NSString stringWithFormat:@"Ollama: %@ downloaded.", name]
+                    : [NSString stringWithFormat:@"Ollama: download failed for %@. %@", name, error ?: @"Check that Ollama is running."];
                 __block NSString *rs = [status retain];
-                [out release]; [name release];
+                [name release];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:rs];
                     [rs release];
+                    ollamaListModels();
                     this->release();
                 });
             }
@@ -1476,8 +1778,8 @@ private:
         }
         if (settingsProviderCombo_) [settingsProviderCombo_ setStringValue:@"ollama"];
         if (settingsModelField_) [settingsModelField_ setStringValue:name];
-        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Serving %@…", name]];
-        runOllamaGenerate(name, @"\"30m\"", @"Model is being served.");
+        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Ollama: serving %@...", name]];
+        runOllamaGenerate(name, @"30m", @"Ollama: model is being served.");
     }
 
     void ollamaStopServingModel()
@@ -1487,45 +1789,70 @@ private:
             if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Choose an installed model to stop serving."];
             return;
         }
-        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Stopping %@…", name]];
-        runOllamaGenerate(name, @"0", @"Model stopped.");
+        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Ollama: stopping %@...", name]];
+        runOllamaGenerate(name, @0, @"Ollama: model stopped.");
     }
 
-    void runOllamaGenerate(NSString *model, NSString *keepAlive, NSString *success)
+    void ollamaTestModel()
     {
-        NSString *safeModel = [[[model stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"]
-            stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""] retain];
-        NSString *payload = [[NSString stringWithFormat:@"{\"model\":\"%@\",\"keep_alive\":%@}",
-            safeModel, keepAlive] retain];
-        [safeModel release];
+        NSString *name = ollamaModelsCombo_ ? [controlString(ollamaModelsCombo_) copy] : nil;
+        if (!name || [name length] == 0) {
+            if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Choose an installed model to test."];
+            [name release]; return;
+        }
+        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Ollama: testing %@...", name]];
         addRef();
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
             @autoreleasepool {
-                NSTask *task = [[NSTask alloc] init];
-                [task setLaunchPath:@"/usr/bin/curl"];
-                [task setArguments:@[@"-s", @"http://127.0.0.1:11434/api/generate",
-                                     @"-H", @"Content-Type: application/json",
-                                     @"-d", payload]];
-                NSPipe *pipe = [NSPipe pipe];
-                [task setStandardOutput:pipe]; [task setStandardError:pipe];
-                NSString *out = nil;
-                @try {
-                    [task launch]; [task waitUntilExit];
-                    NSData *d = [[pipe fileHandleForReading] readDataToEndOfFile];
-                    out = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
-                } @catch (NSException *) {
-                    out = [@"Unable to call local Ollama API." retain];
-                }
-                [task release]; [payload release];
-                NSString *trimmed = [out stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-                NSString *status = [trimmed length] > 0
-                    ? [NSString stringWithFormat:@"%@ %@", success, trimmed]
-                    : success;
+                NSDictionary *body = @{
+                    @"model": name,
+                    @"prompt": @"Reply exactly with: LLM-r Ollama test OK",
+                    @"stream": @NO,
+                    @"keep_alive": @"5m",
+                };
+                NSString *error = nil;
+                NSInteger code = 0;
+                NSString *out = httpRequest(@"http://127.0.0.1:11434/api/generate", @"POST", body, nil, 120.0, &code, &error);
+                NSData *data = [out dataUsingEncoding:NSUTF8StringEncoding];
+                NSDictionary *json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+                NSString *reply = [json isKindOfClass:[NSDictionary class]] ? [json objectForKey:@"response"] : nil;
+                BOOL ok = (code >= 200 && code < 300 && !error && [reply length] > 0);
+                NSString *status = ok
+                    ? [NSString stringWithFormat:@"Ollama: test succeeded with %@. Reply: %@", name, reply]
+                    : [NSString stringWithFormat:@"Ollama: test failed for %@. %@", name, error ?: @"No response."];
                 __block NSString *rs = [status retain];
-                [out release];
+                [name release];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:rs];
                     [rs release];
+                    ollamaListModels();
+                    this->release();
+                });
+            }
+        });
+    }
+
+    void runOllamaGenerate(NSString *model, id keepAlive, NSString *success)
+    {
+        NSDictionary *body = @{
+            @"model": model ?: @"",
+            @"prompt": @"",
+            @"stream": @NO,
+            @"keep_alive": keepAlive ?: @"30m",
+        };
+        addRef();
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            @autoreleasepool {
+                NSString *error = nil;
+                NSInteger code = 0;
+                httpRequest(@"http://127.0.0.1:11434/api/generate", @"POST", body, nil, 120.0, &code, &error);
+                BOOL ok = (code >= 200 && code < 300 && !error);
+                NSString *status = ok ? success : [NSString stringWithFormat:@"%@ %@", success, error ?: @"Ollama did not respond."];
+                __block NSString *rs = [status retain];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:rs];
+                    [rs release];
+                    ollamaListModels();
                     this->release();
                 });
             }
@@ -1564,6 +1891,25 @@ private:
         return prompt;
     }
 
+    NSString *assistantFailureMessage(NSString *error, NSString *raw)
+    {
+        NSMutableString *out = [NSMutableString stringWithString:
+            @"I could not turn that response into executable Ableton actions."];
+        if ([error length] > 0) {
+            if ([error hasPrefix:@"LLM HTTP "]) {
+                NSRange colon = [error rangeOfString:@":"];
+                NSString *head = colon.location == NSNotFound ? error : [error substringToIndex:colon.location];
+                [out appendFormat:@"\n\n%@. Check the provider, model, endpoint, and API key in Settings.", head];
+            } else {
+                [out appendFormat:@"\n\n%@", error];
+            }
+        } else if ([raw length] > 0) {
+            [out appendString:@"\n\nThe model replied, but the reply did not match the LLM-r action schema."];
+        }
+        [out appendString:@"\n\nOpen Raw JSON for the exact provider response."];
+        return out;
+    }
+
     void planFromPrompt()
     {
         NSString *rawInput = chatInputField_ ? [[chatInputField_ stringValue] copy] : [@"" copy];
@@ -1593,7 +1939,8 @@ private:
                 NSString *error = nil;
                 NSString *content = callLLM(provider, model, endpoint, apiKey, system, userPrompt, &error);
                 NSDictionary *plan = content ? parsePlan(content, &error) : nil;
-                NSArray *actions = plan ? buildActions(plan[@"calls"], &error) : nil;
+                id calls = plan ? ([plan objectForKey:@"calls"] ?: [plan objectForKey:@"actions"]) : nil;
+                NSArray *actions = plan ? buildActions(calls, &error) : nil;
                 NSString *display = nil;
                 NSString *rawDisplay = nil;
                 NSString *status = nil;
@@ -1602,7 +1949,7 @@ private:
                     rawDisplay = [renderRawPlan(plan, content, actions) retain];
                     status = [@"Plan ready. Review it, then Execute or keep Dry run enabled." retain];
                 } else {
-                    display = [(error ?: @"No executable actions were returned.") retain];
+                    display = [assistantFailureMessage(error, content) retain];
                     rawDisplay = [(content ?: error ?: @"") retain];
                     status = [@"No executable actions." retain];
                 }
@@ -1673,6 +2020,29 @@ private:
     {
         NSString *p = [[provider lowercaseString] length] ? [provider lowercaseString] : @"openai";
         NSString *urlString = [endpoint length] ? endpoint : defaultEndpointForProvider(p);
+        if ([p isEqualToString:@"google"]) {
+            if ([apiKey length] == 0 && ![urlString containsString:@"key="]) {
+                if (error) *error = @"Google provider requires an API key.";
+                return nil;
+            }
+            NSString *googleModel = [model length] ? model : @"gemini-2.5-flash";
+            NSString *encodedModel = [googleModel stringByAddingPercentEncodingWithAllowedCharacters:
+                [NSCharacterSet URLPathAllowedCharacterSet]];
+            NSString *encodedKey = [apiKey stringByAddingPercentEncodingWithAllowedCharacters:
+                [NSCharacterSet URLQueryAllowedCharacterSet]];
+            if ([urlString containsString:@":generateContent"]) {
+                if (![urlString containsString:@"key="] && [encodedKey length] > 0) {
+                    NSString *sep = [urlString containsString:@"?"] ? @"&" : @"?";
+                    urlString = [urlString stringByAppendingFormat:@"%@key=%@", sep, encodedKey];
+                }
+            } else {
+                while ([urlString hasSuffix:@"/"]) {
+                    urlString = [urlString substringToIndex:[urlString length] - 1];
+                }
+                urlString = [NSString stringWithFormat:@"%@/models/%@:generateContent?key=%@",
+                             urlString, encodedModel, encodedKey ?: @""];
+            }
+        }
         NSURL *url = [NSURL URLWithString:urlString];
         if (!url) {
             if (error) {
@@ -1703,6 +2073,14 @@ private:
                 @"max_tokens": @4096,
                 @"system": system,
                 @"messages": @[@{@"role": @"user", @"content": userPrompt}],
+            };
+        } else if ([p isEqualToString:@"google"]) {
+            body = @{
+                @"systemInstruction": @{@"parts": @[@{@"text": system}]},
+                @"contents": @[
+                    @{@"role": @"user", @"parts": @[@{@"text": userPrompt}]},
+                ],
+                @"generationConfig": @{@"temperature": @0.2},
             };
         } else {
             if ([apiKey length] > 0) {
@@ -1755,6 +2133,15 @@ private:
                 if ([content count] > 0) {
                     result = [[[content objectAtIndex:0] objectForKey:@"text"] retain];
                 }
+            } else if ([p isEqualToString:@"google"]) {
+                NSArray *candidates = [json objectForKey:@"candidates"];
+                if ([candidates count] > 0) {
+                    NSDictionary *content = [[candidates objectAtIndex:0] objectForKey:@"content"];
+                    NSArray *parts = [content objectForKey:@"parts"];
+                    if ([parts count] > 0) {
+                        result = [[[parts objectAtIndex:0] objectForKey:@"text"] retain];
+                    }
+                }
             } else {
                 NSArray *choices = [json objectForKey:@"choices"];
                 if ([choices count] > 0) {
@@ -1794,6 +2181,31 @@ private:
         return json;
     }
 
+    NSString *humanValue(id value)
+    {
+        if ([value isKindOfClass:[NSString class]]) return value;
+        if ([value isKindOfClass:[NSNumber class]]) return [value stringValue];
+        if ([value isKindOfClass:[NSArray class]]) {
+            NSMutableArray *parts = [NSMutableArray array];
+            for (id item in (NSArray *)value) {
+                [parts addObject:humanValue(item)];
+            }
+            return [parts componentsJoinedByString:@", "];
+        }
+        return [NSString stringWithFormat:@"%@", value ?: @""];
+    }
+
+    NSString *humanArgs(NSArray *args)
+    {
+        if (![args isKindOfClass:[NSArray class]] || [args count] == 0) return @"No parameters.";
+        NSMutableArray *parts = [NSMutableArray array];
+        for (id value in args) {
+            NSString *text = humanValue(value);
+            if ([text length] > 0) [parts addObject:text];
+        }
+        return [NSString stringWithFormat:@"Parameters: %@", [parts componentsJoinedByString:@", "]];
+    }
+
     NSString *renderPlan(NSDictionary *plan, NSString *raw, NSArray *actions)
     {
         (void)raw;
@@ -1801,19 +2213,22 @@ private:
         NSString *explanation = [plan objectForKey:@"explanation"] ?: @"No explanation provided.";
         double confidence = [[plan objectForKey:@"confidence"] doubleValue];
         if (confidence <= 1.0) confidence *= 100.0;
-        [out appendFormat:@"Plan ready: %lu action(s)\n\n", (unsigned long)[actions count]];
+        [out appendFormat:@"I can do this in Ableton as %lu step%@.\n\n",
+            (unsigned long)[actions count], [actions count] == 1 ? @"" : @"s"];
         [out appendFormat:@"%@\n\n", explanation];
         [out appendFormat:@"Confidence: %.0f%%\n\n", confidence];
-        [out appendString:@"Actions:\n"];
+        [out appendString:@"Planned steps:\n"];
         NSUInteger index = 1;
         for (NSDictionary *action in actions) {
-            NSString *safety = [[action objectForKey:@"destructive"] boolValue] ? @"destructive" : @"safe";
-            [out appendFormat:@"%lu. %@ (%@)\n", (unsigned long)index, [action objectForKey:@"tool"], safety];
-            [out appendFormat:@"   %@\n", [action objectForKey:@"description"] ?: @""];
-            [out appendFormat:@"   OSC: %@\n", [action objectForKey:@"address"] ?: @""];
-            [out appendFormat:@"   Args: %@\n", [[action objectForKey:@"args"] description]];
+            BOOL destructive = [[action objectForKey:@"destructive"] boolValue];
+            NSString *safety = destructive ? @"requires destructive-actions permission" : @"safe";
+            NSString *description = [action objectForKey:@"description"] ?: [action objectForKey:@"tool"] ?: @"Action";
+            [out appendFormat:@"%lu. %@\n", (unsigned long)index, description];
+            [out appendFormat:@"   Tool: %@. Safety: %@.\n", [action objectForKey:@"tool"] ?: @"unknown", safety];
+            [out appendFormat:@"   %@\n", humanArgs([action objectForKey:@"args"])];
             index++;
         }
+        [out appendString:@"\nRaw provider output and OSC addresses are available in the Raw JSON tab."];
         return out;
     }
 
@@ -2121,6 +2536,8 @@ private:
     NSTextField *ollamaStatusLabel_{nullptr};
     NSComboBox *ollamaModelField_{nullptr};
     NSComboBox *ollamaModelsCombo_{nullptr};
+    bool ollamaOnlineModelsLoaded_{false};
+    bool ollamaOnlineLoadInFlight_{false};
 #endif
 };
 

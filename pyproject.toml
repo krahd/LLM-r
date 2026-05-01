@@ -1,6 +1,6 @@
 [project]
 name = "llm-r"
-version = "0.6.3"
+version = "0.6.4"
 description = "LLM-r bridges Ableton Live and LLM agents"
 requires-python = ">=3.11"
 authors = [ { name = "Tomas Laurenzo" } ]
