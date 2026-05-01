@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define LLMR_VERSION "0.6.2"
+#define LLMR_VERSION "0.6.3"
 
 #if defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
@@ -22,6 +22,13 @@ enum LlmrEditorAction : NSInteger {
     kLlmrEditorActionOllamaInstall = 8,
     kLlmrEditorActionOllamaListModels = 9,
     kLlmrEditorActionOllamaDownloadModel = 10,
+    kLlmrEditorActionShowChatTab = 11,
+    kLlmrEditorActionShowRawTab = 12,
+    kLlmrEditorActionOpenAdvancedSettings = 13,
+    kLlmrEditorActionCloseAdvancedSettings = 14,
+    kLlmrEditorActionOllamaServeModel = 15,
+    kLlmrEditorActionOllamaStopServingModel = 16,
+    kLlmrEditorActionOpenHelp = 17,
 };
 
 static void llmrEditorHandleAction(void *owner, NSInteger action);
@@ -32,6 +39,9 @@ static void llmrEditorHandleAction(void *owner, NSInteger action);
 }
 - (instancetype)initWithOwner:(void *)owner action:(NSInteger)action;
 - (void)performAction:(id)sender;
+@end
+
+@interface LlmrCopyTextView : NSTextView
 @end
 #endif
 
@@ -554,6 +564,8 @@ public:
 #if defined(__APPLE__)
         [chatHistory_ release];
         chatHistory_ = nullptr;
+        [lastRawResponse_ release];
+        lastRawResponse_ = nullptr;
 #endif
     }
 
@@ -634,12 +646,15 @@ public:
         chatView_ = nullptr;
         settingsView_ = nullptr;
         chatHistoryView_ = nullptr;
+        rawResponseView_ = nullptr;
         chatInputField_ = nullptr;
         chatStatusLabel_ = nullptr;
         chatSendButton_ = nullptr;
         chatExecuteButton_ = nullptr;
         chatDryRunButton_ = nullptr;
         chatSettingsButton_ = nullptr;
+        chatTabButton_ = nullptr;
+        rawTabButton_ = nullptr;
         settingsProviderCombo_ = nullptr;
         settingsModelField_ = nullptr;
         settingsEndpointField_ = nullptr;
@@ -649,6 +664,10 @@ public:
         settingsExtraPromptButton_ = nullptr;
         settingsDestructiveButton_ = nullptr;
         settingsDryRunButton_ = nullptr;
+        settingsMainView_ = nullptr;
+        settingsAdvancedView_ = nullptr;
+        settingsAdvancedButton_ = nullptr;
+        settingsBasicButton_ = nullptr;
         ollamaStatusLabel_ = nullptr;
         ollamaModelField_ = nullptr;
         ollamaModelsCombo_ = nullptr;
@@ -742,6 +761,13 @@ public:
         case kLlmrEditorActionOllamaInstall: ollamaInstall(); break;
         case kLlmrEditorActionOllamaListModels:    ollamaListModels(); break;
         case kLlmrEditorActionOllamaDownloadModel: ollamaDownloadModel(); break;
+        case kLlmrEditorActionShowChatTab:    showResponseTab(false); break;
+        case kLlmrEditorActionShowRawTab:     showResponseTab(true); break;
+        case kLlmrEditorActionOpenAdvancedSettings:  showAdvancedSettings(); break;
+        case kLlmrEditorActionCloseAdvancedSettings: showBasicSettings(); break;
+        case kLlmrEditorActionOllamaServeModel:      ollamaServeModel(); break;
+        case kLlmrEditorActionOllamaStopServingModel: ollamaStopServingModel(); break;
+        case kLlmrEditorActionOpenHelp:       openHelp(); break;
         default: break;
         }
     }
@@ -860,8 +886,10 @@ private:
         NSScrollView *sc = [[NSScrollView alloc] initWithFrame:scrollF];
         [sc setHasVerticalScroller:YES]; [sc setBorderType:NSNoBorder];
         [sc setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-        NSTextView *tv = [[NSTextView alloc] initWithFrame:NSMakeRect(0,0,scrollF.size.width,scrollF.size.height)];
+        NSTextView *tv = [[LlmrCopyTextView alloc] initWithFrame:NSMakeRect(0,0,scrollF.size.width,scrollF.size.height)];
         [tv setEditable:NO]; [tv setRichText:YES];
+        [tv setSelectable:YES];
+        [tv setAllowsUndo:NO];
         [tv setBackgroundColor:cChatBg()];
         [tv setDrawsBackground:YES];
         [tv setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
@@ -899,7 +927,7 @@ private:
 
     void buildChatView(CGFloat width, CGFloat height)
     {
-        static const CGFloat kHdr = 44.0, kBtm = 90.0, kPad = 12.0;
+        static const CGFloat kHdr = 44.0, kTabs = 34.0, kBtm = 90.0, kPad = 12.0;
 
         // Header bar (top-anchored)
         NSView *hdr = [[NSView alloc] initWithFrame:NSMakeRect(0, height - kHdr, width, kHdr)];
@@ -913,18 +941,38 @@ private:
                 NSMakeRect(kPad + 140, 11, width - kPad - 240, 22),
                 [NSFont systemFontOfSize:12.0], cAccent());
 
+        NSButton *helpBtn = btnIn(hdr, NSMakeRect(width - 190, 8, 74, 28),
+                                  @"Help", kLlmrEditorActionOpenHelp);
+        [helpBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
         chatSettingsButton_ = btnIn(hdr, NSMakeRect(width - 104, 8, 92, 28),
                                     @"⚙  Settings", kLlmrEditorActionOpenSettings);
         [chatSettingsButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
 
+        NSView *tabs = [[NSView alloc] initWithFrame:NSMakeRect(0, height - kHdr - kTabs, width, kTabs)];
+        [tabs setWantsLayer:YES]; tabs.layer.backgroundColor = cBg().CGColor;
+        [tabs setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
+        [chatView_ addSubview:tabs]; [tabs release];
+
+        chatTabButton_ = btnIn(tabs, NSMakeRect(kPad, 4, 86, 26), @"Chat", kLlmrEditorActionShowChatTab);
+        rawTabButton_ = btnIn(tabs, NSMakeRect(kPad + 92, 4, 96, 26), @"Raw JSON", kLlmrEditorActionShowRawTab);
+
         // Chat history scroll (fills middle, auto-resizes)
         chatHistoryView_ = chatTextViewIn(chatView_,
-            NSMakeRect(0, kBtm, width, height - kHdr - kBtm));
+            NSMakeRect(0, kBtm, width, height - kHdr - kTabs - kBtm));
+        rawResponseView_ = chatTextViewIn(chatView_,
+            NSMakeRect(0, kBtm, width, height - kHdr - kTabs - kBtm));
+        [[rawResponseView_ enclosingScrollView] setHidden:YES];
+        [rawResponseView_ setRichText:NO];
+        [rawResponseView_ setString:@"Raw JSON will appear here after the model returns a response."];
+        if (lastRawResponse_) {
+            [rawResponseView_ setString:lastRawResponse_];
+        }
 
         // Restore previous chat history
         if ([chatHistory_ length] > 0) {
             [[chatHistoryView_ textStorage] setAttributedString:chatHistory_];
         }
+        showResponseTab(activeRawTab_);
 
         // Bottom container (bottom-anchored, fixed height)
         NSView *btm = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, kBtm)];
@@ -956,8 +1004,7 @@ private:
     // ─── buildSettingsView ────────────────────────────────────
     void buildSettingsView(CGFloat width, CGFloat height)
     {
-        static const CGFloat kHdr = 44.0, kPad = 16.0, kLblW = 96.0, kGap = 8.0;
-        static const CGFloat kContentH = 660.0;
+        static const CGFloat kHdr = 44.0, kPad = 16.0, kLblW = 104.0, kGap = 8.0;
         const CGFloat fldW = width - 2.0*kPad - kLblW - kGap;
 
         // Header
@@ -968,126 +1015,145 @@ private:
 
         labelIn(hdr, @"Settings", NSMakeRect(kPad, 9, 160, 26),
                 [NSFont boldSystemFontOfSize:16.0], cPri());
+        settingsAdvancedButton_ = btnIn(hdr, NSMakeRect(width - 218, 8, 112, 28),
+                                        @"Advanced", kLlmrEditorActionOpenAdvancedSettings);
+        [settingsAdvancedButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
+        settingsBasicButton_ = btnIn(hdr, NSMakeRect(width - 218, 8, 112, 28),
+                                     @"Basic Settings", kLlmrEditorActionCloseAdvancedSettings);
+        [settingsBasicButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
+        [settingsBasicButton_ setHidden:YES];
         NSButton *backBtn = btnIn(hdr, NSMakeRect(width - 96, 8, 80, 28),
                                   @"✓ Done", kLlmrEditorActionCloseSettings);
         [backBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
 
-        // Scroll view for content
+        settingsMainView_ = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
+        [settingsMainView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+        [settingsMainView_ setWantsLayer:YES]; settingsMainView_.layer.backgroundColor = cBg().CGColor;
+        [settingsView_ addSubview:settingsMainView_]; [settingsMainView_ release];
+
+        CGFloat y = height - kHdr - 28.0;
+        labelIn(settingsMainView_, @"Active planner", NSMakeRect(kPad, y - 24.0, width - 2*kPad, 24.0),
+                [NSFont boldSystemFontOfSize:13.0], cAccent());
+        y -= 42.0;
+        labelIn(settingsMainView_, @"Provider", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
+                [NSFont systemFontOfSize:12.0], cSec());
+        settingsProviderCombo_ = comboIn(settingsMainView_,
+            NSMakeRect(kPad + kLblW + kGap, y - 28.0, fldW, 28.0),
+            @[@"openai", @"anthropic", @"ollama", @"custom"]);
+        [settingsProviderCombo_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+        y -= 42.0;
+        labelIn(settingsMainView_, @"Model", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
+                [NSFont systemFontOfSize:12.0], cSec());
+        settingsModelField_ = comboIn(settingsMainView_,
+            NSMakeRect(kPad + kLblW + kGap, y - 28.0, fldW, 28.0),
+            @[@"gpt-4.1-mini", @"gpt-4.1", @"claude-3-5-sonnet-latest", @"llama3:latest", @"mistral:latest", @"codellama:latest"]);
+        [settingsModelField_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+        y -= 32.0;
+        labelIn(settingsMainView_, @"For Ollama, use Advanced Settings to refresh installed models, serve a model, or stop a served model.",
+                NSMakeRect(kPad + kLblW + kGap, y - 32.0, fldW, 32.0),
+                [NSFont systemFontOfSize:11.0], cSec());
+        y -= 56.0;
+        settingsDryRunButton_ = checkIn(settingsMainView_,
+            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 160, 24), @"Dry run default", true);
+        y -= 30.0;
+        settingsDestructiveButton_ = checkIn(settingsMainView_,
+            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 230, 24), @"Allow destructive actions", false);
+        y -= 48.0;
+        btnIn(settingsMainView_, NSMakeRect(kPad + kLblW + kGap, y - 30.0, 150, 30),
+              @"Advanced Settings", kLlmrEditorActionOpenAdvancedSettings);
+
+        settingsAdvancedView_ = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
+        [settingsAdvancedView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+        [settingsAdvancedView_ setWantsLayer:YES]; settingsAdvancedView_.layer.backgroundColor = cBg().CGColor;
+        [settingsAdvancedView_ setHidden:YES];
+        [settingsView_ addSubview:settingsAdvancedView_]; [settingsAdvancedView_ release];
+
+        static const CGFloat kContentH = 620.0;
         NSScrollView *sc = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
         [sc setHasVerticalScroller:YES]; [sc setBorderType:NSNoBorder];
         [sc setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
         [sc setBackgroundColor:cBg()];
-        [settingsView_ addSubview:sc]; [sc release];
+        [settingsAdvancedView_ addSubview:sc]; [sc release];
 
         NSView *cv = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, kContentH)];
         [cv setAutoresizingMask:NSViewWidthSizable];
         [cv setWantsLayer:YES]; cv.layer.backgroundColor = cBg().CGColor;
         [sc setDocumentView:cv]; [cv release];
 
-        // ── Position helper: topY counts down from top of content ──
-        CGFloat y = kContentH; // cursor: bottom of next item
+        CGFloat ay = kContentH;
 
 #define SECT(title) \
-        y -= 14.0; \
-        labelIn(cv, title, NSMakeRect(kPad, y - 22.0, width - 2*kPad, 22.0), \
+        ay -= 16.0; \
+        labelIn(cv, title, NSMakeRect(kPad, ay - 22.0, width - 2*kPad, 22.0), \
                 [NSFont boldSystemFontOfSize:12.0], cAccent()); \
-        y -= 22.0;
+        ay -= 24.0;
 
 #define ROW_LBL(lbl, field_expr) \
-        y -= 8.0; \
-        labelIn(cv, lbl, NSMakeRect(kPad, y - 28.0, kLblW, 28.0), \
+        ay -= 8.0; \
+        labelIn(cv, lbl, NSMakeRect(kPad, ay - 28.0, kLblW, 28.0), \
                 [NSFont systemFontOfSize:12.0], cSec()); \
         field_expr; \
-        y -= 28.0;
+        ay -= 30.0;
 
-        // ── LLM Provider ──────────────────────────────────────
-        SECT(@"LLM Provider")
-        ROW_LBL(@"Provider:",
-            settingsProviderCombo_ = comboIn(cv,
-                NSMakeRect(kPad + kLblW + kGap, y - 28.0, fldW, 28.0),
-                @[@"openai", @"anthropic", @"ollama", @"custom"]))
-        ROW_LBL(@"Model:",
-            settingsModelField_ = fieldIn(cv,
-                NSMakeRect(kPad + kLblW + kGap, y - 28.0, fldW, 28.0),
-                @"e.g. gpt-4.1-mini  claude-3-sonnet  llama3", NO))
+        SECT(@"Provider keys and endpoint")
         ROW_LBL(@"Endpoint:",
             settingsEndpointField_ = fieldIn(cv,
-                NSMakeRect(kPad + kLblW + kGap, y - 28.0, fldW, 28.0),
-                @"Leave blank for default", NO))
+                NSMakeRect(kPad + kLblW + kGap, ay - 28.0, fldW, 28.0),
+                @"Leave blank for provider default", NO))
         ROW_LBL(@"API Key:",
             settingsApiKeyField_ = fieldIn(cv,
-                NSMakeRect(kPad + kLblW + kGap, y - 28.0, fldW, 28.0),
+                NSMakeRect(kPad + kLblW + kGap, ay - 28.0, fldW, 28.0),
                 @"API key (cloud providers)", YES))
-
-        y -= 8.0;
+        ay -= 8.0;
         settingsExtraPromptButton_ = checkIn(cv,
-            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 220, 24), @"LLM-r guidance prompt", true);
-        y -= 24.0;
-        settingsDestructiveButton_ = checkIn(cv,
-            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 200, 24), @"Allow destructive actions", false);
-        y -= 24.0;
+            NSMakeRect(kPad + kLblW + kGap, ay - 24.0, 220, 24), @"LLM-r guidance prompt", true);
+        ay -= 34.0;
 
-        // ── AbletonOSC ────────────────────────────────────────
         SECT(@"AbletonOSC")
-        y -= 8.0;
-        labelIn(cv, @"Host:", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
+        ay -= 8.0;
+        labelIn(cv, @"Host:", NSMakeRect(kPad, ay - 28.0, kLblW, 28.0),
                 [NSFont systemFontOfSize:12.0], cSec());
         settingsOscHostField_ = fieldIn(cv,
-            NSMakeRect(kPad + kLblW + kGap, y - 28.0, 160, 28.0), @"127.0.0.1", NO);
-        labelIn(cv, @"Port:", NSMakeRect(kPad + kLblW + kGap + 168, y - 28.0, 44, 28.0),
+            NSMakeRect(kPad + kLblW + kGap, ay - 28.0, 170, 28.0), @"127.0.0.1", NO);
+        labelIn(cv, @"Port:", NSMakeRect(kPad + kLblW + kGap + 182, ay - 28.0, 44, 28.0),
                 [NSFont systemFontOfSize:12.0], cSec());
         settingsOscPortField_ = fieldIn(cv,
-            NSMakeRect(kPad + kLblW + kGap + 218, y - 28.0, 80, 28.0), @"11000", NO);
-        y -= 28.0;
-        y -= 8.0;
-        settingsDryRunButton_ = checkIn(cv,
-            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 120, 24), @"Dry run default", true);
-        y -= 24.0;
+            NSMakeRect(kPad + kLblW + kGap + 232, ay - 28.0, 90, 28.0), @"11000", NO);
+        ay -= 38.0;
 
-        // ── Ollama ────────────────────────────────────────────
         SECT(@"Ollama")
-        y -= 6.0;
         ollamaStatusLabel_ = labelIn(cv,
-            @"Status unknown. Click List Models to check.",
-            NSMakeRect(kPad, y - 20.0, width - 2*kPad, 20.0),
+            @"Status unknown. Refresh local models to check Ollama.",
+            NSMakeRect(kPad, ay - 22.0, width - 2*kPad, 22.0),
             [NSFont systemFontOfSize:11.0], cSec());
-        [ollamaStatusLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
-        y -= 20.0;
+        ay -= 34.0;
+        btnIn(cv, NSMakeRect(kPad,          ay - 28.0, 108, 28), @"Start Ollama",   kLlmrEditorActionOllamaStart);
+        btnIn(cv, NSMakeRect(kPad + 116,    ay - 28.0, 108, 28), @"Stop Ollama",    kLlmrEditorActionOllamaStop);
+        btnIn(cv, NSMakeRect(kPad + 232,    ay - 28.0, 112, 28), @"Install", kLlmrEditorActionOllamaInstall);
+        btnIn(cv, NSMakeRect(kPad + 352,    ay - 28.0, 124, 28), @"Refresh Local", kLlmrEditorActionOllamaListModels);
+        ay -= 44.0;
 
-        y -= 8.0;
-        btnIn(cv, NSMakeRect(kPad,          y - 28.0, 100, 28), @"Start Ollama",   kLlmrEditorActionOllamaStart);
-        btnIn(cv, NSMakeRect(kPad + 108,    y - 28.0, 100, 28), @"Stop Ollama",    kLlmrEditorActionOllamaStop);
-        btnIn(cv, NSMakeRect(kPad + 216,    y - 28.0, 110, 28), @"Install Ollama", kLlmrEditorActionOllamaInstall);
-        y -= 28.0;
-
-        y -= 12.0;
-        labelIn(cv, @"Installed models:", NSMakeRect(kPad, y - 20.0, 140, 20.0),
+        labelIn(cv, @"Installed model", NSMakeRect(kPad, ay - 20.0, 160, 20.0),
                 [NSFont systemFontOfSize:11.0], cSec());
-        btnIn(cv, NSMakeRect(kPad + 148, y - 24.0, 130, 24),
-              @"↺ Refresh List", kLlmrEditorActionOllamaListModels);
-        y -= 20.0;
-
-        y -= 4.0;
+        ay -= 24.0;
         ollamaModelsCombo_ = comboIn(cv,
-            NSMakeRect(kPad, y - 28.0, fldW + kLblW + kGap, 28.0), @[]);
+            NSMakeRect(kPad, ay - 28.0, fldW + kLblW - 160, 28.0), @[]);
         [ollamaModelsCombo_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
-        y -= 28.0;
+        btnIn(cv, NSMakeRect(width - 250, ay - 28.0, 78, 28), @"Serve", kLlmrEditorActionOllamaServeModel);
+        btnIn(cv, NSMakeRect(width - 164, ay - 28.0, 140, 28), @"Stop Serving", kLlmrEditorActionOllamaStopServingModel);
+        ay -= 44.0;
 
-        y -= 12.0;
-        labelIn(cv, @"Download model:", NSMakeRect(kPad, y - 20.0, 120, 20.0),
+        labelIn(cv, @"Downloadable model", NSMakeRect(kPad, ay - 20.0, 160, 20.0),
                 [NSFont systemFontOfSize:11.0], cSec());
-        y -= 20.0;
-
-        y -= 4.0;
-        ollamaModelField_ = fieldIn(cv,
-            NSMakeRect(kPad, y - 28.0, fldW, 28.0),
-            @"e.g. llama3  mistral  codellama", NO);
+        ay -= 24.0;
+        ollamaModelField_ = comboIn(cv,
+            NSMakeRect(kPad, ay - 28.0, fldW + kLblW - 120, 28.0),
+            @[@"llama3:latest", @"llama3.1:latest", @"mistral:latest", @"codellama:latest", @"qwen2.5:latest", @"gemma2:latest", @"phi3:latest"]);
         [ollamaModelField_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
-        btnIn(cv, NSMakeRect(kPad + fldW + kGap, y - 28.0, 110, 28),
-              @"⬇ Download", kLlmrEditorActionOllamaDownloadModel);
-        y -= 28.0;
+        btnIn(cv, NSMakeRect(width - 164, ay - 28.0, 140, 28),
+              @"Download", kLlmrEditorActionOllamaDownloadModel);
 
-        (void)y;
+        (void)ay;
 #undef SECT
 #undef ROW_LBL
     }
@@ -1110,6 +1176,7 @@ private:
     void showSettings()
     {
         if (!settingsView_) return;
+        showBasicSettings();
         [settingsView_ setHidden:NO];
         [chatView_ setHidden:YES];
     }
@@ -1119,6 +1186,48 @@ private:
         if (!settingsView_) return;
         [settingsView_ setHidden:YES];
         [chatView_ setHidden:NO];
+    }
+
+    void showBasicSettings()
+    {
+        if (settingsMainView_) [settingsMainView_ setHidden:NO];
+        if (settingsAdvancedView_) [settingsAdvancedView_ setHidden:YES];
+        if (settingsAdvancedButton_) [settingsAdvancedButton_ setHidden:NO];
+        if (settingsBasicButton_) [settingsBasicButton_ setHidden:YES];
+    }
+
+    void showAdvancedSettings()
+    {
+        if (settingsMainView_) [settingsMainView_ setHidden:YES];
+        if (settingsAdvancedView_) [settingsAdvancedView_ setHidden:NO];
+        if (settingsAdvancedButton_) [settingsAdvancedButton_ setHidden:YES];
+        if (settingsBasicButton_) [settingsBasicButton_ setHidden:NO];
+    }
+
+    void showResponseTab(bool raw)
+    {
+        NSScrollView *chatScroll = chatHistoryView_ ? [chatHistoryView_ enclosingScrollView] : nil;
+        NSScrollView *rawScroll = rawResponseView_ ? [rawResponseView_ enclosingScrollView] : nil;
+        if (chatScroll) [chatScroll setHidden:raw];
+        if (rawScroll) [rawScroll setHidden:!raw];
+        if (chatTabButton_) [chatTabButton_ setState:raw ? NSControlStateValueOff : NSControlStateValueOn];
+        if (rawTabButton_) [rawTabButton_ setState:raw ? NSControlStateValueOn : NSControlStateValueOff];
+        activeRawTab_ = raw;
+    }
+
+    void updateRawResponse(NSString *text)
+    {
+        [lastRawResponse_ release];
+        lastRawResponse_ = [text ? text : @"" retain];
+        if (rawResponseView_) {
+            [rawResponseView_ setString:lastRawResponse_ ?: @""];
+        }
+    }
+
+    void openHelp()
+    {
+        [[NSWorkspace sharedWorkspace] openURL:
+            [NSURL URLWithString:@"https://github.com/krahd/LLM-r/blob/main/docs/GUI-PLUGIN.md"]];
     }
 
     void appendToChat(NSString *role, NSString *text)
@@ -1294,6 +1403,14 @@ private:
                         [ollamaModelsCombo_ addItemsWithObjectValues:rm];
                         if ([rm count] > 0) [ollamaModelsCombo_ selectItemAtIndex:0];
                     }
+                    if (settingsModelField_ && settingsProviderCombo_ &&
+                        [[controlString(settingsProviderCombo_) lowercaseString] isEqualToString:@"ollama"]) {
+                        [settingsModelField_ removeAllItems];
+                        [settingsModelField_ addItemsWithObjectValues:rm];
+                        if ([rm count] > 0 && [[settingsModelField_ stringValue] length] == 0) {
+                            [settingsModelField_ selectItemAtIndex:0];
+                        }
+                    }
                     if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:rs];
                     [rm release]; [rs release];
                     this->release();
@@ -1341,6 +1458,71 @@ private:
                          substringToIndex:MIN((NSUInteger)80, [out length])]];
                 __block NSString *rs = [status retain];
                 [out release]; [name release];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:rs];
+                    [rs release];
+                    this->release();
+                });
+            }
+        });
+    }
+
+    void ollamaServeModel()
+    {
+        NSString *name = ollamaModelsCombo_ ? [[controlString(ollamaModelsCombo_) copy] autorelease] : @"";
+        if (!name || [name length] == 0) {
+            if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Choose an installed model to serve."];
+            return;
+        }
+        if (settingsProviderCombo_) [settingsProviderCombo_ setStringValue:@"ollama"];
+        if (settingsModelField_) [settingsModelField_ setStringValue:name];
+        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Serving %@…", name]];
+        runOllamaGenerate(name, @"\"30m\"", @"Model is being served.");
+    }
+
+    void ollamaStopServingModel()
+    {
+        NSString *name = ollamaModelsCombo_ ? [[controlString(ollamaModelsCombo_) copy] autorelease] : @"";
+        if (!name || [name length] == 0) {
+            if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Choose an installed model to stop serving."];
+            return;
+        }
+        if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Stopping %@…", name]];
+        runOllamaGenerate(name, @"0", @"Model stopped.");
+    }
+
+    void runOllamaGenerate(NSString *model, NSString *keepAlive, NSString *success)
+    {
+        NSString *safeModel = [[[model stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"]
+            stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""] retain];
+        NSString *payload = [[NSString stringWithFormat:@"{\"model\":\"%@\",\"keep_alive\":%@}",
+            safeModel, keepAlive] retain];
+        [safeModel release];
+        addRef();
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            @autoreleasepool {
+                NSTask *task = [[NSTask alloc] init];
+                [task setLaunchPath:@"/usr/bin/curl"];
+                [task setArguments:@[@"-s", @"http://127.0.0.1:11434/api/generate",
+                                     @"-H", @"Content-Type: application/json",
+                                     @"-d", payload]];
+                NSPipe *pipe = [NSPipe pipe];
+                [task setStandardOutput:pipe]; [task setStandardError:pipe];
+                NSString *out = nil;
+                @try {
+                    [task launch]; [task waitUntilExit];
+                    NSData *d = [[pipe fileHandleForReading] readDataToEndOfFile];
+                    out = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
+                } @catch (NSException *) {
+                    out = [@"Unable to call local Ollama API." retain];
+                }
+                [task release]; [payload release];
+                NSString *trimmed = [out stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                NSString *status = [trimmed length] > 0
+                    ? [NSString stringWithFormat:@"%@ %@", success, trimmed]
+                    : success;
+                __block NSString *rs = [status retain];
+                [out release];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:rs];
                     [rs release];
@@ -1413,12 +1595,15 @@ private:
                 NSDictionary *plan = content ? parsePlan(content, &error) : nil;
                 NSArray *actions = plan ? buildActions(plan[@"calls"], &error) : nil;
                 NSString *display = nil;
+                NSString *rawDisplay = nil;
                 NSString *status = nil;
                 if (actions && [actions count] > 0) {
                     display = [renderPlan(plan, content, actions) retain];
+                    rawDisplay = [renderRawPlan(plan, content, actions) retain];
                     status = [@"Plan ready. Review it, then Execute or keep Dry run enabled." retain];
                 } else {
                     display = [(error ?: @"No executable actions were returned.") retain];
+                    rawDisplay = [(content ?: error ?: @"") retain];
                     status = [@"No executable actions." retain];
                 }
                 __block NSArray *retainedActions = [actions retain];
@@ -1434,11 +1619,14 @@ private:
                         lastActions_ = retainedActions;
                         retainedActions = nil;
                         appendToChat(@"assistant", display ?: @"");
+                        updateRawResponse(rawDisplay ?: @"");
+                        showResponseTab(false);
                         setStatus(status);
                         setBusy(false);
                     }
                     [retainedActions release];
                     [display release];
+                    [rawDisplay release];
                     [status release];
                     this->release();
                 });
@@ -1607,6 +1795,29 @@ private:
     }
 
     NSString *renderPlan(NSDictionary *plan, NSString *raw, NSArray *actions)
+    {
+        (void)raw;
+        NSMutableString *out = [NSMutableString string];
+        NSString *explanation = [plan objectForKey:@"explanation"] ?: @"No explanation provided.";
+        double confidence = [[plan objectForKey:@"confidence"] doubleValue];
+        if (confidence <= 1.0) confidence *= 100.0;
+        [out appendFormat:@"Plan ready: %lu action(s)\n\n", (unsigned long)[actions count]];
+        [out appendFormat:@"%@\n\n", explanation];
+        [out appendFormat:@"Confidence: %.0f%%\n\n", confidence];
+        [out appendString:@"Actions:\n"];
+        NSUInteger index = 1;
+        for (NSDictionary *action in actions) {
+            NSString *safety = [[action objectForKey:@"destructive"] boolValue] ? @"destructive" : @"safe";
+            [out appendFormat:@"%lu. %@ (%@)\n", (unsigned long)index, [action objectForKey:@"tool"], safety];
+            [out appendFormat:@"   %@\n", [action objectForKey:@"description"] ?: @""];
+            [out appendFormat:@"   OSC: %@\n", [action objectForKey:@"address"] ?: @""];
+            [out appendFormat:@"   Args: %@\n", [[action objectForKey:@"args"] description]];
+            index++;
+        }
+        return out;
+    }
+
+    NSString *renderRawPlan(NSDictionary *plan, NSString *raw, NSArray *actions)
     {
         NSMutableDictionary *payload = [NSMutableDictionary dictionary];
         [payload setObject:[plan objectForKey:@"explanation"] ?: @"" forKey:@"explanation"];
@@ -1874,21 +2085,26 @@ private:
     NSMutableArray *targets_{nullptr};
     NSArray *lastActions_{nullptr};
     NSMutableAttributedString *chatHistory_{nullptr}; // survives removed/attached
+    NSString *lastRawResponse_{nullptr};
+    bool activeRawTab_{false};
 
     // Chat view
     NSView *chatView_{nullptr};
     NSTextView *chatHistoryView_{nullptr};
+    NSTextView *rawResponseView_{nullptr};
     NSTextField *chatInputField_{nullptr};
     NSTextField *chatStatusLabel_{nullptr};
     NSButton *chatSendButton_{nullptr};
     NSButton *chatExecuteButton_{nullptr};
     NSButton *chatDryRunButton_{nullptr};
     NSButton *chatSettingsButton_{nullptr};
+    NSButton *chatTabButton_{nullptr};
+    NSButton *rawTabButton_{nullptr};
 
     // Settings overlay
     NSView *settingsView_{nullptr};
     NSComboBox *settingsProviderCombo_{nullptr};
-    NSTextField *settingsModelField_{nullptr};
+    NSComboBox *settingsModelField_{nullptr};
     NSTextField *settingsEndpointField_{nullptr};
     NSTextField *settingsApiKeyField_{nullptr};
     NSTextField *settingsOscHostField_{nullptr};
@@ -1896,10 +2112,14 @@ private:
     NSButton *settingsExtraPromptButton_{nullptr};
     NSButton *settingsDestructiveButton_{nullptr};
     NSButton *settingsDryRunButton_{nullptr};
+    NSView *settingsMainView_{nullptr};
+    NSView *settingsAdvancedView_{nullptr};
+    NSButton *settingsAdvancedButton_{nullptr};
+    NSButton *settingsBasicButton_{nullptr};
 
     // Ollama controls (inside settings)
     NSTextField *ollamaStatusLabel_{nullptr};
-    NSTextField *ollamaModelField_{nullptr};
+    NSComboBox *ollamaModelField_{nullptr};
     NSComboBox *ollamaModelsCombo_{nullptr};
 #endif
 };
@@ -2172,6 +2392,24 @@ LlmrPluginFactory gFactory;
 {
     (void)sender;
     llmrEditorHandleAction(_owner, _action);
+}
+@end
+
+@implementation LlmrCopyTextView
+- (BOOL)performKeyEquivalent:(NSEvent *)event
+{
+    if (([event modifierFlags] & NSEventModifierFlagCommand) == NSEventModifierFlagCommand) {
+        NSString *key = [[event charactersIgnoringModifiers] lowercaseString];
+        if ([key isEqualToString:@"c"]) {
+            [self copy:nil];
+            return YES;
+        }
+        if ([key isEqualToString:@"a"]) {
+            [self selectAll:nil];
+            return YES;
+        }
+    }
+    return [super performKeyEquivalent:event];
 }
 @end
 

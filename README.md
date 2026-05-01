@@ -311,6 +311,10 @@ require the desktop GUI or FastAPI server for normal use. The plug-in stores its
 own runtime settings in macOS user defaults and can:
 
 - choose provider/model/endpoint and API key
+- switch between Chat and Raw JSON response tabs
+- copy/select text from the response panel
+- keep provider/model on the basic settings screen while API keys, AbletonOSC,
+  and Ollama controls live under Advanced Settings
 - send the built-in LLM-r tool catalog and optional guidance to the LLM
 - parse the returned JSON plan
 - dry-run or execute the resulting AbletonOSC actions

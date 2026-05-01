@@ -8,10 +8,13 @@ entirely from within the host — no terminal, no server, no extra windows requi
 
 - **Chat interface** — type requests in natural language and get responses in a
   scrollable chat history, just like a standard LLM chat app.
+- **Response tabs** — use Chat for the interpreted plan and Raw JSON for the
+  exact provider response/debug payload.
 - **Resizable window** — drag the plug-in editor to the size you want.
 - **Separate Settings panel** — click ⚙ Settings to open a dedicated screen.
-  All LLM provider, AbletonOSC, and Ollama settings live there so the main
-  view stays clean.
+  Basic provider/model choices stay on the first settings screen. API keys,
+  endpoint, AbletonOSC, and Ollama service/model controls are in Advanced
+  Settings so the normal workflow stays clean.
 - **Persistent settings** — API keys, ports, model names, and checkboxes are
   saved to macOS `NSUserDefaults` and restored across sessions.
 - **Dry-run by default** — every plan is previewed before execution; toggle
@@ -31,6 +34,7 @@ entirely from within the host — no terminal, no server, no extra windows requi
 ## Settings panel
 
 Open with the ⚙ Settings button; close with ✓ Done (saves automatically).
+Use Advanced for provider keys, endpoint, AbletonOSC, and Ollama management.
 
 ### LLM Provider
 
@@ -51,19 +55,20 @@ Open with the ⚙ Settings button; close with ✓ Done (saves automatically).
 | Port | Default `11000` |
 | Dry run default | Pre-check to preview plans without sending OSC |
 
-### Ollama (local models)
+### Advanced Ollama (local models)
 
-All Ollama management operations are available directly in the Settings panel:
+Ollama management operations are available from Advanced Settings:
 
 | Action | Description |
 | --- | --- |
 | Start Ollama | Launches `ollama serve` in the background |
 | Stop Ollama | Kills the running Ollama process |
 | Install Ollama | Opens [ollama.ai](https://ollama.ai) in your browser |
-| ↺ Refresh List | Runs `ollama list` and populates the installed-models picker |
+| Refresh Local | Runs `ollama list` and populates the installed-models picker |
 | Installed models combo | Shows all locally installed models; select one as the active planner model |
-| Served models combo | Shows models currently loaded by Ollama; stop a served model without stopping the service |
-| Download model | Choose from the downloadable-model pull-down or type a model name (e.g. `llama3`, `mistral`) |
+| Serve | Loads the selected installed model and sets it as the active planner model |
+| Stop Serving | Unloads the selected model without stopping the Ollama service |
+| Download model | Choose from the downloadable-model pull-down |
 
 ## Other approaches
 
