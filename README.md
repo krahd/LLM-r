@@ -90,8 +90,11 @@ python gui/pyqt_app.py
 ```
 
 The GUI can run in embedded mode, attach to a running server, or start a local
-server from the Server controls. Its Settings dialog configures the LLM provider,
-model, assistant prompt guidance, Ableton connection, server URL, and API token.
+server from the toolbar. Its main Settings dialog keeps the normal workflow
+short: choose the provider, choose the model, set execution defaults, and save.
+Advanced Settings contains provider API keys, Ollama service/model controls,
+planner guidance, Ableton connection, server URL, and API token. Use Open Help
+in the toolbar to open the GitHub manual.
 
 #### Option C — Server only (headless / API)
 
@@ -317,7 +320,7 @@ own runtime settings in macOS user defaults and can:
 
 The GUI is an optional companion. It can run LLM-r in embedded mode without a
 separate server process, attach to a running server, or start/stop a local server
-from the Server controls.
+from the toolbar.
 
 ```bash
 pip install PyQt6
@@ -326,12 +329,11 @@ python gui/pyqt_app.py
 
 A **Settings** dialog (accessible from the toolbar) lets you configure everything at runtime:
 
-- LLM provider and model
-- Assistant prompt guidance toggle and prompt file path
-- Dry-run and destructive-execution defaults
-- Ableton OSC host and port
-- Server URL and API token
-- Ollama status, local model serving/stop-serving, online model download, and local model deletion
+- Main Settings: LLM provider, model, dry-run default, and destructive-execution default
+- Advanced Settings: provider API keys, assistant prompt guidance, Ableton OSC host/port, server URL, and API token
+- Advanced Settings → Ollama: status, start/stop service, installed model picker, served model stop, downloadable-model picker, download, serve, and delete
+- Response tabs: Chat for the processed plan/result, Actions for parsed tool calls, Execution for execution reports, and Raw `.json` for the complete payload plus parsed `llm_raw` when available
+- Open Help opens the GitHub user manual from the toolbar
 
 GUI connection settings are persisted to `~/.llmr/gui.json`. Runtime settings are
 pushed to the server via `PATCH /api/settings` when connected to HTTP mode, or

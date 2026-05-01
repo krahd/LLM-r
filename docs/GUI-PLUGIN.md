@@ -72,17 +72,31 @@ For advanced or headless setups, LLM-r also provides:
 
 ### Desktop GUI (`gui/pyqt_app.py`)
 
-A PyQt6 standalone window with the same chat/plan/execute workflow.
+A PyQt6 standalone window with the same plan/review/execute workflow.
 
 - **Embedded mode** — runs the LLM planner in-process without a server.
 - **HTTP mode** — attaches to a running `llmr serve` server for multi-client
   or remote setups.
 - Start/stop the server from within the GUI.
+- **Processed response tabs** — Chat shows the interpreted plan/result, Actions
+  shows parsed tool calls, Execution shows run reports, and Raw `.json` shows
+  the complete payload including parsed `llm_raw` when available.
+- **Simple Settings** — choose provider/model and execution defaults. When the
+  provider is `ollama`, the model field is a pull-down backed by local Ollama
+  models and safe fallback choices.
+- **Advanced Settings** — provider API keys, planner guidance, AbletonOSC,
+  server connection, and Ollama service/model management live outside the main
+  settings screen.
 
 ```bash
 pip install PyQt6
 python gui/pyqt_app.py
 ```
+
+Desktop Advanced Settings includes an Ollama screen for status refresh,
+install/start/stop, local model selection, serving a model, stopping a served
+model, deleting a local model, and downloading from a downloadable-model
+pull-down. The toolbar Open Help button opens this manual on GitHub.
 
 ### HTTP API (headless / scripting)
 

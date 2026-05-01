@@ -5,12 +5,13 @@ import os
 import subprocess
 import sys
 import time
+from html import escape
 from pathlib import Path
 from urllib import parse, request
 
 try:
-    from PyQt6.QtCore import QThread, QTimer, Qt, pyqtSignal
-    from PyQt6.QtGui import QAction, QColor, QKeySequence, QPalette
+    from PyQt6.QtCore import QThread, QTimer, Qt, QUrl, pyqtSignal
+    from PyQt6.QtGui import QAction, QColor, QDesktopServices, QKeySequence, QPalette
     from PyQt6.QtWidgets import (
         QAbstractItemView,
         QApplication,
@@ -27,13 +28,13 @@ try:
         QMainWindow,
         QMessageBox,
         QPushButton,
-        QProgressBar,
         QSpinBox,
         QSplitter,
         QStatusBar,
         QTabWidget,
         QTableWidget,
         QTableWidgetItem,
+        QTextBrowser,
         QTextEdit,
         QVBoxLayout,
         QWidget,
@@ -46,7 +47,15 @@ except Exception as exc:
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _GUI_SETTINGS_PATH = Path.home() / ".llmr" / "gui.json"
+_HELP_URL = "https://github.com/krahd/LLM-r/blob/main/docs/GUI-PLUGIN.md"
 _PROVIDERS = ["openai", "anthropic", "google", "ollama", "cohere", "mistral", "mock", "other"]
+_PROVIDER_KEY_ENVS = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "google": "GOOGLE_API_KEY",
+    "cohere": "COHERE_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+}
 _MODEL_FALLBACKS = {
     "openai": ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"],
     "anthropic": ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"],
@@ -70,6 +79,8 @@ _COMMON_OLLAMA_MODELS = [
 
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
+
+from llmr import __version__  # noqa: E402
 
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
@@ -326,6 +337,21 @@ def _save_gui_settings(data: dict) -> None:
     _GUI_SETTINGS_PATH.write_text(json.dumps(data, indent=2))
 
 
+def _provider_api_keys(data: dict) -> dict[str, str]:
+    keys = data.get("provider_api_keys", {})
+    if not isinstance(keys, dict):
+        return {}
+    return {str(k): str(v) for k, v in keys.items() if str(v).strip()}
+
+
+def _apply_provider_api_keys(data: dict) -> None:
+    keys = _provider_api_keys(data)
+    for provider, env_name in _PROVIDER_KEY_ENVS.items():
+        value = keys.get(provider, "").strip()
+        if value:
+            os.environ[env_name] = value
+
+
 def _ping(url: str) -> bool:
     try:
         request.urlopen(f"{url.rstrip('/')}/health", timeout=1)
@@ -363,6 +389,51 @@ def _set_combo_items(combo: QComboBox, values: list[str], current: str = "") -> 
 
 def _json_text(value) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _parse_json_candidate(value):
+    if isinstance(value, (dict, list)):
+        return value
+    if not isinstance(value, str):
+        return None
+
+    text = value.strip()
+    if not text:
+        return None
+
+    candidates = [text]
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].strip().startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        fenced = "\n".join(lines).strip()
+        if fenced:
+            candidates.append(fenced)
+
+    for open_char, close_char in (("{", "}"), ("[", "]")):
+        start = text.find(open_char)
+        end = text.rfind(close_char)
+        if start != -1 and end > start:
+            candidates.append(text[start:end + 1])
+
+    for candidate in candidates:
+        try:
+            return json.loads(candidate)
+        except (TypeError, json.JSONDecodeError):
+            continue
+    return None
+
+
+def _raw_payload(payload):
+    if not isinstance(payload, dict):
+        return payload
+    data = dict(payload)
+    parsed = _parse_json_candidate(data.get("llm_raw"))
+    if parsed is not None:
+        data["llm_raw_parsed"] = parsed
+    return data
 
 
 def _short_id(value: str) -> str:
@@ -652,10 +723,10 @@ class _ServerStartWatcher(QThread):
         self.failed.emit("Server did not respond within timeout")
 
 
-# ── Settings dialog ───────────────────────────────────────────────────────────
+# ── Settings dialogs ──────────────────────────────────────────────────────────
 
-class SettingsDialog(QDialog):
-    """Settings are staged in the dialog and persisted only by Save."""
+class AdvancedSettingsDialog(QDialog):
+    """Advanced settings are staged in the dialog and persisted only by Save."""
 
     def __init__(self, backend: Backend, cached: dict, parent=None) -> None:
         super().__init__(parent)
@@ -665,7 +736,7 @@ class SettingsDialog(QDialog):
         self._dirty = False
         self._live_provider = cached.get("provider", "openai")
 
-        self.setWindowTitle("LLM-r Settings")
+        self.setWindowTitle("LLM-r Advanced Settings")
         self.setMinimumSize(760, 620)
         self.resize(860, 720)
 
@@ -677,7 +748,7 @@ class SettingsDialog(QDialog):
         header_layout = QVBoxLayout()
         header_layout.setContentsMargins(16, 14, 16, 10)
         header_layout.setSpacing(4)
-        title = QLabel("Settings")
+        title = QLabel("Advanced Settings")
         title.setStyleSheet("font-size: 18px; font-weight: 700; color: #111827;")
         self._summary_lbl = QLabel("")
         self._summary_lbl.setStyleSheet("font-size: 12px; color: #6b7280;")
@@ -688,6 +759,7 @@ class SettingsDialog(QDialog):
         self._tabs = QTabWidget()
         _configure_tabs(self._tabs)
         self._build_model_tab()
+        self._build_api_keys_tab()
         self._build_ollama_tab()
         self._build_runtime_tab()
         self._build_connection_tab()
@@ -805,11 +877,48 @@ class SettingsDialog(QDialog):
         self.provider_combo.currentTextChanged.connect(self._on_provider_changed)
         self.prompt_browse_btn.clicked.connect(self._browse_prompt_file)
 
+    def _build_api_keys_tab(self) -> None:
+        w = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
+        keys_grp = QGroupBox("Provider API Keys")
+        form = QFormLayout()
+        form.setSpacing(9)
+        self.api_key_edits: dict[str, QLineEdit] = {}
+        for provider, env_name in _PROVIDER_KEY_ENVS.items():
+            edit = self._new_edit(env_name)
+            edit.setEchoMode(QLineEdit.EchoMode.Password)
+            self.api_key_edits[provider] = edit
+            form.addRow(f"{provider.title()} ({env_name})", edit)
+
+        self.show_api_keys_chk = QCheckBox("Show API keys")
+        self.show_api_keys_chk.toggled.connect(self._set_api_key_visibility)
+        keys_note = QLabel(
+            "Keys saved here are applied to this desktop GUI process as provider environment variables."
+        )
+        keys_note.setWordWrap(True)
+        keys_note.setStyleSheet("font-size: 12px; color: #6b7280;")
+        form.addRow(self.show_api_keys_chk)
+        form.addRow("", keys_note)
+        keys_grp.setLayout(form)
+
+        layout.addWidget(keys_grp)
+        layout.addStretch()
+        w.setLayout(layout)
+        self._tabs.addTab(w, "API Keys")
+
+    def _set_api_key_visibility(self, visible: bool) -> None:
+        mode = QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password
+        for edit in self.api_key_edits.values():
+            edit.setEchoMode(mode)
+
     def _build_ollama_tab(self) -> None:
         w = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
+        layout.setSpacing(14)
 
         svc_grp = QGroupBox("Ollama Service")
         svc_layout = QVBoxLayout()
@@ -842,11 +951,11 @@ class SettingsDialog(QDialog):
         local_layout = QVBoxLayout()
         local_layout.setSpacing(7)
         self.local_models_combo = self._new_combo(
-            editable=True,
+            editable=False,
             placeholder="Local Ollama models appear here",
         )
         self.running_models_combo = self._new_combo(
-            editable=True,
+            editable=False,
             placeholder="Served Ollama models appear here",
         )
 
@@ -901,8 +1010,8 @@ class SettingsDialog(QDialog):
         remote_layout = QVBoxLayout()
         remote_layout.setSpacing(8)
         self.remote_models_combo = self._new_combo(
-            editable=True,
-            placeholder="Choose a downloadable model or type one",
+            editable=False,
+            placeholder="Choose a downloadable model",
         )
         _set_combo_items(self.remote_models_combo, _COMMON_OLLAMA_MODELS)
         remote_btns = QHBoxLayout()
@@ -929,7 +1038,9 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(svc_grp)
         layout.addWidget(local_grp)
+        layout.addSpacing(8)
         layout.addWidget(remote_grp)
+        layout.addSpacing(8)
         layout.addWidget(log_grp)
         layout.addStretch()
         w.setLayout(layout)
@@ -1058,6 +1169,8 @@ class SettingsDialog(QDialog):
             _MODEL_FALLBACKS.get(provider, []) + ([model] if model else []),
             model,
         )
+        for provider_name, edit in self.api_key_edits.items():
+            edit.setText(_provider_api_keys(cached).get(provider_name, ""))
 
         self.dry_run_default.setChecked(bool(cached.get("dry_run", True)))
         self.allow_destructive.setChecked(bool(cached.get("allow_destructive", False)))
@@ -1072,6 +1185,7 @@ class SettingsDialog(QDialog):
             self.token_edit,
             self.extra_prompt_path_edit,
             self.ableton_host_edit,
+            *self.api_key_edits.values(),
         ):
             edit.textChanged.connect(self._mark_dirty)
         for combo in (self.provider_combo, self.model_combo):
@@ -1435,6 +1549,11 @@ class SettingsDialog(QDialog):
             "allow_destructive": self.allow_destructive.isChecked(),
             "ableton_host": self.ableton_host_edit.text().strip() or "127.0.0.1",
             "ableton_port": self.ableton_port_spin.value(),
+            "provider_api_keys": {
+                provider: edit.text().strip()
+                for provider, edit in self.api_key_edits.items()
+                if edit.text().strip()
+            },
         }
 
     def _runtime_patch(self, vals: dict) -> dict:
@@ -1467,6 +1586,7 @@ class SettingsDialog(QDialog):
             self._set_status(f"Settings were not saved because runtime settings failed: {exc}", "error")
             return
 
+        _apply_provider_api_keys(vals)
         _save_gui_settings(vals)
         self._backend = backend
         self._live_provider = vals["provider"]
@@ -1475,6 +1595,396 @@ class SettingsDialog(QDialog):
         self._update_summary()
         if close:
             self.accept()
+
+
+class SettingsDialog(QDialog):
+    """Simple first-run settings screen for the normal plan/execute workflow."""
+
+    def __init__(self, backend: Backend, cached: dict, parent=None) -> None:
+        super().__init__(parent)
+        self._backend = backend
+        self._cached = dict(cached)
+        self._workers: list[_ActionWorker] = []
+        self._loading = False
+        self._dirty = False
+        self._live_provider = cached.get("provider", "openai")
+
+        self.setWindowTitle("LLM-r Settings")
+        self.setMinimumSize(560, 400)
+        self.resize(640, 460)
+
+        root = QVBoxLayout()
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        header = QWidget()
+        header_layout = QVBoxLayout()
+        header_layout.setContentsMargins(18, 16, 18, 10)
+        header_layout.setSpacing(4)
+        title = QLabel("Settings")
+        title.setStyleSheet("font-size: 19px; font-weight: 700; color: #111827;")
+        subtitle = QLabel("Choose the planner provider and model used by the main GUI.")
+        subtitle.setWordWrap(True)
+        subtitle.setStyleSheet("font-size: 12px; color: #6b7280;")
+        header_layout.addWidget(title)
+        header_layout.addWidget(subtitle)
+        header.setLayout(header_layout)
+
+        content = QWidget()
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(18, 12, 18, 12)
+        content_layout.setSpacing(12)
+
+        model_grp = QGroupBox("Active Planner")
+        model_form = QFormLayout()
+        model_form.setSpacing(10)
+
+        self.provider_combo = self._new_combo(editable=False)
+        self.provider_combo.addItems(_PROVIDERS)
+        self.model_combo = self._new_combo(
+            editable=True,
+            placeholder="Choose a model",
+        )
+        self.refresh_models_btn = QPushButton("Refresh")
+        self.model_status = QLabel("")
+        self.model_status.setWordWrap(True)
+        self.model_status.setStyleSheet("font-size: 12px; color: #6b7280;")
+
+        model_row = QHBoxLayout()
+        model_row.setSpacing(8)
+        model_row.addWidget(self.model_combo, stretch=1)
+        model_row.addWidget(self.refresh_models_btn)
+        model_form.addRow("Provider", self.provider_combo)
+        model_form.addRow("Model", model_row)
+        model_form.addRow("", self.model_status)
+        model_grp.setLayout(model_form)
+
+        exec_grp = QGroupBox("Execution Defaults")
+        exec_form = QFormLayout()
+        exec_form.setSpacing(9)
+        self.dry_run_default = QCheckBox("Dry run by default")
+        self.allow_destructive = QCheckBox("Allow destructive execution after review")
+        exec_form.addRow(self.dry_run_default)
+        exec_form.addRow(self.allow_destructive)
+        exec_grp.setLayout(exec_form)
+
+        content_layout.addWidget(model_grp)
+        content_layout.addWidget(exec_grp)
+        content_layout.addStretch()
+        content.setLayout(content_layout)
+
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setStyleSheet("color: #c8d0dc;")
+
+        footer = QHBoxLayout()
+        footer.setContentsMargins(18, 10, 18, 14)
+        footer.setSpacing(8)
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet("color: #6b7280; font-size: 12px;")
+        self._help_btn = QPushButton("Open Help")
+        self._advanced_btn = QPushButton("Advanced Settings")
+        self._save_btn = QPushButton("Save")
+        self._save_btn.setProperty("role", "primary")
+        self._save_btn.setStyle(self._save_btn.style())
+        self._cancel_btn = QPushButton("Cancel")
+        footer.addWidget(self._status_lbl, stretch=1)
+        footer.addWidget(self._help_btn)
+        footer.addWidget(self._advanced_btn)
+        footer.addWidget(self._cancel_btn)
+        footer.addWidget(self._save_btn)
+
+        root.addWidget(header)
+        root.addWidget(content, stretch=1)
+        root.addWidget(line)
+        root.addLayout(footer)
+        self.setLayout(root)
+
+        self._populate(self._cached)
+        self._wire_signals()
+        self._set_dirty(False)
+        self._install_text_shortcuts()
+
+        QTimer.singleShot(50, self._populate_model_list)
+
+    def _new_combo(self, editable: bool = True, placeholder: str = "") -> QComboBox:
+        combo = QComboBox()
+        combo.setEditable(editable)
+        combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        combo.setMinimumContentsLength(28)
+        combo.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
+        if placeholder and combo.lineEdit():
+            combo.lineEdit().setPlaceholderText(placeholder)
+            combo.lineEdit().setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
+        return combo
+
+    def _populate(self, cached: dict) -> None:
+        self._loading = True
+        provider = cached.get("provider", "openai")
+        model = cached.get("model", "")
+        live_error = ""
+        try:
+            live = self._backend.get_settings()
+            provider = live.get("modelito_provider", provider)
+            model = live.get("modelito_model", model)
+            self._cached.update({
+                "planner_extra_prompt_enabled": live.get("planner_extra_prompt_enabled", True),
+                "planner_extra_prompt_path": live.get("planner_extra_prompt_path", ""),
+                "ableton_host": live.get("ableton_host", "127.0.0.1"),
+                "ableton_port": int(live.get("ableton_port", 11000)),
+            })
+        except Exception as exc:
+            live_error = str(exc)
+
+        self._live_provider = provider
+        self.provider_combo.setCurrentText(provider)
+        self._set_model_editing(provider)
+        values = _MODEL_FALLBACKS.get(provider, []) + ([model] if model else [])
+        _set_combo_items(self.model_combo, values, model)
+        self.dry_run_default.setChecked(bool(cached.get("dry_run", True)))
+        self.allow_destructive.setChecked(bool(cached.get("allow_destructive", False)))
+        self._loading = False
+        if live_error:
+            self._set_status(f"Loaded saved settings; live settings unavailable: {live_error}", "warn")
+        else:
+            self._update_summary()
+
+    def _wire_signals(self) -> None:
+        self.provider_combo.currentTextChanged.connect(self._on_provider_changed)
+        self.model_combo.currentTextChanged.connect(self._mark_dirty)
+        self.refresh_models_btn.clicked.connect(self._populate_model_list)
+        self.dry_run_default.toggled.connect(self._mark_dirty)
+        self.allow_destructive.toggled.connect(self._mark_dirty)
+        self._help_btn.clicked.connect(self._open_help)
+        self._advanced_btn.clicked.connect(self._open_advanced)
+        self._save_btn.clicked.connect(self._save)
+        self._cancel_btn.clicked.connect(self.reject)
+
+    def _set_model_editing(self, provider: str) -> None:
+        editable = provider != "ollama"
+        self.model_combo.setEditable(editable)
+        if editable and self.model_combo.lineEdit():
+            self.model_combo.lineEdit().setPlaceholderText("Choose a model or type an exact model id")
+            self.model_combo.lineEdit().setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
+
+    def _on_provider_changed(self, provider: str) -> None:
+        if self._loading:
+            return
+        self._set_model_editing(provider)
+        preferred = _combo_text(self.model_combo) if provider == self._live_provider else ""
+        _set_combo_items(
+            self.model_combo,
+            _MODEL_FALLBACKS.get(provider, []),
+            preferred,
+        )
+        self._populate_model_list()
+        self._mark_dirty()
+
+    def _populate_model_list(self) -> None:
+        provider = _combo_text(self.provider_combo)
+        current = _combo_text(self.model_combo)
+        if provider == "ollama":
+            self._load_ollama_models(current)
+            return
+        self.model_status.setText("Loading models...")
+
+        def on_done(payload: dict) -> None:
+            models = [str(m) for m in payload.get("models", []) if str(m).strip()]
+            models = _MODEL_FALLBACKS.get(provider, []) + models + ([current] if current else [])
+            _set_combo_items(self.model_combo, models, current or payload.get("default_model", ""))
+            p = payload.get("provider") or provider
+            self.model_status.setText(f"{self.model_combo.count()} model(s) available for {p}.")
+
+        def on_error(msg: str) -> None:
+            _set_combo_items(
+                self.model_combo,
+                _MODEL_FALLBACKS.get(provider, []) + ([current] if current else []),
+                current,
+            )
+            self.model_status.setText(f"Could not refresh model list: {msg}")
+
+        self._run_async(
+            lambda: self._backend.get_modelito_models(provider, current),
+            on_done,
+            on_error=on_error,
+            lock=(self.refresh_models_btn,),
+        )
+
+    def _load_ollama_models(self, current: str = "") -> None:
+        self.model_status.setText("Loading local Ollama models...")
+
+        def on_done(payload: dict) -> None:
+            models = [str(m) for m in payload.get("models", []) if str(m).strip()]
+            values = models + _MODEL_FALLBACKS.get("ollama", []) + ([current] if current else [])
+            _set_combo_items(self.model_combo, values, current)
+            count = len(models)
+            suffix = " Use Advanced Settings to start Ollama or download models." if count == 0 else ""
+            self.model_status.setText(f"{count} local Ollama model(s) found.{suffix}")
+
+        def on_error(msg: str) -> None:
+            values = _MODEL_FALLBACKS.get("ollama", []) + ([current] if current else [])
+            _set_combo_items(self.model_combo, values, current)
+            self.model_status.setText(
+                f"Could not read local Ollama models: {msg}. Use Advanced Settings for Ollama controls."
+            )
+
+        self._run_async(
+            lambda: self._backend.ollama("local_models"),
+            on_done,
+            on_error=on_error,
+            lock=(self.refresh_models_btn,),
+        )
+
+    def _open_advanced(self) -> None:
+        staged = self.values()
+        dlg = AdvancedSettingsDialog(self._backend, staged, parent=self)
+        if dlg.exec():
+            self._cached = _load_gui_settings()
+            self._populate(self._cached)
+            self._set_dirty(False)
+
+    def _open_help(self) -> None:
+        QDesktopServices.openUrl(QUrl(_HELP_URL))
+
+    def _mark_dirty(self, *_args) -> None:
+        if not self._loading:
+            self._set_dirty(True)
+            self._update_summary()
+
+    def _set_dirty(self, dirty: bool) -> None:
+        self._dirty = dirty
+        if dirty:
+            self._set_status("Unsaved changes.", "warn")
+        elif not self._status_lbl.text():
+            self._set_status("Settings loaded.", "neutral")
+
+    def _set_status(self, text: str, kind: str = "neutral") -> None:
+        colors = {
+            "neutral": "#6b7280",
+            "ok": "#16a34a",
+            "warn": "#b45309",
+            "error": "#dc2626",
+        }
+        self._status_lbl.setText(text)
+        self._status_lbl.setStyleSheet(f"color: {colors.get(kind, colors['neutral'])}; font-size: 12px;")
+
+    def _update_summary(self) -> None:
+        provider = _combo_text(self.provider_combo) or "provider"
+        model = _combo_text(self.model_combo) or "model"
+        if self._dirty:
+            self._set_status(f"Unsaved changes: {provider} / {model}", "warn")
+        else:
+            self._set_status(f"{provider} / {model}", "neutral")
+
+    def _run_async(self, fn, on_success, *, on_error=None, lock=()) -> None:
+        worker = _ActionWorker(fn)
+        self._workers.append(worker)
+        locked = tuple(lock)
+        for button in locked:
+            button.setEnabled(False)
+
+        def cleanup() -> None:
+            if worker in self._workers:
+                self._workers.remove(worker)
+            for button in locked:
+                button.setEnabled(True)
+            worker.deleteLater()
+
+        worker.finished.connect(on_success)
+        worker.finished.connect(lambda *_: cleanup())
+        worker.error.connect(on_error or (lambda m: self._set_status(f"Error: {m}", "error")))
+        worker.error.connect(lambda *_: cleanup())
+        worker.start()
+
+    def _install_text_shortcuts(self) -> None:
+        actions = [
+            ("Cut", QKeySequence.StandardKey.Cut, "cut"),
+            ("Copy", QKeySequence.StandardKey.Copy, "copy"),
+            ("Paste", QKeySequence.StandardKey.Paste, "paste"),
+            ("Delete", QKeySequence.StandardKey.Delete, "delete"),
+            ("Select All", QKeySequence.StandardKey.SelectAll, "select_all"),
+        ]
+        for label, shortcut, operation in actions:
+            action = QAction(label, self)
+            action.setShortcut(QKeySequence(shortcut))
+            action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            action.triggered.connect(lambda _checked=False, op=operation: self._text_action(op))
+            self.addAction(action)
+
+    def _text_action(self, operation: str) -> None:
+        widget = QApplication.focusWidget()
+        if operation == "cut" and hasattr(widget, "cut"):
+            widget.cut()
+        elif operation == "copy" and hasattr(widget, "copy"):
+            widget.copy()
+        elif operation == "paste" and hasattr(widget, "paste"):
+            widget.paste()
+        elif operation == "select_all" and hasattr(widget, "selectAll"):
+            widget.selectAll()
+        elif operation == "delete":
+            if isinstance(widget, QLineEdit):
+                widget.del_()
+            elif isinstance(widget, QTextEdit):
+                cursor = widget.textCursor()
+                if cursor.hasSelection():
+                    cursor.removeSelectedText()
+                else:
+                    cursor.deleteChar()
+
+    def values(self) -> dict:
+        vals = dict(self._cached)
+        vals.update({
+            "base_url": vals.get("base_url", "http://127.0.0.1:8787"),
+            "token": vals.get("token", ""),
+            "provider": _combo_text(self.provider_combo),
+            "model": _combo_text(self.model_combo),
+            "planner_extra_prompt_enabled": vals.get("planner_extra_prompt_enabled", True),
+            "planner_extra_prompt_path": vals.get("planner_extra_prompt_path", ""),
+            "dry_run": self.dry_run_default.isChecked(),
+            "allow_destructive": self.allow_destructive.isChecked(),
+            "ableton_host": vals.get("ableton_host", "127.0.0.1"),
+            "ableton_port": int(vals.get("ableton_port", 11000)),
+            "provider_api_keys": _provider_api_keys(vals),
+        })
+        return vals
+
+    def _runtime_patch(self, vals: dict) -> dict:
+        return {
+            "modelito_provider": vals["provider"],
+            "modelito_model": vals["model"],
+            "planner_extra_prompt_enabled": vals["planner_extra_prompt_enabled"],
+            "planner_extra_prompt_path": vals["planner_extra_prompt_path"],
+            "ableton_host": vals["ableton_host"],
+            "ableton_port": vals["ableton_port"],
+            "api_token": vals.get("token") or None,
+        }
+
+    def _backend_for_save(self, vals: dict) -> tuple[Backend, str]:
+        if isinstance(self._backend, HttpBackend) and self._backend.base_url == vals["base_url"]:
+            return self._backend, f"HTTP server: {vals['base_url']}"
+        return _choose_backend(vals["base_url"], vals.get("token", ""))
+
+    def _save(self) -> None:
+        vals = self.values()
+        if not vals["provider"] or not vals["model"]:
+            self._set_status("Choose both a provider and a model before saving.", "error")
+            return
+
+        backend, mode = self._backend_for_save(vals)
+        try:
+            backend.patch_settings(self._runtime_patch(vals))
+        except Exception as exc:
+            self._set_status(f"Settings were not saved because runtime settings failed: {exc}", "error")
+            return
+
+        _apply_provider_api_keys(vals)
+        _save_gui_settings(vals)
+        self._backend = backend
+        self._cached = vals
+        self._live_provider = vals["provider"]
+        self._set_dirty(False)
+        self._set_status(f"Settings saved. {mode}", "ok")
+        self.accept()
 
 
 # ── Main window ───────────────────────────────────────────────────────────────
@@ -1486,6 +1996,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(720, 560)
 
         self._gui_cfg             = _load_gui_settings()
+        _apply_provider_api_keys(self._gui_cfg)
         self.last_plan_id         = ""
         self.last_requires_approval = False
         self._plan_action_count = 0
@@ -1514,6 +2025,8 @@ class MainWindow(QMainWindow):
         top_bar = QHBoxLayout()
         top_bar.setSpacing(6)
 
+        self._version_lbl = QLabel(f"LLM-r v{__version__}")
+        self._version_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #111827;")
         self._server_status_lbl = QLabel("Checking server…")
         self._server_status_lbl.setStyleSheet("font-size: 12px; color: #6b7280;")
 
@@ -1525,10 +2038,13 @@ class MainWindow(QMainWindow):
         self._settings_btn = QPushButton("⚙ Settings")
         self._settings_btn.setProperty("role", "primary")
         self._settings_btn.setStyle(self._settings_btn.style())
+        self._help_btn = QPushButton("Open Help")
 
+        top_bar.addWidget(self._version_lbl)
         top_bar.addWidget(self._server_status_lbl, stretch=1)
         top_bar.addWidget(self._start_server_btn)
         top_bar.addWidget(self._stop_server_btn)
+        top_bar.addWidget(self._help_btn)
         top_bar.addWidget(self._settings_btn)
 
         # ── Splitter: prompt (top) | response (bottom) ────────────────────────
@@ -1550,6 +2066,7 @@ class MainWindow(QMainWindow):
         )
         self.prompt.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
         self.prompt.setMinimumHeight(90)
+        self.prompt.setMaximumHeight(180)
 
         action_row = QHBoxLayout()
         action_row.setSpacing(8)
@@ -1600,27 +2117,10 @@ class MainWindow(QMainWindow):
 
         self._response_tabs = QTabWidget()
         _configure_tabs(self._response_tabs)
-        self._summary_tab = QWidget()
-        summary_layout = QVBoxLayout()
-        summary_layout.setContentsMargins(12, 12, 12, 12)
-        summary_layout.setSpacing(8)
-        self._summary_title = QLabel("No plan yet")
-        self._summary_title.setStyleSheet("font-size: 16px; font-weight: 700; color: #111827;")
-        self._summary_detail = QLabel("Enter a prompt, click Plan, then review the parsed action list.")
-        self._summary_detail.setWordWrap(True)
-        self._summary_detail.setStyleSheet("font-size: 13px; color: #374151;")
-        self._confidence_bar = QProgressBar()
-        self._confidence_bar.setRange(0, 100)
-        self._confidence_bar.setValue(0)
-        self._confidence_bar.setFormat("Confidence: %p%")
-        self._approval_lbl = QLabel("Approval: not required")
-        self._approval_lbl.setStyleSheet("font-size: 12px; color: #6b7280;")
-        summary_layout.addWidget(self._summary_title)
-        summary_layout.addWidget(self._summary_detail)
-        summary_layout.addWidget(self._confidence_bar)
-        summary_layout.addWidget(self._approval_lbl)
-        summary_layout.addStretch()
-        self._summary_tab.setLayout(summary_layout)
+        self._chat_view = QTextBrowser()
+        self._chat_view.setOpenExternalLinks(False)
+        self._chat_view.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
+        self._chat_view.setHtml(self._empty_chat_html())
 
         self._actions_table = self._make_table(
             ["#", "Tool", "Safety", "Description", "Args", "OSC Address"]
@@ -1631,14 +2131,14 @@ class MainWindow(QMainWindow):
         self._response_raw = QTextEdit()
         self._response_raw.setReadOnly(True)
         self._response_raw.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
-        self._response_raw.setPlaceholderText("Raw JSON appears here after a plan or execution.")
+        self._response_raw.setPlaceholderText("Raw .json appears here after a plan or execution.")
         self._last_payload: dict = {}
         self._last_plan_payload: dict = {}
 
-        self._response_tabs.addTab(self._summary_tab, "Summary")
+        self._response_tabs.addTab(self._chat_view, "Chat")
         self._response_tabs.addTab(self._actions_table, "Actions")
         self._response_tabs.addTab(self._execution_table, "Execution")
-        self._response_tabs.addTab(self._response_raw, "Raw JSON")
+        self._response_tabs.addTab(self._response_raw, "Raw .json")
 
         rp_layout.addLayout(response_hdr)
         rp_layout.addWidget(self._response_tabs, stretch=1)
@@ -1646,8 +2146,8 @@ class MainWindow(QMainWindow):
 
         splitter.addWidget(prompt_panel)
         splitter.addWidget(response_panel)
-        splitter.setStretchFactor(0, 2)
-        splitter.setStretchFactor(1, 3)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 4)
 
         layout.addLayout(top_bar)
         layout.addWidget(splitter, stretch=1)
@@ -1663,12 +2163,163 @@ class MainWindow(QMainWindow):
         self.plan_btn.clicked.connect(self.on_plan)
         self.execute_btn.clicked.connect(self.on_execute)
         self._settings_btn.clicked.connect(self.on_settings)
+        self._help_btn.clicked.connect(self.on_help)
         self._start_server_btn.clicked.connect(self.on_start_server)
         self._stop_server_btn.clicked.connect(self.on_stop_server)
         self._install_edit_menu()
         self._update_model_badge()
 
     # ── Output rendering ──────────────────────────────────────────────────────
+
+    def _empty_chat_html(self) -> str:
+        return self._chat_document(
+            "No plan yet",
+            "<p>Enter a prompt, click Plan, then review the processed response and action list.</p>",
+        )
+
+    def _chat_style(self) -> str:
+        return """
+          <style>
+            body {
+              background: #f8f9fc;
+              color: #111827;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+              font-size: 13px;
+              margin: 0;
+            }
+            .thread { padding: 12px; }
+            .bubble {
+              background: #ffffff;
+              border: 1px solid #d7deea;
+              border-radius: 8px;
+              margin: 0 0 10px 0;
+              padding: 11px 12px;
+            }
+            .bubble.user { background: #eef4ff; border-color: #bfdbfe; }
+            .eyebrow {
+              color: #6b7280;
+              font-size: 11px;
+              font-weight: 700;
+              letter-spacing: 0;
+              margin-bottom: 4px;
+              text-transform: uppercase;
+            }
+            h2 { font-size: 17px; margin: 0 0 8px 0; }
+            p { margin: 4px 0 8px 0; line-height: 1.35; }
+            ul { margin: 6px 0 0 18px; padding: 0; }
+            li { margin-bottom: 5px; }
+            code {
+              background: #eef2f7;
+              border-radius: 4px;
+              color: #111827;
+              padding: 1px 4px;
+            }
+            .meta { color: #4b5563; margin-top: 8px; }
+            .warn { color: #b45309; font-weight: 700; }
+            .ok { color: #15803d; font-weight: 700; }
+            .error { color: #dc2626; font-weight: 700; }
+            pre {
+              background: #111827;
+              border-radius: 6px;
+              color: #f9fafb;
+              padding: 10px;
+              white-space: pre-wrap;
+            }
+          </style>
+        """
+
+    def _chat_document(self, title: str, body_html: str, meta_html: str = "") -> str:
+        return f"""
+        <html>
+        <head>
+          {self._chat_style()}
+        </head>
+        <body><div class="thread"><div class="bubble"><h2>{escape(title)}</h2>{body_html}{meta_html}</div></div></body>
+        </html>
+        """
+
+    def _chat_thread_document(self, thread_html: str) -> str:
+        return f"""
+        <html>
+        <head>
+          {self._chat_style()}
+        </head>
+        <body><div class="thread">{thread_html}</div></body>
+        </html>
+        """
+
+    def _normalized_plan_payload(self, payload: dict) -> tuple[dict, object | None]:
+        data = dict(payload)
+        parsed = _parse_json_candidate(data.get("llm_raw"))
+        if isinstance(parsed, dict):
+            for key in ("explanation", "confidence", "requires_approval"):
+                if key not in data and key in parsed:
+                    data[key] = parsed[key]
+            if not data.get("planned_actions"):
+                calls = parsed.get("calls") or parsed.get("planned_actions") or parsed.get("actions")
+                if isinstance(calls, list):
+                    data["planned_actions"] = [self._call_to_action(call) for call in calls]
+        return data, parsed
+
+    def _call_to_action(self, call) -> dict:
+        if not isinstance(call, dict):
+            return {
+                "tool": str(call),
+                "args": {},
+                "description": str(call),
+                "address": "",
+                "destructive": False,
+            }
+        tool = call.get("tool") or call.get("name") or call.get("function") or ""
+        args = call.get("args", call.get("arguments", {}))
+        return {
+            "tool": str(tool),
+            "args": args,
+            "description": str(call.get("description") or tool),
+            "address": str(call.get("address", "")),
+            "destructive": bool(call.get("destructive", False)),
+        }
+
+    def _confidence_percent(self, value) -> int:
+        try:
+            confidence = float(value)
+        except (TypeError, ValueError):
+            return 0
+        if confidence <= 1.0:
+            confidence *= 100
+        return max(0, min(100, int(confidence)))
+
+    def _actions_html(self, actions: list[dict]) -> str:
+        if not actions:
+            return "<p>No executable actions were parsed from this response.</p>"
+        items = []
+        for idx, action in enumerate(actions, start=1):
+            tool = escape(str(action.get("tool", "")))
+            desc = escape(str(action.get("description", "")))
+            args = escape(_json_text(action.get("args", {})))
+            safety = " <span class='warn'>destructive</span>" if action.get("destructive") else ""
+            items.append(f"<li><code>{idx}. {tool}</code>{safety}<br>{desc}<br><code>{args}</code></li>")
+        return "<ul>" + "".join(items) + "</ul>"
+
+    def _execution_html(self, report: list, dry_run: bool) -> str:
+        if not report:
+            return "<p>No execution report rows were returned.</p>"
+        items = []
+        for idx, item in enumerate(report, start=1):
+            if isinstance(item, dict):
+                status = escape(str(item.get("status", "ok")))
+                tool = escape(str(item.get("tool", "")))
+                message = escape(str(item.get("error") or item.get("message") or item.get("result") or ""))
+                args = escape(_json_text(item.get("args", [])))
+                tone = "ok" if status.lower() in {"ok", "dry_run", "sent"} else "warn"
+                items.append(
+                    f"<li><span class='{tone}'>{status}</span> <code>{tool}</code><br>"
+                    f"{message}<br><code>{args}</code></li>"
+                )
+            else:
+                items.append(f"<li>{escape(str(idx))}. {escape(str(item))}</li>")
+        label = "Dry run preview" if dry_run else "Live execution"
+        return f"<p><strong>{label}</strong></p><ul>{''.join(items)}</ul>"
 
     def _make_table(self, headers: list[str]) -> QTableWidget:
         table = QTableWidget(0, len(headers))
@@ -1698,39 +2349,52 @@ class MainWindow(QMainWindow):
 
     def _show_output(self, payload: dict, is_error: bool = False) -> None:
         self._last_payload = payload
-        self._response_raw.setPlainText(json.dumps(payload, indent=2, ensure_ascii=False))
+        self._response_raw.setPlainText(json.dumps(_raw_payload(payload), indent=2, ensure_ascii=False))
 
         if is_error:
             self._show_error_payload(payload)
-        elif "planned_actions" in payload:
-            self._show_plan_payload(payload)
         elif "execution_report" in payload or "executed_count" in payload:
             self._show_execution_payload(payload)
+        elif "planned_actions" in payload or "llm_raw" in payload or "plan_id" in payload:
+            self._show_plan_payload(payload)
         else:
-            self._summary_title.setText("Response")
-            self._summary_detail.setText(json.dumps(payload, indent=2, ensure_ascii=False))
-            self._confidence_bar.setValue(0)
-            self._approval_lbl.setText("")
-            self._response_tabs.setCurrentWidget(self._summary_tab)
+            body = f"<pre>{escape(json.dumps(_raw_payload(payload), indent=2, ensure_ascii=False))}</pre>"
+            self._chat_view.setHtml(self._chat_document("Response", body))
+            self._response_tabs.setCurrentWidget(self._chat_view)
 
     def _show_plan_payload(self, payload: dict) -> None:
-        self._last_plan_payload = payload
-        actions = payload.get("planned_actions", []) or []
-        confidence = max(0, min(100, int(float(payload.get("confidence", 0.0)) * 100)))
-        requires_approval = bool(payload.get("requires_approval", False))
+        data, parsed = self._normalized_plan_payload(payload)
+        self._last_plan_payload = data
+        actions = data.get("planned_actions", []) or []
+        confidence = self._confidence_percent(data.get("confidence", 0.0))
+        requires_approval = bool(data.get("requires_approval", False))
 
-        self._summary_title.setText(f"Plan ready: {len(actions)} action(s)")
-        detail = payload.get("explanation") or "No explanation provided."
-        self._summary_detail.setText(str(detail))
-        self._confidence_bar.setValue(confidence)
-        self._approval_lbl.setText(
-            "Approval: required for destructive actions"
+        prompt = escape(str(data.get("prompt", "")).strip())
+        detail = escape(str(data.get("explanation") or "No explanation provided."))
+        approval = (
+            "<span class='warn'>Approval required for destructive actions.</span>"
             if requires_approval
-            else "Approval: not required"
+            else "<span class='ok'>No destructive-action approval required.</span>"
         )
-        self._approval_lbl.setStyleSheet(
-            f"font-size: 12px; color: {'#b45309' if requires_approval else '#16a34a'};"
+        parsed_note = (
+            "<p class='meta'>The model's raw JSON was parsed and normalized for this view.</p>"
+            if parsed is not None
+            else ""
         )
+        prompt_html = (
+            f"<div class='bubble user'><div class='eyebrow'>Prompt</div><p>{prompt}</p></div>"
+            if prompt
+            else ""
+        )
+        plan_html = (
+            f"{prompt_html}<div class='bubble'><div class='eyebrow'>Processed Plan</div>"
+            f"<h2>Plan ready: {len(actions)} action(s)</h2>"
+            f"<p>{detail}</p>"
+            f"<p>Confidence: <strong>{confidence}%</strong></p>"
+            f"<p>{approval}</p>"
+            f"{self._actions_html(actions)}{parsed_note}</div>"
+        )
+        self._chat_view.setHtml(self._chat_thread_document(plan_html))
 
         rows: list[list[str]] = []
         for idx, action in enumerate(actions, start=1):
@@ -1745,29 +2409,17 @@ class MainWindow(QMainWindow):
             ])
         self._set_table_rows(self._actions_table, rows)
         self._set_table_rows(self._execution_table, [])
-        self._response_tabs.setCurrentWidget(self._actions_table if rows else self._summary_tab)
+        self._response_tabs.setCurrentWidget(self._chat_view)
 
     def _show_execution_payload(self, payload: dict) -> None:
         report = payload.get("execution_report", []) or []
         dry_run = bool(payload.get("dry_run", False))
         count = payload.get("executed_count", len(report))
-        if dry_run:
-            self._summary_title.setText(f"Dry run complete: {count} action(s)")
-            self._summary_detail.setText("No OSC messages were sent to Ableton.")
-        else:
-            self._summary_title.setText(f"Executed: {count} action(s)")
-            self._summary_detail.setText("OSC messages were sent to Ableton for this plan.")
-        self._confidence_bar.setValue(
-            max(0, min(100, int(float(self._last_plan_payload.get("confidence", 0.0)) * 100)))
-            if self._last_plan_payload
-            else 0
-        )
-        self._approval_lbl.setText(
-            "Execution mode: dry run" if dry_run else "Execution mode: live OSC"
-        )
-        self._approval_lbl.setStyleSheet(
-            f"font-size: 12px; color: {'#0891b2' if dry_run else '#16a34a'};"
-        )
+        title = f"Dry run complete: {count} action(s)" if dry_run else f"Executed: {count} action(s)"
+        detail = "No OSC messages were sent to Ableton." if dry_run else "OSC messages were sent to Ableton."
+        body = f"<p>{escape(detail)}</p>{self._execution_html(report, dry_run)}"
+        self._chat_view.setHtml(self._chat_document(title, body))
+        self._response_tabs.setCurrentWidget(self._chat_view)
 
         rows: list[list[str]] = []
         for idx, item in enumerate(report, start=1):
@@ -1785,16 +2437,13 @@ class MainWindow(QMainWindow):
             else:
                 rows.append([str(idx), "info", str(item), "", "", ""])
         self._set_table_rows(self._execution_table, rows)
-        self._response_tabs.setCurrentWidget(self._execution_table if rows else self._summary_tab)
 
     def _show_error_payload(self, payload: dict) -> None:
         message = payload.get("error", payload) if isinstance(payload, dict) else str(payload)
-        self._summary_title.setText("Error")
-        self._summary_detail.setText(str(message))
-        self._confidence_bar.setValue(0)
-        self._approval_lbl.setText("")
+        body = f"<p class='error'>{escape(str(message))}</p>"
+        self._chat_view.setHtml(self._chat_document("Error", body))
         self._set_table_rows(self._execution_table, [])
-        self._response_tabs.setCurrentWidget(self._summary_tab)
+        self._response_tabs.setCurrentWidget(self._chat_view)
 
     def _update_model_badge(self) -> None:
         provider = self._gui_cfg.get("provider", "")
@@ -1865,6 +2514,9 @@ class MainWindow(QMainWindow):
             lines.append("\t".join(values))
         QApplication.clipboard().setText("\n".join(lines))
 
+    def on_help(self) -> None:
+        QDesktopServices.openUrl(QUrl(_HELP_URL))
+
     # ── UI state ──────────────────────────────────────────────────────────────
 
     def _set_busy(self, busy: bool) -> None:
@@ -1918,7 +2570,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self, "Approval Required",
                 "This plan includes destructive actions.\n\n"
-                "Enable 'Allow destructive execution' in Settings → Execution, "
+                "Enable 'Allow destructive execution' in Settings, "
                 "or keep Dry run checked.",
             )
             return
@@ -2026,6 +2678,7 @@ class MainWindow(QMainWindow):
 
         # Re-read persisted settings so Save-without-close changes are reflected.
         self._gui_cfg = _load_gui_settings()
+        _apply_provider_api_keys(self._gui_cfg)
 
         self._server_url = self._gui_cfg.get("base_url", self._server_url)
         token            = self._gui_cfg.get("token", "")

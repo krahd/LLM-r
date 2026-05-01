@@ -8,8 +8,8 @@ How to create a release via GitHub (recommended):
    contain the intended version:
 
 ```bash
-git tag v0.6.1
-git push origin v0.6.1
+git tag v0.6.2
+git push origin v0.6.2
 ```
 
 2. The workflow `.github/workflows/release.yml` will run on tag push, build artifacts for multiple platforms, and create a GitHub Release attaching the built files.
@@ -43,6 +43,11 @@ Local install helpers:
   VST3 instrument with a native Cocoa editor view. The editor is self-contained:
   it exposes LLM provider/model/endpoint settings, prompt entry, plan review,
   dry-run, destructive-action approval, and direct AbletonOSC execution.
+- The PyQt desktop GUI exposes the same plan/review/execute workflow with
+  processed Chat, Actions, Execution, and Raw `.json` response tabs. Its main
+  Settings screen is intentionally limited to provider/model and execution
+  defaults; Advanced Settings owns API keys, Ollama controls, server connection,
+  AbletonOSC, and planner guidance.
 
 Notes and caveats:
 

@@ -6,6 +6,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#define LLMR_VERSION "0.6.2"
+
 #if defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
 
@@ -907,7 +909,7 @@ private:
 
         labelIn(hdr, @"LLM-r", NSMakeRect(kPad, 9, 130, 26),
                 [NSFont boldSystemFontOfSize:18.0], cPri());
-        labelIn(hdr, @"Ableton Live LLM assistant",
+        labelIn(hdr, [NSString stringWithFormat:@"v%s", LLMR_VERSION],
                 NSMakeRect(kPad + 140, 11, width - kPad - 240, 22),
                 [NSFont systemFontOfSize:12.0], cAccent());
 
@@ -2096,7 +2098,7 @@ public:
         info->classFlags = 0;
         copyString(info->subCategories, index == 0 ? "Instrument|Synth" : "");
         copyString(info->vendor, "Tomas Laurenzo");
-        copyString(info->version, "0.6.1");
+        copyString(info->version, LLMR_VERSION);
         copyString(info->sdkVersion, "VST 3.8");
         return kResultOk;
     }
@@ -2114,7 +2116,7 @@ public:
         info->classFlags = 0;
         copyString(info->subCategories, index == 0 ? "Instrument|Synth" : "");
         copyString16(info->vendor, "Tomas Laurenzo");
-        copyString16(info->version, "0.6.1");
+        copyString16(info->version, LLMR_VERSION);
         copyString16(info->sdkVersion, "VST 3.8");
         return kResultOk;
     }

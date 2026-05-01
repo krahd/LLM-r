@@ -30,7 +30,14 @@ Read-only endpoints (`GET /api/*`, `POST /api/plan`, `POST /api/plan_macro`) are
 
 ## LLM provider credentials
 
-API keys for OpenAI, Anthropic, Google, etc. are handled entirely by [Modelito](https://github.com/krahd/modelito) through standard provider environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.). LLM-r never reads, logs, or stores them.
+API keys for OpenAI, Anthropic, Google, etc. are normally handled by
+[Modelito](https://github.com/krahd/modelito) through standard provider
+environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.).
+
+The optional desktop GUI also has Advanced Settings fields for provider keys.
+When used, those keys are stored in `~/.llmr/gui.json` as plaintext and applied
+to the GUI process environment before embedded planning calls. Do not use the
+GUI key fields on a shared machine unless the file permissions are restricted.
 
 ## Local settings file
 
@@ -44,7 +51,9 @@ chmod 600 .llmr/settings.json
 
 ## Desktop GUI
 
-The GUI stores its connection settings (server URL and API token) in `~/.llmr/gui.json` as plaintext JSON. Apply the same permission restriction if this is a concern:
+The GUI stores its connection settings (server URL and API token), execution
+defaults, and optional provider API keys in `~/.llmr/gui.json` as plaintext JSON.
+Apply the same permission restriction if this is a concern:
 
 ```bash
 chmod 600 ~/.llmr/gui.json
