@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define LLMR_VERSION "0.6.5"
+#define LLMR_VERSION "0.6.6"
 
 #if defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
@@ -1961,13 +1961,36 @@ private:
             @"You are the LLM-r planner running inside the LLM-r VST3 plug-in in Ableton Live. "
              "Return ONLY valid JSON matching this schema: "
              "{\"explanation\":\"short explanation\",\"confidence\":0.0,\"calls\":[{\"tool\":\"set_tempo\",\"args\":{\"bpm\":128}}]}. "
+             "Do not include Markdown, prose, numbered lists, comments, or code fences outside the JSON object. "
+             "The top-level JSON object must contain a calls array. Every call must contain tool and args. "
              "Plan only executable LLM-r tools. Do not claim to export/render, master, load plug-ins, analyze loudness, or inspect unavailable Live state unless a listed tool supports it. "
-             "For composition requests, create tracks/clips and MIDI notes when enough musical detail is provided. For mixing requests, use exposed mixer/device parameter tools only.\n"];
+             "For composition requests, create tracks/clips and MIDI notes when enough musical detail is provided. "
+             "For drum-loop requests, create a MIDI track, create a clip, add General MIDI drum notes with midi_notes_add, and fire the clip. "
+             "Do not use unsupported tools such as set_track_quantization, clip_set_start_time, or clip_set_end_time. "
+             "For mixing requests, use exposed mixer/device parameter tools only.\n"];
         [prompt appendString:toolCatalogPrompt()];
+        [prompt appendString:
+            @"Example drum-loop response: {\"explanation\":\"Create a 2-bar MIDI jazz drum loop.\",\"confidence\":0.82,\"calls\":["
+             "{\"tool\":\"set_tempo\",\"args\":{\"bpm\":92}},"
+             "{\"tool\":\"create_midi_track\",\"args\":{\"index\":0}},"
+             "{\"tool\":\"track_rename\",\"args\":{\"track_index\":0,\"name\":\"Jazzy Drum Loop\"}},"
+             "{\"tool\":\"clip_create\",\"args\":{\"track_index\":0,\"clip_index\":0,\"length_beats\":8}},"
+             "{\"tool\":\"midi_notes_add\",\"args\":{\"track_index\":0,\"clip_index\":0,\"notes\":[{\"pitch\":51,\"start_time\":0,\"duration\":0.16,\"velocity\":92,\"mute\":false}]}},"
+             "{\"tool\":\"clip_set_looping\",\"args\":{\"track_index\":0,\"clip_index\":0,\"looping\":true}},"
+             "{\"tool\":\"fire_clip\",\"args\":{\"track_index\":0,\"clip_index\":0}}"
+             "]}.\n"];
         if (buttonOn(settingsExtraPromptButton_)) {
             [prompt appendString:@"Additional guidance: be explicit about limitations, keep plans conservative for destructive edits, and prefer dry-run review before executing.\n"];
         }
         return prompt;
+    }
+
+    NSString *repairSystemPrompt()
+    {
+        return @"You convert non-compliant LLM-r planner output into executable LLM-r JSON. "
+               "Return ONLY one valid JSON object with keys explanation, confidence, and calls. "
+               "Use only tools from the provided catalog. Drop unsupported or impossible steps. "
+               "For drum-loop requests, create a MIDI track, a clip, MIDI drum notes, loop it, and fire it.\n";
     }
 
     NSString *assistantFailureMessage(NSString *error, NSString *raw)
@@ -1987,6 +2010,80 @@ private:
         }
         [out appendString:@"\n\nOpen Raw JSON for the exact provider response."];
         return out;
+    }
+
+    NSDictionary *localDrumLoopPlan(NSString *userPrompt)
+    {
+        if (!isDrumLoopRequest(userPrompt)) {
+            return nil;
+        }
+
+        NSArray *notes = @[
+            @{@"pitch": @51, @"start_time": @0.0,  @"duration": @0.18, @"velocity": @96, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @0.67, @"duration": @0.14, @"velocity": @72, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @1.0,  @"duration": @0.18, @"velocity": @88, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @2.0,  @"duration": @0.18, @"velocity": @94, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @2.67, @"duration": @0.14, @"velocity": @70, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @3.0,  @"duration": @0.18, @"velocity": @86, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @4.0,  @"duration": @0.18, @"velocity": @96, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @4.67, @"duration": @0.14, @"velocity": @72, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @5.0,  @"duration": @0.18, @"velocity": @88, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @6.0,  @"duration": @0.18, @"velocity": @94, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @6.67, @"duration": @0.14, @"velocity": @70, @"mute": @NO},
+            @{@"pitch": @51, @"start_time": @7.0,  @"duration": @0.18, @"velocity": @86, @"mute": @NO},
+            @{@"pitch": @44, @"start_time": @1.5,  @"duration": @0.12, @"velocity": @70, @"mute": @NO},
+            @{@"pitch": @44, @"start_time": @3.5,  @"duration": @0.12, @"velocity": @72, @"mute": @NO},
+            @{@"pitch": @44, @"start_time": @5.5,  @"duration": @0.12, @"velocity": @70, @"mute": @NO},
+            @{@"pitch": @44, @"start_time": @7.5,  @"duration": @0.12, @"velocity": @72, @"mute": @NO},
+            @{@"pitch": @36, @"start_time": @0.0,  @"duration": @0.20, @"velocity": @92, @"mute": @NO},
+            @{@"pitch": @36, @"start_time": @3.33, @"duration": @0.18, @"velocity": @68, @"mute": @NO},
+            @{@"pitch": @36, @"start_time": @4.0,  @"duration": @0.20, @"velocity": @88, @"mute": @NO},
+            @{@"pitch": @36, @"start_time": @6.33, @"duration": @0.18, @"velocity": @70, @"mute": @NO},
+            @{@"pitch": @38, @"start_time": @2.0,  @"duration": @0.18, @"velocity": @66, @"mute": @NO},
+            @{@"pitch": @38, @"start_time": @3.67, @"duration": @0.12, @"velocity": @42, @"mute": @NO},
+            @{@"pitch": @38, @"start_time": @6.0,  @"duration": @0.18, @"velocity": @68, @"mute": @NO},
+            @{@"pitch": @38, @"start_time": @7.67, @"duration": @0.12, @"velocity": @44, @"mute": @NO},
+        ];
+        return @{
+            @"explanation": @"Built-in fallback: create a 2-bar jazzy MIDI drum loop using General MIDI drum notes. Add a Drum Rack or drum instrument on the created track to hear it.",
+            @"confidence": @0.72,
+            @"calls": @[
+                @{@"tool": @"set_tempo", @"args": @{@"bpm": @92}},
+                @{@"tool": @"create_midi_track", @"args": @{@"index": @0}},
+                @{@"tool": @"track_rename", @"args": @{@"track_index": @0, @"name": @"Jazzy Drum Loop"}},
+                @{@"tool": @"clip_create", @"args": @{@"track_index": @0, @"clip_index": @0, @"length_beats": @8}},
+                @{@"tool": @"clip_rename", @"args": @{@"track_index": @0, @"clip_index": @0, @"name": @"2-bar jazz ride loop"}},
+                @{@"tool": @"midi_notes_add", @"args": @{@"track_index": @0, @"clip_index": @0, @"notes": notes}},
+                @{@"tool": @"clip_set_looping", @"args": @{@"track_index": @0, @"clip_index": @0, @"looping": @YES}},
+                @{@"tool": @"fire_clip", @"args": @{@"track_index": @0, @"clip_index": @0}},
+            ],
+        };
+    }
+
+    bool isDrumLoopRequest(NSString *userPrompt)
+    {
+        NSString *lower = [userPrompt lowercaseString];
+        BOOL asksForDrums = ([lower containsString:@"drum"] ||
+                             [lower containsString:@"beat"] ||
+                             [lower containsString:@"groove"]);
+        BOOL asksToCreate = ([lower containsString:@"create"] ||
+                             [lower containsString:@"make"] ||
+                             [lower containsString:@"generate"] ||
+                             [lower containsString:@"write"]);
+        return asksForDrums && asksToCreate;
+    }
+
+    NSString *repairNonJsonPlan(NSString *provider, NSString *model, NSString *endpoint, NSString *apiKey,
+                                NSString *userPrompt, NSString *badOutput, NSString **error)
+    {
+        NSMutableString *repairPrompt = [NSMutableString string];
+        [repairPrompt appendString:toolCatalogPrompt()];
+        [repairPrompt appendFormat:@"\nUser request:\n%@\n\nNon-compliant output:\n%@\n\nReturn only corrected JSON.",
+            userPrompt ?: @"", badOutput ?: @""];
+        NSString *system = [[repairSystemPrompt() stringByAppendingString:toolCatalogPrompt()] retain];
+        NSString *fixed = callLLM(provider, model, endpoint, apiKey, system, repairPrompt, error);
+        [system release];
+        return fixed;
     }
 
     void planFromPrompt()
@@ -2022,10 +2119,56 @@ private:
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             @autoreleasepool {
                 NSString *error = nil;
-                NSString *content = callLLM(provider, model, endpoint, apiKey, system, userPrompt, &error);
+                NSString *content = [callLLM(provider, model, endpoint, apiKey, system, userPrompt, &error) retain];
                 NSDictionary *plan = content ? parsePlan(content, &error) : nil;
-                id calls = plan ? ([plan objectForKey:@"calls"] ?: [plan objectForKey:@"actions"]) : nil;
+                if (!plan && content) {
+                    NSString *repairError = nil;
+                    NSString *repaired = repairNonJsonPlan(provider, model, endpoint, apiKey, userPrompt, content, &repairError);
+                    NSDictionary *repairedPlan = repaired ? parsePlan(repaired, &repairError) : nil;
+                    if (repairedPlan) {
+                        NSString *original = [content retain];
+                        [content release];
+                        content = [[NSString stringWithFormat:
+                            @"%@\n\n--- repaired JSON ---\n%@", original ?: @"", repaired ?: @""] retain];
+                        [original release];
+                        plan = repairedPlan;
+                        error = nil;
+                    } else if (repairError) {
+                        error = repairError;
+                    }
+                }
+                if (!plan) {
+                    NSDictionary *fallback = localDrumLoopPlan(userPrompt);
+                    if (fallback) {
+                        plan = fallback;
+                        NSString *original = [content retain];
+                        [content release];
+                        content = [[NSString stringWithFormat:
+                            @"%@\n\n--- local fallback JSON ---\n%@",
+                            original ?: @"",
+                            renderRawPlan(fallback, @"Built-in fallback generated because the model did not return JSON.", @[])] retain];
+                        [original release];
+                        error = nil;
+                    }
+                }
+                id calls = plan ? ([plan objectForKey:@"calls"] ?: [plan objectForKey:@"actions"] ?: [plan objectForKey:@"tool_calls"]) : nil;
                 NSArray *actions = plan ? buildActions(calls, &error) : nil;
+                if (plan && isDrumLoopRequest(userPrompt) && !planHasUsefulDrumLoop(calls)) {
+                    NSDictionary *fallback = localDrumLoopPlan(userPrompt);
+                    if (fallback) {
+                        plan = fallback;
+                        calls = [fallback objectForKey:@"calls"];
+                        actions = buildActions(calls, &error);
+                        NSString *original = [content retain];
+                        [content release];
+                        content = [[NSString stringWithFormat:
+                            @"%@\n\n--- local fallback JSON ---\n%@",
+                            original ?: @"",
+                            renderRawPlan(fallback, @"Built-in fallback generated because the model returned an incomplete drum-loop plan.", actions ?: @[])] retain];
+                        [original release];
+                        error = nil;
+                    }
+                }
                 NSString *display = nil;
                 NSString *rawDisplay = nil;
                 NSString *status = nil;
@@ -2039,6 +2182,7 @@ private:
                     status = [@"No executable actions." retain];
                 }
                 __block NSArray *retainedActions = [actions retain];
+                [content release];
                 [provider release];
                 [model release];
                 [endpoint release];
@@ -2156,6 +2300,7 @@ private:
             if (error) {
                 *error = @"Invalid LLM endpoint URL.";
             }
+            [llmModel release];
             return nil;
         }
 
@@ -2168,6 +2313,8 @@ private:
             body = @{
                 @"model": [llmModel length] ? llmModel : @"llama3",
                 @"stream": @NO,
+                @"format": @"json",
+                @"options": @{@"temperature": @0.1},
                 @"messages": @[
                     @{@"role": @"system", @"content": system},
                     @{@"role": @"user", @"content": userPrompt},
@@ -2188,20 +2335,24 @@ private:
                 @"contents": @[
                     @{@"role": @"user", @"parts": @[@{@"text": userPrompt}]},
                 ],
-                @"generationConfig": @{@"temperature": @0.2},
+                @"generationConfig": @{@"temperature": @0.2, @"responseMimeType": @"application/json"},
             };
         } else {
             if ([apiKey length] > 0) {
                 [request setValue:[NSString stringWithFormat:@"Bearer %@", apiKey] forHTTPHeaderField:@"Authorization"];
             }
-            body = @{
+            NSMutableDictionary *openAiBody = [@{
                 @"model": [llmModel length] ? llmModel : @"gpt-4.1-mini",
                 @"temperature": @0.2,
                 @"messages": @[
                     @{@"role": @"system", @"content": system},
                     @{@"role": @"user", @"content": userPrompt},
                 ],
-            };
+            } mutableCopy];
+            if ([p isEqualToString:@"openai"]) {
+                [openAiBody setObject:@{@"type": @"json_object"} forKey:@"response_format"];
+            }
+            body = [openAiBody autorelease];
         }
 
         NSData *bodyData = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
@@ -2352,6 +2503,60 @@ private:
         return [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease] ?: [payload description];
     }
 
+    NSString *toolNameForCall(NSDictionary *call)
+    {
+        id value = [call objectForKey:@"tool"] ?: [call objectForKey:@"name"];
+        if (!value) {
+            NSDictionary *function = [call objectForKey:@"function"];
+            if ([function isKindOfClass:[NSDictionary class]]) {
+                value = [function objectForKey:@"name"];
+            }
+        }
+        return [value isKindOfClass:[NSString class]] ? value : nil;
+    }
+
+    NSDictionary *argsForCall(NSDictionary *call)
+    {
+        id value = [call objectForKey:@"args"] ?: [call objectForKey:@"arguments"];
+        if (!value) {
+            NSDictionary *function = [call objectForKey:@"function"];
+            if ([function isKindOfClass:[NSDictionary class]]) {
+                value = [function objectForKey:@"arguments"];
+            }
+        }
+        if ([value isKindOfClass:[NSDictionary class]]) {
+            return value;
+        }
+        if ([value isKindOfClass:[NSString class]]) {
+            NSData *data = [value dataUsingEncoding:NSUTF8StringEncoding];
+            id json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+            if ([json isKindOfClass:[NSDictionary class]]) {
+                return json;
+            }
+        }
+        return @{};
+    }
+
+    bool planHasUsefulDrumLoop(id calls)
+    {
+        if (![calls isKindOfClass:[NSArray class]]) return false;
+        bool createsTrack = false;
+        bool createsClip = false;
+        bool addsNotes = false;
+        for (NSDictionary *call in (NSArray *)calls) {
+            if (![call isKindOfClass:[NSDictionary class]]) continue;
+            NSString *tool = toolNameForCall(call);
+            NSDictionary *args = argsForCall(call);
+            if ([tool isEqualToString:@"create_midi_track"]) createsTrack = true;
+            if ([tool isEqualToString:@"clip_create"]) createsClip = true;
+            if ([tool isEqualToString:@"midi_notes_add"]) {
+                id notes = [args objectForKey:@"notes"];
+                addsNotes = [notes isKindOfClass:[NSArray class]] && [notes count] > 0;
+            }
+        }
+        return createsTrack && createsClip && addsNotes;
+    }
+
     NSArray *buildActions(id calls, NSString **error)
     {
         if (![calls isKindOfClass:[NSArray class]]) {
@@ -2365,7 +2570,7 @@ private:
             if (![call isKindOfClass:[NSDictionary class]]) {
                 continue;
             }
-            NSDictionary *action = actionForTool([call objectForKey:@"tool"], [call objectForKey:@"args"] ?: @{});
+            NSDictionary *action = actionForTool(toolNameForCall(call), argsForCall(call));
             if (action) {
                 [actions addObject:action];
             }
@@ -2472,6 +2677,9 @@ private:
     {
         NSMutableArray *payload = [NSMutableArray arrayWithObjects:@(intValue(args, @"track_index", 0)), @(intValue(args, @"clip_index", 0)), nil];
         NSArray *notes = [args objectForKey:@"notes"];
+        if (![notes isKindOfClass:[NSArray class]] || [notes count] == 0) {
+            return nil;
+        }
         for (NSDictionary *note in notes) {
             if (![note isKindOfClass:[NSDictionary class]]) {
                 continue;

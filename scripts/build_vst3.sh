@@ -67,9 +67,9 @@ cat > "$INFO_PLIST" <<PLIST
   <key>CFBundleSignature</key>
   <string>????</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.6.5</string>
+  <string>0.6.6</string>
   <key>CFBundleVersion</key>
-  <string>0.6.5</string>
+  <string>0.6.6</string>
   <key>CSResourcesFileMapped</key>
   <true/>
 </dict>

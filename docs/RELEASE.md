@@ -8,8 +8,8 @@ How to create a release via GitHub (recommended):
    contain the intended version:
 
 ```bash
-git tag v0.6.5
-git push origin v0.6.5
+git tag v0.6.6
+git push origin v0.6.6
 ```
 
 2. The workflow `.github/workflows/release.yml` will run on tag push, build artifacts for multiple platforms, and create a GitHub Release attaching the built files.

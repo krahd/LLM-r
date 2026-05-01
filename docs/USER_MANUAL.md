@@ -45,6 +45,11 @@ The chat view is selectable. Use standard macOS shortcuts such as `Cmd+C`, `Cmd+
 
 The **Raw JSON** tab is for debugging. It shows the provider response and the internal action payload that LLM-r built from it. Use it when a plan fails, a provider returns invalid JSON, or you need to inspect the exact OSC/action details.
 
+LLM-r asks supported providers for structured JSON responses. If a model still
+answers with prose, LLM-r first asks the model to repair the answer into the
+action schema. For common drum-loop requests, it can also fall back to a local
+2-bar MIDI drum-loop plan so the workflow still produces executable actions.
+
 ### Dry Run and Execute
 
 Keep **Dry run** enabled when testing. A dry run shows what would be sent to Ableton without changing the Live set.
@@ -139,6 +144,10 @@ For cloud providers, choose a fast and inexpensive model first, then move to a s
 ### The assistant says it could not build actions
 
 Open **Raw JSON**. The model may have returned invalid JSON, used unsupported tool names, or answered conversationally instead of returning an action plan.
+
+For local models, try a stronger instruction-following model if this happens
+often. The plug-in can repair some non-JSON responses, but models that ignore
+tool names or invent unsupported tools will still produce weaker plans.
 
 ### Ollama installed models are empty
 
