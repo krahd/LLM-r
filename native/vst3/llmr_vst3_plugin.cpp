@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define LLMR_VERSION "0.6.4"
+#define LLMR_VERSION "0.6.5"
 
 #if defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
@@ -46,6 +46,9 @@ static void llmrEditorHandleAction(void *owner, NSInteger action);
 @end
 
 @interface LlmrCopyTextView : NSTextView
+@end
+
+@interface LlmrPromptField : NSTextField
 @end
 #endif
 
@@ -790,7 +793,9 @@ private:
 #if defined(__APPLE__)
     static NSString *defaultEndpointForProvider(NSString *provider)
     {
-        NSString *p = [provider lowercaseString];
+        NSString *raw = provider ? provider : @"";
+        NSString *p = [[raw stringByTrimmingCharactersInSet:
+                        [NSCharacterSet whitespaceAndNewlineCharacterSet]] lowercaseString];
         if ([p isEqualToString:@"ollama"]) {
             return @"http://127.0.0.1:11434/api/chat";
         }
@@ -803,12 +808,32 @@ private:
         if ([p isEqualToString:@"custom"]) {
             return @"";
         }
-        return @"https://api.openai.com/v1/chat/completions";
+        if ([p length] == 0 || [p isEqualToString:@"openai"]) {
+            return @"https://api.openai.com/v1/chat/completions";
+        }
+        return @"";
     }
 
     static NSArray *providers()
     {
         return @[@"openai", @"anthropic", @"google", @"ollama", @"custom"];
+    }
+
+    static NSString *canonicalProvider(NSString *provider)
+    {
+        NSString *raw = provider ? provider : @"";
+        NSString *p = [[raw stringByTrimmingCharactersInSet:
+                        [NSCharacterSet whitespaceAndNewlineCharacterSet]] lowercaseString];
+        return [p length] > 0 ? p : @"openai";
+    }
+
+    static bool providerHasManagedEndpoint(NSString *provider)
+    {
+        NSString *p = canonicalProvider(provider);
+        return [p isEqualToString:@"openai"] ||
+               [p isEqualToString:@"anthropic"] ||
+               [p isEqualToString:@"google"] ||
+               [p isEqualToString:@"ollama"];
     }
 
     static NSArray *defaultModelsForProvider(NSString *provider)
@@ -902,6 +927,15 @@ private:
                                 : [[NSTextField alloc] initWithFrame:f];
         [v setPlaceholderString:ph]; [v setFont:[NSFont systemFontOfSize:12.0]];
         [p addSubview:v]; [v release]; return v;
+    }
+    NSTextField *promptFieldIn(NSView *p, NSRect f, NSString *ph)
+    {
+        NSTextField *v = [[LlmrPromptField alloc] initWithFrame:f];
+        [v setPlaceholderString:ph];
+        [v setFont:[NSFont systemFontOfSize:12.0]];
+        [p addSubview:v];
+        [v release];
+        return v;
     }
     NSComboBox *comboIn(NSView *p, NSRect f, NSArray *items)
     {
@@ -1059,9 +1093,14 @@ private:
         chatDryRunButton_ = checkIn(btm, NSMakeRect(kPad + 96, 28, 96, 22), @"Dry run", true);
 
         // Input field + Send button (top row of bottom)
-        chatInputField_ = fieldIn(btm, NSMakeRect(kPad, 58, width - kPad*2 - 80, 28),
-                                  @"Describe what you want Ableton to do…", NO);
+        chatInputField_ = promptFieldIn(btm, NSMakeRect(kPad, 58, width - kPad*2 - 80, 28),
+                                        @"Describe what you want Ableton to do…");
         [chatInputField_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+        LlmrEditorTarget *inputTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionPlan];
+        [targets_ addObject:inputTarget];
+        [chatInputField_ setTarget:inputTarget];
+        [chatInputField_ setAction:@selector(performAction:)];
+        [inputTarget release];
 
         chatSendButton_ = btnIn(btm, NSMakeRect(width - kPad - 72, 58, 72, 28),
                                 @"Send", kLlmrEditorActionPlan);
@@ -1363,9 +1402,9 @@ private:
     {
         if (!settingsProviderCombo_) return;
         NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-        NSString *prov = [d stringForKey:@"llmr.vst3.provider"] ?: @"openai";
+        NSString *prov = canonicalProvider([d stringForKey:@"llmr.vst3.provider"] ?: @"openai");
         NSString *mdl  = [d stringForKey:@"llmr.vst3.model"] ?: @"gpt-4.1-mini";
-        NSString *ep   = [d stringForKey:@"llmr.vst3.endpoint"] ?: defaultEndpointForProvider(prov);
+        NSString *ep   = resolvedEndpointForSettings(prov, [d stringForKey:@"llmr.vst3.endpoint"] ?: @"");
         NSString *key  = [d stringForKey:@"llmr.vst3.api_key"] ?: @"";
         NSString *host = [d stringForKey:@"llmr.vst3.osc_host"] ?: @"127.0.0.1";
         NSInteger port = [d integerForKey:@"llmr.vst3.osc_port"];
@@ -1427,14 +1466,47 @@ private:
         return false;
     }
 
+    NSString *resolvedEndpointForSettings(NSString *provider, NSString *endpoint)
+    {
+        NSString *p = canonicalProvider(provider);
+        NSString *raw = endpoint ? endpoint : @"";
+        NSString *value = [raw stringByTrimmingCharactersInSet:
+                           [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (providerHasManagedEndpoint(p) && ([value length] == 0 || endpointLooksDefault(value))) {
+            return defaultEndpointForProvider(p);
+        }
+        return value;
+    }
+
+    NSString *resolvedModelForSettings(NSString *provider, NSString *model)
+    {
+        NSString *p = canonicalProvider(provider);
+        NSString *raw = model ? model : @"";
+        NSString *value = [raw stringByTrimmingCharactersInSet:
+                           [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([value length] > 0) return value;
+        if ([p isEqualToString:@"ollama"] && ollamaModelsCombo_) {
+            NSString *selected = controlString(ollamaModelsCombo_);
+            if ([selected length] > 0) return selected;
+            if ([ollamaModelsCombo_ numberOfItems] > 0) {
+                NSString *first = [ollamaModelsCombo_ itemObjectValueAtIndex:0];
+                if ([first length] > 0) return first;
+            }
+        }
+        NSArray *defaults = defaultModelsForProvider(p);
+        return [defaults count] > 0 ? [defaults objectAtIndex:0] : value;
+    }
+
     void providerChanged()
     {
-        NSString *provider = controlString(settingsProviderCombo_);
+        NSString *provider = canonicalProvider(controlString(settingsProviderCombo_));
+        [settingsProviderCombo_ setStringValue:provider];
         rebuildModelChoices(provider, nil);
-        if (settingsEndpointField_ && endpointLooksDefault(controlString(settingsEndpointField_))) {
-            [settingsEndpointField_ setStringValue:defaultEndpointForProvider(provider)];
+        if (settingsEndpointField_) {
+            NSString *endpoint = resolvedEndpointForSettings(provider, controlString(settingsEndpointField_));
+            [settingsEndpointField_ setStringValue:endpoint];
         }
-        if ([[provider lowercaseString] isEqualToString:@"ollama"]) {
+        if ([provider isEqualToString:@"ollama"]) {
             ollamaListModels();
         }
     }
@@ -1443,9 +1515,15 @@ private:
     {
         if (!settingsProviderCombo_) return;
         NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-        [d setObject:controlString(settingsProviderCombo_) forKey:@"llmr.vst3.provider"];
-        [d setObject:controlString(settingsModelField_)    forKey:@"llmr.vst3.model"];
-        [d setObject:controlString(settingsEndpointField_) forKey:@"llmr.vst3.endpoint"];
+        NSString *provider = canonicalProvider(controlString(settingsProviderCombo_));
+        NSString *model = resolvedModelForSettings(provider, controlString(settingsModelField_));
+        NSString *endpoint = resolvedEndpointForSettings(provider, controlString(settingsEndpointField_));
+        [settingsProviderCombo_ setStringValue:provider];
+        [settingsModelField_ setStringValue:model];
+        [settingsEndpointField_ setStringValue:endpoint];
+        [d setObject:provider forKey:@"llmr.vst3.provider"];
+        [d setObject:model forKey:@"llmr.vst3.model"];
+        [d setObject:endpoint forKey:@"llmr.vst3.endpoint"];
         [d setObject:controlString(settingsApiKeyField_)   forKey:@"llmr.vst3.api_key"];
         [d setObject:controlString(settingsOscHostField_)  forKey:@"llmr.vst3.osc_host"];
         [d setInteger:[controlString(settingsOscPortField_) integerValue] forKey:@"llmr.vst3.osc_port"];
@@ -1778,6 +1856,7 @@ private:
         }
         if (settingsProviderCombo_) [settingsProviderCombo_ setStringValue:@"ollama"];
         if (settingsModelField_) [settingsModelField_ setStringValue:name];
+        if (settingsEndpointField_) [settingsEndpointField_ setStringValue:defaultEndpointForProvider(@"ollama")];
         if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Ollama: serving %@...", name]];
         runOllamaGenerate(name, @"30m", @"Ollama: model is being served.");
     }
@@ -1927,9 +2006,15 @@ private:
         setBusy(true);
         setStatus(@"Planning with LLM…");
 
-        NSString *provider = [controlString(settingsProviderCombo_) copy];
-        NSString *model = [controlString(settingsModelField_) copy];
-        NSString *endpoint = [controlString(settingsEndpointField_) copy];
+        NSString *providerValue = canonicalProvider(controlString(settingsProviderCombo_));
+        NSString *modelValue = resolvedModelForSettings(providerValue, controlString(settingsModelField_));
+        NSString *endpointValue = resolvedEndpointForSettings(providerValue, controlString(settingsEndpointField_));
+        if (settingsProviderCombo_) [settingsProviderCombo_ setStringValue:providerValue];
+        if (settingsModelField_) [settingsModelField_ setStringValue:modelValue ?: @""];
+        if (settingsEndpointField_) [settingsEndpointField_ setStringValue:endpointValue ?: @""];
+        NSString *provider = [providerValue copy];
+        NSString *model = [modelValue copy];
+        NSString *endpoint = [endpointValue copy];
         NSString *apiKey = [controlString(settingsApiKeyField_) copy];
         NSString *system = [systemPrompt() copy];
 
@@ -2018,14 +2103,37 @@ private:
     NSString *callLLM(NSString *provider, NSString *model, NSString *endpoint, NSString *apiKey,
                       NSString *system, NSString *userPrompt, NSString **error)
     {
-        NSString *p = [[provider lowercaseString] length] ? [provider lowercaseString] : @"openai";
-        NSString *urlString = [endpoint length] ? endpoint : defaultEndpointForProvider(p);
+        NSString *p = canonicalProvider(provider);
+        NSString *urlString = resolvedEndpointForSettings(p, endpoint);
+        if ([urlString length] == 0) {
+            if (error) {
+                *error = [NSString stringWithFormat:@"%@ provider requires an endpoint.", p];
+            }
+            return nil;
+        }
+        NSString *rawModel = model ? model : @"";
+        NSString *llmModel = [[rawModel stringByTrimmingCharactersInSet:
+                               [NSCharacterSet whitespaceAndNewlineCharacterSet]] retain];
+        if ([p isEqualToString:@"ollama"] && [llmModel length] == 0) {
+            NSString *tagsError = nil;
+            NSInteger tagsCode = 0;
+            NSString *tags = httpRequest(@"http://127.0.0.1:11434/api/tags",
+                                         @"GET", nil, nil, 8.0, &tagsCode, &tagsError);
+            NSArray *localModels = (tagsCode >= 200 && tagsCode < 300 && !tagsError)
+                ? modelNamesFromOllamaJSON(tags)
+                : @[];
+            if ([localModels count] > 0) {
+                [llmModel release];
+                llmModel = [[localModels objectAtIndex:0] retain];
+            }
+        }
         if ([p isEqualToString:@"google"]) {
             if ([apiKey length] == 0 && ![urlString containsString:@"key="]) {
                 if (error) *error = @"Google provider requires an API key.";
+                [llmModel release];
                 return nil;
             }
-            NSString *googleModel = [model length] ? model : @"gemini-2.5-flash";
+            NSString *googleModel = [llmModel length] ? llmModel : @"gemini-2.5-flash";
             NSString *encodedModel = [googleModel stringByAddingPercentEncodingWithAllowedCharacters:
                 [NSCharacterSet URLPathAllowedCharacterSet]];
             NSString *encodedKey = [apiKey stringByAddingPercentEncodingWithAllowedCharacters:
@@ -2058,7 +2166,7 @@ private:
         NSDictionary *body = nil;
         if ([p isEqualToString:@"ollama"]) {
             body = @{
-                @"model": [model length] ? model : @"llama3",
+                @"model": [llmModel length] ? llmModel : @"llama3",
                 @"stream": @NO,
                 @"messages": @[
                     @{@"role": @"system", @"content": system},
@@ -2069,7 +2177,7 @@ private:
             [request setValue:apiKey forHTTPHeaderField:@"x-api-key"];
             [request setValue:@"2023-06-01" forHTTPHeaderField:@"anthropic-version"];
             body = @{
-                @"model": [model length] ? model : @"claude-3-5-sonnet-latest",
+                @"model": [llmModel length] ? llmModel : @"claude-3-5-sonnet-latest",
                 @"max_tokens": @4096,
                 @"system": system,
                 @"messages": @[@{@"role": @"user", @"content": userPrompt}],
@@ -2087,7 +2195,7 @@ private:
                 [request setValue:[NSString stringWithFormat:@"Bearer %@", apiKey] forHTTPHeaderField:@"Authorization"];
             }
             body = @{
-                @"model": [model length] ? model : @"gpt-4.1-mini",
+                @"model": [llmModel length] ? llmModel : @"gpt-4.1-mini",
                 @"temperature": @0.2,
                 @"messages": @[
                     @{@"role": @"system", @"content": system},
@@ -2155,6 +2263,7 @@ private:
         [responseData release];
         [requestError release];
         [httpResponse release];
+        [llmModel release];
         return [result autorelease];
     }
 
@@ -2827,6 +2936,23 @@ LlmrPluginFactory gFactory;
         }
     }
     return [super performKeyEquivalent:event];
+}
+@end
+
+@implementation LlmrPromptField
+- (void)keyDown:(NSEvent *)event
+{
+    NSString *chars = [event charactersIgnoringModifiers] ?: @"";
+    unichar ch = [chars length] > 0 ? [chars characterAtIndex:0] : 0;
+    if (ch == NSCarriageReturnCharacter || ch == NSEnterCharacter || ch == NSNewlineCharacter) {
+        id target = [self target];
+        SEL action = [self action];
+        if (target && action) {
+            [NSApp sendAction:action to:target from:self];
+            return;
+        }
+    }
+    [super keyDown:event];
 }
 @end
 

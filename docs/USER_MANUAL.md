@@ -27,6 +27,7 @@ Settings are only applied when you click **Save**. Click **Cancel** to close set
 ## Main Screen
 
 The main screen has a prompt field, an assistant response area, and execution controls.
+Press **Return** in the prompt field to send the request, or click **Send**.
 
 ### Chat Tab
 
@@ -106,6 +107,11 @@ The **Installed model** pull-down is populated from the local Ollama API. If it 
 - download a model if none are installed
 
 Use **Serve** to load the selected model and keep it alive. Use **Stop Serving** to unload it. Use **Test** to send a tiny local request and confirm the selected model responds.
+
+When `ollama` is selected as the provider, LLM-r uses the local Ollama endpoint
+`http://127.0.0.1:11434/api/chat` by default. The endpoint is restored during
+Save and before planning, so a stale cloud-provider endpoint is not reused for
+local Ollama plans.
 
 ### Downloadable Models
 

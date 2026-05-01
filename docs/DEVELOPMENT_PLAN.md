@@ -4,7 +4,7 @@ This is the single planning and audit document for the current pre-release LLM-r
 codebase. Older roadmap, audit, and patch-plan documents have been removed so
 the project has one source of truth.
 
-Current package version: `0.6.4`
+Current package version: `0.6.5`
 
 ## Product Stance
 
