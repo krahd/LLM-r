@@ -2801,7 +2801,7 @@ private:
             dispatch_semaphore_t sema = dispatch_semaphore_create(0);
 
             NSURL *archiveURL = [NSURL URLWithString:
-                @"https://github.com/ideoforms/AbletonOSC/archive/refs/heads/main.zip"];
+                @"https://github.com/ideoforms/AbletonOSC/archive/refs/heads/master.zip"];
             NSURLSessionDownloadTask *dlTask =
                 [[NSURLSession sharedSession]
                     downloadTaskWithURL:archiveURL
