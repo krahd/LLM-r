@@ -2795,10 +2795,10 @@ private:
             NSString *tmpZip  = @"/tmp/llmr_AbletonOSC.zip";
             NSString *tmpDir  = @"/tmp/llmr_aosc_extract";
 
-            // Download
+            // Download (--fail so HTTP errors produce non-zero exit)
             NSTask *curl = [[NSTask alloc] init];
             [curl setLaunchPath:@"/usr/bin/curl"];
-            [curl setArguments:@[@"-L", @"-s", @"-o", tmpZip,
+            [curl setArguments:@[@"-L", @"--fail", @"-s", @"-o", tmpZip,
                 @"https://github.com/ideoforms/AbletonOSC/archive/refs/heads/main.zip"]];
             [curl launch];
             [curl waitUntilExit];
@@ -2824,7 +2824,20 @@ private:
             [unzip setArguments:@[@"-o", @"-q", tmpZip, @"-d", tmpDir]];
             [unzip launch];
             [unzip waitUntilExit];
+            int unzipExit = [unzip terminationStatus];
             [unzip release];
+
+            if (unzipExit != 0) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    setStatus(@"AbletonOSC extraction failed.");
+                    NSAlert *a = [[NSAlert alloc] init];
+                    [a setMessageText:@"Extraction Failed"];
+                    [a setInformativeText:@"Could not unzip the downloaded AbletonOSC archive. Please install manually from https://github.com/ideoforms/AbletonOSC"];
+                    [a runModal]; [a release];
+                    release();
+                });
+                return;
+            }
 
             // Find AbletonOSC subfolder anywhere in the extracted dir
             NSString *src = nil;
