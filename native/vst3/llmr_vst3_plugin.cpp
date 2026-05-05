@@ -33,6 +33,7 @@ enum LlmrEditorAction : NSInteger {
     kLlmrEditorActionOllamaRefreshOnlineModels = 19,
     kLlmrEditorActionProviderChanged = 20,
     kLlmrEditorActionOllamaTestModel = 21,
+    kLlmrEditorActionPreview = 22,
 };
 
 static void llmrEditorHandleAction(void *owner, NSInteger action);
@@ -49,6 +50,9 @@ static void llmrEditorHandleAction(void *owner, NSInteger action);
 @end
 
 @interface LlmrPromptField : NSTextField
+@end
+
+@interface FullClickComboBox : NSComboBox
 @end
 #endif
 
@@ -656,9 +660,10 @@ public:
         rawResponseView_ = nullptr;
         chatInputField_ = nullptr;
         chatStatusLabel_ = nullptr;
+        chatModelLabel_ = nullptr;
         chatSendButton_ = nullptr;
         chatExecuteButton_ = nullptr;
-        chatDryRunButton_ = nullptr;
+        chatPreviewButton_ = nullptr;
         chatSettingsButton_ = nullptr;
         chatTabButton_ = nullptr;
         rawTabButton_ = nullptr;
@@ -759,7 +764,8 @@ public:
     {
         switch (action) {
         case kLlmrEditorActionPlan:          planFromPrompt(); break;
-        case kLlmrEditorActionExecute:       executeLastPlan(); break;
+        case kLlmrEditorActionExecute:       executeLastPlan(false); break;
+        case kLlmrEditorActionPreview:       executeLastPlan(true); break;
         case kLlmrEditorActionSaveSettings:  saveSettings(); hideSettings(); break;
         case kLlmrEditorActionOpenSettings:  showSettings(); break;
         case kLlmrEditorActionCloseSettings: cancelSettings(); break;
@@ -939,7 +945,7 @@ private:
     }
     NSComboBox *comboIn(NSView *p, NSRect f, NSArray *items)
     {
-        NSComboBox *v = [[NSComboBox alloc] initWithFrame:f];
+        NSComboBox *v = [[FullClickComboBox alloc] initWithFrame:f];
         [v addItemsWithObjectValues:items]; [v setCompletes:YES];
         [v setFont:[NSFont systemFontOfSize:12.0]];
         [p addSubview:v]; [v release]; return v;
@@ -1022,6 +1028,12 @@ private:
         buildSettingsView(width, height);
 
         loadSettings();
+
+        // Prompt to install AbletonOSC if missing (once per session)
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if (view_) checkAbletonOSCOnFirstUse();
+        });
     }
 
     void buildChatView(CGFloat width, CGFloat height)
@@ -1034,11 +1046,15 @@ private:
         [hdr setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
         [chatView_ addSubview:hdr]; [hdr release];
 
-        labelIn(hdr, @"LLM-r", NSMakeRect(kPad, 9, 130, 26),
+        labelIn(hdr, @"LLM-r", NSMakeRect(kPad, 9, 56, 26),
                 [NSFont boldSystemFontOfSize:18.0], cPri());
         labelIn(hdr, [NSString stringWithFormat:@"v%s", LLMR_VERSION],
-                NSMakeRect(kPad + 140, 11, width - kPad - 240, 22),
-                [NSFont systemFontOfSize:12.0], cAccent());
+                NSMakeRect(kPad + 60, 14, 52, 16),
+                [NSFont systemFontOfSize:10.0], cSec());
+        chatModelLabel_ = labelIn(hdr, @"",
+                NSMakeRect(kPad + 118, 12, width - kPad - 332, 20),
+                [NSFont systemFontOfSize:11.0], cAccent());
+        [chatModelLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
 
         NSButton *helpBtn = btnIn(hdr, NSMakeRect(width - 190, 8, 74, 28),
                                   @"Help", kLlmrEditorActionOpenHelp);
@@ -1086,11 +1102,13 @@ private:
                                    [NSFont systemFontOfSize:11.0], cSec());
         [chatStatusLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
 
-        // Execute button + dry-run (second row)
+        // Execute button + Preview button (second row)
         chatExecuteButton_ = btnIn(btm, NSMakeRect(kPad, 26, 88, 26),
                                    @"▶ Execute", kLlmrEditorActionExecute);
         [chatExecuteButton_ setEnabled:NO];
-        chatDryRunButton_ = checkIn(btm, NSMakeRect(kPad + 96, 28, 96, 22), @"Dry run", true);
+        chatPreviewButton_ = btnIn(btm, NSMakeRect(kPad + 96, 26, 80, 26),
+                                   @"◯ Preview", kLlmrEditorActionPreview);
+        [chatPreviewButton_ setEnabled:NO];
 
         // Input field + Send button (top row of bottom)
         chatInputField_ = promptFieldIn(btm, NSMakeRect(kPad, 58, width - kPad*2 - 80, 28),
@@ -1105,6 +1123,14 @@ private:
         chatSendButton_ = btnIn(btm, NSMakeRect(width - kPad - 72, 58, 72, 28),
                                 @"Send", kLlmrEditorActionPlan);
         [chatSendButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
+
+        // Populate model badge from saved settings
+        NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+        NSString *savedProv = [d stringForKey:@"llmr.vst3.provider"] ?: @"";
+        NSString *savedMdl  = [d stringForKey:@"llmr.vst3.model"] ?: @"";
+        if ([savedProv length] > 0 && [savedMdl length] > 0 && chatModelLabel_) {
+            [chatModelLabel_ setStringValue:[NSString stringWithFormat:@"%@ / %@", savedProv, savedMdl]];
+        }
     }
 
     // ─── buildSettingsView ────────────────────────────────────
@@ -1290,12 +1316,26 @@ private:
         }
     }
 
+    void updateModelBadge()
+    {
+        if (!chatModelLabel_) return;
+        NSString *provider = settingsProviderCombo_ ? controlString(settingsProviderCombo_) : @"";
+        NSString *model = settingsModelField_ ? controlString(settingsModelField_) : @"";
+        if ([provider length] > 0 && [model length] > 0) {
+            [chatModelLabel_ setStringValue:[NSString stringWithFormat:@"%@ / %@", provider, model]];
+        } else if ([provider length] > 0) {
+            [chatModelLabel_ setStringValue:provider];
+        } else {
+            [chatModelLabel_ setStringValue:@""];
+        }
+    }
+
     void setBusy(bool busy)
     {
         if (chatSendButton_) [chatSendButton_ setEnabled:!busy];
-        if (chatExecuteButton_) {
-            [chatExecuteButton_ setEnabled:!busy && lastActions_ && [lastActions_ count] > 0];
-        }
+        bool hasActions = !busy && lastActions_ && [lastActions_ count] > 0;
+        if (chatExecuteButton_) [chatExecuteButton_ setEnabled:hasActions];
+        if (chatPreviewButton_) [chatPreviewButton_ setEnabled:hasActions];
     }
 
     void showSettings()
@@ -1418,14 +1458,12 @@ private:
         bool extraOn = [d objectForKey:@"llmr.vst3.extra_prompt_enabled"]
                        ? [d boolForKey:@"llmr.vst3.extra_prompt_enabled"] : true;
         bool dryOn   = [d objectForKey:@"llmr.vst3.dry_run"]
-                       ? [d boolForKey:@"llmr.vst3.dry_run"] : true;
+                       ? [d boolForKey:@"llmr.vst3.dry_run"] : false;
         [settingsExtraPromptButton_ setState:extraOn ? NSControlStateValueOn : NSControlStateValueOff];
         [settingsDestructiveButton_ setState:[d boolForKey:@"llmr.vst3.allow_destructive"]
                                                ? NSControlStateValueOn : NSControlStateValueOff];
         [settingsDryRunButton_      setState:dryOn  ? NSControlStateValueOn : NSControlStateValueOff];
-        if (chatDryRunButton_) {
-            [chatDryRunButton_ setState:dryOn ? NSControlStateValueOn : NSControlStateValueOff];
-        }
+        updateModelBadge();
     }
 
     void rebuildModelChoices(NSString *provider, NSString *preferred)
@@ -1531,11 +1569,7 @@ private:
         [d setBool:buttonOn(settingsDestructiveButton_) forKey:@"llmr.vst3.allow_destructive"];
         [d setBool:buttonOn(settingsDryRunButton_)      forKey:@"llmr.vst3.dry_run"];
         [d synchronize];
-        // keep chat dry-run checkbox in sync
-        if (chatDryRunButton_) {
-            [chatDryRunButton_ setState:buttonOn(settingsDryRunButton_)
-                                         ? NSControlStateValueOn : NSControlStateValueOff];
-        }
+        updateModelBadge();
     }
 
     void cancelSettings()
@@ -1748,9 +1782,11 @@ private:
 
                 NSString *status = nil;
                 if (running) {
-                    NSString *serving = [served count] > 0 ? [served componentsJoinedByString:@", "] : @"none";
-                    status = [NSString stringWithFormat:@"Ollama: running. Installed: %lu. Serving: %@.",
-                              (unsigned long)[installed count], serving];
+                    NSString *servingNote = [served count] > 0
+                        ? [NSString stringWithFormat:@"Active: %@.", [served componentsJoinedByString:@", "]]
+                        : @"No model loaded yet — loads on demand when you send a request.";
+                    status = [NSString stringWithFormat:@"Ollama: running. Installed: %lu model(s). %@",
+                              (unsigned long)[installed count], servingNote];
                 } else {
                     NSString *reason = [error length] > 0 ? error : @"local API did not respond";
                     status = [NSString stringWithFormat:@"Ollama: not running (%@). Start Ollama to list installed models.", reason];
@@ -2101,6 +2137,7 @@ private:
         if (chatInputField_) [chatInputField_ setStringValue:@""];
         appendToChat(@"user", userPrompt);
         setBusy(true);
+        NSTimeInterval planStartTime = [NSDate timeIntervalSinceReferenceDate];
         setStatus(@"Planning with LLM…");
 
         NSString *providerValue = canonicalProvider(controlString(settingsProviderCombo_));
@@ -2169,13 +2206,15 @@ private:
                         error = nil;
                     }
                 }
+                NSTimeInterval elapsed = [NSDate timeIntervalSinceReferenceDate] - planStartTime;
                 NSString *display = nil;
                 NSString *rawDisplay = nil;
                 NSString *status = nil;
                 if (actions && [actions count] > 0) {
                     display = [renderPlan(plan, content, actions) retain];
                     rawDisplay = [renderRawPlan(plan, content, actions) retain];
-                    status = [@"Plan ready. Review it, then Execute or keep Dry run enabled." retain];
+                    status = [[NSString stringWithFormat:@"Plan ready — %lu step(s). Execute to send to Ableton, Preview to review. (%.1fs)",
+                               (unsigned long)[actions count], elapsed] retain];
                 } else {
                     display = [assistantFailureMessage(error, content) retain];
                     rawDisplay = [(content ?: error ?: @"") retain];
@@ -2210,13 +2249,12 @@ private:
         });
     }
 
-    void executeLastPlan()
+    void executeLastPlan(bool dryRun)
     {
         if (!lastActions_ || [lastActions_ count] == 0) {
             setStatus(@"Create a plan first.");
             return;
         }
-        bool dryRun = buttonOn(chatDryRunButton_);
         bool allowDestructive = buttonOn(settingsDestructiveButton_);
         NSString *host = controlString(settingsOscHostField_);
         int port = static_cast<int>([controlString(settingsOscPortField_) integerValue]);
@@ -2722,6 +2760,143 @@ private:
         return action(tool, @"/live/device/set/parameters/value", @"Set device parameters", payload, false);
     }
 
+    // ─── AbletonOSC detection & install ──────────────────────────
+
+    static NSString *midiRemoteScriptsPath()
+    {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSArray<NSString *> *apps = [fm contentsOfDirectoryAtPath:@"/Applications" error:nil];
+        for (NSString *app in apps) {
+            if (![app hasPrefix:@"Ableton Live"]) continue;
+            NSString *scripts = [NSString stringWithFormat:
+                @"/Applications/%@/Contents/App-Resources/MIDI Remote Scripts", app];
+            BOOL isDir = NO;
+            if ([fm fileExistsAtPath:scripts isDirectory:&isDir] && isDir) {
+                return scripts;
+            }
+        }
+        return nil;
+    }
+
+    static bool abletonOSCInstalled()
+    {
+        NSString *scripts = midiRemoteScriptsPath();
+        if (!scripts) return false;
+        BOOL isDir = NO;
+        NSString *path = [scripts stringByAppendingPathComponent:@"AbletonOSC"];
+        return [[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&isDir] && isDir;
+    }
+
+    void installAbletonOSC(NSString *scriptsPath)
+    {
+        setStatus(@"Downloading AbletonOSC…");
+        addRef();
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            NSString *tmpZip  = @"/tmp/llmr_AbletonOSC.zip";
+            NSString *tmpDir  = @"/tmp/llmr_aosc_extract";
+
+            // Download
+            NSTask *curl = [[NSTask alloc] init];
+            [curl setLaunchPath:@"/usr/bin/curl"];
+            [curl setArguments:@[@"-L", @"-s", @"-o", tmpZip,
+                @"https://github.com/ideoforms/AbletonOSC/archive/refs/heads/main.zip"]];
+            [curl launch];
+            [curl waitUntilExit];
+            int curlExit = [curl terminationStatus];
+            [curl release];
+
+            if (curlExit != 0) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    setStatus(@"AbletonOSC download failed.");
+                    NSAlert *a = [[NSAlert alloc] init];
+                    [a setMessageText:@"Download Failed"];
+                    [a setInformativeText:@"Could not download AbletonOSC. Check your internet connection and try again."];
+                    [a runModal]; [a release];
+                    release();
+                });
+                return;
+            }
+
+            // Extract
+            [[NSFileManager defaultManager] removeItemAtPath:tmpDir error:nil];
+            NSTask *unzip = [[NSTask alloc] init];
+            [unzip setLaunchPath:@"/usr/bin/unzip"];
+            [unzip setArguments:@[@"-o", @"-q", tmpZip, @"-d", tmpDir]];
+            [unzip launch];
+            [unzip waitUntilExit];
+            [unzip release];
+
+            // Copy (try directly first, then with admin privileges)
+            NSString *src = [tmpDir stringByAppendingPathComponent:@"AbletonOSC-main/AbletonOSC"];
+            NSString *dst = [scriptsPath stringByAppendingPathComponent:@"AbletonOSC"];
+            NSError *copyErr = nil;
+            BOOL copied = [[NSFileManager defaultManager] copyItemAtPath:src toPath:dst error:&copyErr];
+
+            if (!copied) {
+                // Retry with admin privileges via osascript
+                NSString *shellCmd = [NSString stringWithFormat:@"cp -r '%@' '%@'", src, dst];
+                NSString *appleScript = [NSString stringWithFormat:
+                    @"do shell script \"%@\" with administrator privileges",
+                    [shellCmd stringByReplacingOccurrencesOfString:@"'" withString:@"\\'"]];
+                NSTask *osa = [[NSTask alloc] init];
+                [osa setLaunchPath:@"/usr/bin/osascript"];
+                [osa setArguments:@[@"-e", appleScript]];
+                [osa launch];
+                [osa waitUntilExit];
+                copied = ([osa terminationStatus] == 0);
+                [osa release];
+            }
+
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (copied) {
+                    setStatus(@"AbletonOSC installed — enable it in Ableton MIDI preferences.");
+                    NSAlert *a = [[NSAlert alloc] init];
+                    [a setMessageText:@"AbletonOSC Installed"];
+                    [a setInformativeText:
+                        @"AbletonOSC has been installed successfully.\n\n"
+                        @"To activate it:\n"
+                        @"1. Open Ableton Live → Preferences → Link/Tempo/MIDI\n"
+                        @"2. Set a Control Surface slot to ‘AbletonOSC’\n"
+                        @"3. Click OK — LLM-r will start working immediately."];
+                    [a runModal]; [a release];
+                } else {
+                    setStatus(@"AbletonOSC installation failed or was cancelled.");
+                }
+                release();
+            });
+        });
+    }
+
+    void checkAbletonOSCOnFirstUse()
+    {
+        static bool s_checked = false;
+        if (s_checked) return;
+        s_checked = true;
+        if (abletonOSCInstalled()) return;
+
+        NSString *scriptsPath = midiRemoteScriptsPath();
+        if (!scriptsPath) return; // Can't find Ableton — don't bother
+
+        NSAlert *alert = [[NSAlert alloc] init];
+        [alert setMessageText:@"AbletonOSC Not Found"];
+        [alert setInformativeText:
+            @"LLM-r needs AbletonOSC to send commands to Ableton Live, "
+            @"but it is not installed.\n\n"
+            @"Would you like to install it automatically now?"];
+        [alert addButtonWithTitle:@"Install AbletonOSC"];
+        [alert addButtonWithTitle:@"Not Now"];
+        [alert setAlertStyle:NSAlertStyleInformational];
+
+        NSModalResponse resp = [alert runModal];
+        [alert release];
+
+        if (resp == NSAlertFirstButtonReturn) {
+            installAbletonOSC(scriptsPath);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+
     static void appendPaddedString(NSMutableData *data, NSString *string)
     {
         NSData *utf8 = [string dataUsingEncoding:NSUTF8StringEncoding];
@@ -2755,7 +2930,16 @@ private:
         NSMutableString *types = [NSMutableString stringWithString:@","];
         for (id value in args) {
             if ([value isKindOfClass:[NSString class]]) {
-                [types appendString:@"s"];
+                NSString *sv = (NSString *)value;
+                if ([sv containsString:@"."]) {
+                    [types appendString:@"f"];
+                } else if ([sv length] > 0 && ([sv doubleValue] != 0.0 || [sv isEqualToString:@"0"])) {
+                    [types appendString:@"i"];
+                } else {
+                    [types appendString:@"s"];
+                }
+            } else if ([value isKindOfClass:[NSDecimalNumber class]]) {
+                [types appendString:@"f"];
             } else if (CFNumberIsFloatType((CFNumberRef)value)) {
                 [types appendString:@"f"];
             } else {
@@ -2765,7 +2949,16 @@ private:
         appendPaddedString(packet, types);
         for (id value in args) {
             if ([value isKindOfClass:[NSString class]]) {
-                appendPaddedString(packet, value);
+                NSString *sv = (NSString *)value;
+                if ([sv containsString:@"."]) {
+                    appendFloat32(packet, [sv doubleValue]);
+                } else if ([sv length] > 0 && ([sv doubleValue] != 0.0 || [sv isEqualToString:@"0"])) {
+                    appendInt32(packet, (int32_t)[sv integerValue]);
+                } else {
+                    appendPaddedString(packet, sv);
+                }
+            } else if ([value isKindOfClass:[NSDecimalNumber class]]) {
+                appendFloat32(packet, [value doubleValue]);
             } else if (CFNumberIsFloatType((CFNumberRef)value)) {
                 appendFloat32(packet, [value doubleValue]);
             } else {
@@ -2826,9 +3019,10 @@ private:
     NSTextView *rawResponseView_{nullptr};
     NSTextField *chatInputField_{nullptr};
     NSTextField *chatStatusLabel_{nullptr};
+    NSTextField *chatModelLabel_{nullptr};
     NSButton *chatSendButton_{nullptr};
     NSButton *chatExecuteButton_{nullptr};
-    NSButton *chatDryRunButton_{nullptr};
+    NSButton *chatPreviewButton_{nullptr};
     NSButton *chatSettingsButton_{nullptr};
     NSButton *chatTabButton_{nullptr};
     NSButton *rawTabButton_{nullptr};
@@ -3161,6 +3355,16 @@ LlmrPluginFactory gFactory;
         }
     }
     [super keyDown:event];
+}
+@end
+
+@implementation FullClickComboBox
+- (void)mouseDown:(NSEvent *)event
+{
+    [super mouseDown:event];
+    if (![self isEditable]) {
+        [self openPopUp];
+    }
 }
 @end
 
