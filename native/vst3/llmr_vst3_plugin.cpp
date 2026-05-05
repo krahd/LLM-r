@@ -2826,21 +2826,58 @@ private:
             [unzip waitUntilExit];
             [unzip release];
 
-            // Copy (try directly first, then with admin privileges)
-            NSString *src = [tmpDir stringByAppendingPathComponent:@"AbletonOSC-main/AbletonOSC"];
+            // Find AbletonOSC subfolder anywhere in the extracted dir
+            NSString *src = nil;
+            NSDirectoryEnumerator *enumerator =
+                [[NSFileManager defaultManager] enumeratorAtPath:tmpDir];
+            NSString *item;
+            while ((item = [enumerator nextObject])) {
+                if ([[item lastPathComponent] isEqualToString:@"AbletonOSC"]) {
+                    NSString *candidate = [tmpDir stringByAppendingPathComponent:item];
+                    BOOL isDir = NO;
+                    if ([[NSFileManager defaultManager]
+                             fileExistsAtPath:candidate isDirectory:&isDir] && isDir) {
+                        src = candidate;
+                        break;
+                    }
+                }
+            }
+
+            if (!src) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    setStatus(@"AbletonOSC extraction failed.");
+                    NSAlert *a = [[NSAlert alloc] init];
+                    [a setMessageText:@"Extraction Failed"];
+                    [a setInformativeText:@"Could not find the AbletonOSC folder in the downloaded archive. Please install manually from https://github.com/ideoforms/AbletonOSC"];
+                    [a runModal]; [a release];
+                    release();
+                });
+                return;
+            }
+
+            // Copy (try directly first, then via temp shell script with admin privileges)
             NSString *dst = [scriptsPath stringByAppendingPathComponent:@"AbletonOSC"];
             NSError *copyErr = nil;
             BOOL copied = [[NSFileManager defaultManager] copyItemAtPath:src toPath:dst error:&copyErr];
 
             if (!copied) {
-                // Retry with admin privileges via osascript
-                NSString *shellCmd = [NSString stringWithFormat:@"cp -r '%@' '%@'", src, dst];
-                NSString *appleScript = [NSString stringWithFormat:
-                    @"do shell script \"%@\" with administrator privileges",
-                    [shellCmd stringByReplacingOccurrencesOfString:@"'" withString:@"\\'"]];
+                // Write a temp shell script to avoid path-escaping issues in AppleScript
+                NSString *scriptPath = @"/tmp/llmr_install_aosc.sh";
+                NSString *scriptContent = [NSString stringWithFormat:
+                    @"#!/bin/sh\ncp -r \"%@\" \"%@\"\n", src, dst];
+                [scriptContent writeToFile:scriptPath
+                               atomically:YES
+                                 encoding:NSUTF8StringEncoding
+                                    error:nil];
+                NSTask *chmod = [[NSTask alloc] init];
+                [chmod setLaunchPath:@"/bin/chmod"];
+                [chmod setArguments:@[@"+x", scriptPath]];
+                [chmod launch]; [chmod waitUntilExit]; [chmod release];
+
                 NSTask *osa = [[NSTask alloc] init];
                 [osa setLaunchPath:@"/usr/bin/osascript"];
-                [osa setArguments:@[@"-e", appleScript]];
+                [osa setArguments:@[@"-e",
+                    @"do shell script \"/tmp/llmr_install_aosc.sh\" with administrator privileges"]];
                 [osa launch];
                 [osa waitUntilExit];
                 copied = ([osa terminationStatus] == 0);
@@ -2860,7 +2897,17 @@ private:
                         @"3. Click OK — LLM-r will start working immediately."];
                     [a runModal]; [a release];
                 } else {
-                    setStatus(@"AbletonOSC installation failed or was cancelled.");
+                    setStatus(@"AbletonOSC installation failed.");
+                    NSAlert *a = [[NSAlert alloc] init];
+                    [a setMessageText:@"Installation Failed"];
+                    [a setInformativeText:
+                        @"Could not install AbletonOSC automatically.\n\n"
+                        @"To install manually:\n"
+                        @"1. Download from https://github.com/ideoforms/AbletonOSC\n"
+                        @"2. Copy the AbletonOSC folder to:\n"
+                        @"   Ableton Live.app/Contents/App-Resources/MIDI Remote Scripts/\n"
+                        @"3. Restart Ableton Live and enable it in Preferences → Link/Tempo/MIDI."];
+                    [a runModal]; [a release];
                 }
                 release();
             });
