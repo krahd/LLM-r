@@ -14,8 +14,8 @@ invent Ableton operations that are not present in the capability registry.
 
 Runtime source of truth:
 - Prefer GET /api/capabilities for the current tool catalog. Use its `domain`,
-  `safety`, and `include_destructive` query filters when you only need part of
-  the catalog.
+  `transport`, and `safety` metadata, and the `include_destructive` query filter
+  when you only need part of the catalog.
 - Prefer GET /api/live/song and GET /api/live/tracks when you need current set
   context before planning.
 - If a capability appears in runtime output, you may use it. If it is absent, do

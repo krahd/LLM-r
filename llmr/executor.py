@@ -19,11 +19,11 @@ def execute_actions(
     device_bridge_host: str = "127.0.0.1",
     device_bridge_port: int = 8788,
 ) -> tuple[list[dict[str, Any]], str | None]:
-    """Send a list of AbletonActions over OSC, returning (report, executed_at).
+    """Execute a list of AbletonActions, returning (report, executed_at).
 
     Raises:
         PermissionError: any non-dry-run action is destructive and approved is False.
-        RuntimeError: an OSC send fails.
+        RuntimeError: an action transport fails.
     """
     if not dry_run and any(a.destructive for a in actions) and not approved:
         raise PermissionError("Plan includes destructive actions and requires approval")
@@ -61,7 +61,7 @@ def execute_actions(
                 entry["status"] = "failed"
                 entry["error"] = str(exc)
                 report.append(entry)
-                raise RuntimeError("Failed sending one or more OSC actions") from exc
+                raise RuntimeError("Failed executing one or more actions") from exc
             report.append(entry)
         executed_at = datetime.now(timezone.utc).isoformat()
     else:

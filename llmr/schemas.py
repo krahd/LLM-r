@@ -95,6 +95,7 @@ class Capability:
     destructive: bool = False
     domain: str = "utility"
     safety: str = "safe"
+    transport: str = "osc"
 
 
 def parse_plan_envelope(data: dict[str, Any]) -> PlanEnvelope:

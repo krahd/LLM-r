@@ -1,10 +1,14 @@
 import json
 import threading
 import traceback
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from _Framework.ControlSurface import ControlSurface
+try:
+    from _Framework.ControlSurface import ControlSurface
+except ImportError:
+    from ableton.v2.control_surface import ControlSurface
 
 
 HOST = "127.0.0.1"
@@ -53,7 +57,11 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         if parsed.path != "/api/devices/load":
             _json_response(self, 404, {"error": "not found"})
             return
-        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+        except ValueError:
+            _json_response(self, 400, {"error": "invalid Content-Length"})
+            return
         raw = self.rfile.read(length).decode("utf-8") if length else "{}"
         try:
             request = json.loads(raw)
@@ -93,7 +101,12 @@ class LLMRDeviceBridge(ControlSurface):
     def _start_server(self):
         if self._server:
             return
-        self._server = _BridgeServer((HOST, PORT), _BridgeHandler, self)
+        try:
+            self._server = _BridgeServer((HOST, PORT), _BridgeHandler, self)
+        except OSError as exc:
+            self.log_message("LLM-r Device Bridge could not bind %s:%d: %s" % (HOST, PORT, exc))
+            self._server = None
+            return
         self._server_thread = threading.Thread(target=self._server.serve_forever)
         self._server_thread.daemon = True
         self._server_thread.start()
@@ -172,11 +185,11 @@ class LLMRDeviceBridge(ControlSurface):
     def _search_browser(self, query, device_type, limit):
         normalized_query = self._normalize_name(query)
         candidates = []
-        scanned = 0
         for root in self._browser_roots(device_type):
-            stack = [root]
+            stack = deque([root])
+            scanned = 0
             while stack and scanned < MAX_BROWSER_ITEMS:
-                item = stack.pop(0)
+                item = stack.popleft()
                 scanned += 1
                 name = getattr(item, "name", "")
                 if bool(getattr(item, "is_loadable", False)):
@@ -184,7 +197,7 @@ class LLMRDeviceBridge(ControlSurface):
                     if score:
                         candidates.append((score, name.lower(), item))
                         if len(candidates) >= limit and score == 3:
-                            break
+                            return [row[2] for row in sorted(candidates, key=lambda row: (-row[0], row[1]))[:limit]]
                 try:
                     children = list(getattr(item, "children", []) or [])
                 except Exception:

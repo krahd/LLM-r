@@ -46,10 +46,18 @@ editing, or semantic mix/master processing.
 3. Avoid mastering claims unless future capabilities add export/render, loudness,
    EQ, compression, and limiting operations.
 
+## Device Loading
+
+1. Use `device_load` when the user names a Live browser device or plug-in.
+2. Set `device_type` to `instrument`, `audio_effect`, `midi_effect`, `plugin`,
+   `drum`, or `all` to narrow the browser search.
+3. Keep preset browsing and multi-device chain construction out of executable
+   plans until richer browser selection exists.
+
 ## Unsupported Today
 
 - Fully automatic humanize, quantize, transpose, or velocity shaping of unknown
   existing MIDI clips without note readback.
-- Load instruments, effects, samples, presets, or plugin chains.
+- Rich preset browsing, sample loading, and plug-in chain construction.
 - Edit warp markers, arrangement clips, or automation lanes.
 - Export, render, resample, or loudness-analyze a Live set.

@@ -37,7 +37,7 @@ LLM-r currently provides:
 - Self-contained native VST3 editor with Chat/Raw JSON tabs, provider-specific
   model pickers, Save/Cancel settings, Advanced Settings for provider keys and
   Ollama status/model control, prompt entry, plan review, dry-run,
-  destructive-action approval, and direct AbletonOSC execution.
+  destructive-action approval, and direct AbletonOSC plus Device Bridge execution.
 - PyQt desktop GUI that can connect to a running server or operate in embedded
   mode, with settings for provider, model, prompt guidance, AbletonOSC, server
   URL, and API token.
@@ -105,8 +105,8 @@ AbletonOSC as the DAW control surface. Important references:
 3. **Capability expansion for core workflows**
    - Track reorder, color, routing, monitoring, returns, and master controls.
    - Clip follow actions, arrangement clips, and richer clip readback.
-  - Device enable/bypass, list/reorder, racks, and semantic parameter maps.
-  - Rich browser browsing, preset selection, samples, and plug-in chains.
+   - Device enable/bypass, list/reorder, racks, and semantic parameter maps.
+   - Rich browser browsing, preset selection, samples, and plug-in chains.
 
 4. **MIDI and audio editing**
    - Add an OSC reply listener for `midi_notes_get` and device/clip queries.

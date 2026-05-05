@@ -278,6 +278,7 @@ def test_capabilities_include_transport():
     assert payload["count"] == len(payload["capabilities"])
     by_tool = {item["tool"]: item for item in payload["capabilities"]}
     assert by_tool["song_play"]["domain"] == "song"
+    assert by_tool["device_load"]["transport"] == "device_bridge"
 
 
 def test_capabilities_filters_on_single_endpoint():

@@ -21,7 +21,8 @@ LLM-r is a VST3 assistant for Ableton Live. You type a production request, LLM-r
 5. Choose a provider and model.
 6. For cloud providers, open **Advanced Settings** and enter the API key.
 7. Confirm the AbletonOSC host and port. The default is `127.0.0.1:11000`.
-8. Click **Save**.
+8. If you want device loading, accept the LLMRDeviceBridge install prompt, restart Live, and enable it in a Control Surface slot.
+9. Click **Save**.
 
 Settings are only applied when you click **Save**. Click **Cancel** to close settings without applying changes.
 

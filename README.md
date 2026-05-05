@@ -119,7 +119,7 @@ curl -s -X POST http://127.0.0.1:8787/api/plan \
   -d '{"prompt": "Set the tempo to 120 BPM and create a MIDI track"}'
 ```
 
-The response contains a `plan_id`. Execute it (`"dry_run": true` previews without sending OSC):
+The response contains a `plan_id`. Execute it (`"dry_run": true` previews without sending actions):
 
 ```bash
 curl -s -X POST http://127.0.0.1:8787/api/execute \
@@ -175,6 +175,9 @@ Settings are read from environment variables, then from `.llmr/settings.json` (w
 | `LLMR_PORT` | `8787` | Port the API server listens on |
 | `LLMR_ABLETON_HOST` | `127.0.0.1` | AbletonOSC host |
 | `LLMR_ABLETON_PORT` | `11000` | AbletonOSC port |
+| `LLMR_DEVICE_BRIDGE_ENABLED` | `true` | Whether `device_load` calls are allowed |
+| `LLMR_DEVICE_BRIDGE_HOST` | `127.0.0.1` | LLMRDeviceBridge host |
+| `LLMR_DEVICE_BRIDGE_PORT` | `8788` | LLMRDeviceBridge port |
 | `LLMR_PLAN_STORE_PATH` | `.llmr/plans.json` | Persistent plan storage |
 | `LLMR_MACRO_STORE_PATH` | `.llmr/macros.json` | Persistent macro storage |
 | `LLMR_SESSION_STORE_PATH` | `.llmr/sessions.json` | Persistent session storage |
@@ -247,7 +250,7 @@ When `LLMR_API_TOKEN` is set, include the token on write requests:
 
 ## Capabilities
 
-LLM-r exposes a declarative OSC capability registry. The runtime source of truth is always `GET /api/capabilities`. It accepts optional query parameters: `domain`, `safety`, and `include_destructive=false`. Capabilities are organised into domains:
+LLM-r exposes a declarative capability registry. The runtime source of truth is always `GET /api/capabilities`. It accepts optional query parameters: `domain`, `safety`, and `include_destructive=false`. Each capability includes a `transport` field (`osc` or `device_bridge`). Capabilities are organised into domains:
 
 | Domain | Actions |
 | --- | --- |
@@ -327,7 +330,7 @@ own runtime settings in macOS user defaults and can:
 - save or cancel settings changes explicitly
 - send the built-in LLM-r tool catalog and optional guidance to the LLM
 - parse the returned JSON plan
-- dry-run or execute the resulting AbletonOSC actions
+- dry-run or execute the resulting AbletonOSC and Device Bridge actions
 - block destructive actions unless explicitly allowed
 
 ## Desktop GUI

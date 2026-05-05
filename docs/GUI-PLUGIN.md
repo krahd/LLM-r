@@ -13,7 +13,7 @@ entirely from within the host — no terminal, no server, no extra windows requi
 - **Resizable window** — drag the plug-in editor to the size you want.
 - **Separate Settings panel** — click ⚙ Settings to open a dedicated screen.
   Basic provider/model choices stay on the first settings screen. API keys,
-  endpoint, AbletonOSC, and Ollama service/model controls are in Advanced
+  endpoint, AbletonOSC, Device Bridge, and Ollama service/model controls are in Advanced
   Settings so the normal workflow stays clean.
 - **Explicit settings commit** — Save applies changes; Cancel discards edits.
 - **Persistent settings** — API keys, ports, model names, and checkboxes are
@@ -36,7 +36,7 @@ entirely from within the host — no terminal, no server, no extra windows requi
 
 Open with the ⚙ Settings button. Use Save to apply changes, or Cancel to leave
 the current runtime settings unchanged.
-Use Advanced for provider keys, endpoint, AbletonOSC, and Ollama management.
+Use Advanced for provider keys, endpoint, AbletonOSC, Device Bridge, and Ollama management.
 
 ### LLM Provider
 
@@ -47,7 +47,7 @@ Use Advanced for provider keys, endpoint, AbletonOSC, and Ollama management.
 | Endpoint | Leave blank for provider default |
 | API Key | Securely stored; used for cloud providers |
 | LLM-r guidance prompt | Adds extra planning context (recommended on) |
-| Allow destructive actions | Enables execution of destructive OSC tools |
+| Allow destructive actions | Enables execution of destructive tools |
 
 ### AbletonOSC
 
@@ -55,7 +55,7 @@ Use Advanced for provider keys, endpoint, AbletonOSC, and Ollama management.
 | --- | --- |
 | Host | Default `127.0.0.1` |
 | Port | Default `11000` |
-| Dry run default | Pre-check to preview plans without sending OSC |
+| Dry run default | Pre-check to preview plans without sending actions |
 
 ### Advanced Ollama (local models)
 
@@ -94,8 +94,8 @@ A PyQt6 standalone window with the same plan/review/execute workflow.
   provider is `ollama`, the model field is a pull-down backed by local Ollama
   models and safe fallback choices.
 - **Advanced Settings** — provider API keys, planner guidance, AbletonOSC,
-  server connection, and Ollama service/model management live outside the main
-  settings screen.
+  Device Bridge, server connection, and Ollama service/model management live
+  outside the main settings screen.
 
 ```bash
 pip install PyQt6

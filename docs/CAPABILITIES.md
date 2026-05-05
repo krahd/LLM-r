@@ -2,6 +2,8 @@
 
 The authoritative source at runtime is always `GET /api/capabilities`. The
 table below is derived from `llmr/ableton_osc.py` and kept in sync manually.
+Runtime capability records include `transport`, which is `osc` for AbletonOSC
+tools and `device_bridge` for LLMRDeviceBridge tools.
 
 ## Domains
 

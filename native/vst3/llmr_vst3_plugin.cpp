@@ -3666,7 +3666,10 @@ LlmrPluginFactory gFactory;
 {
     [super mouseDown:event];
     if (![self isEditable]) {
-        [self openPopUp];
+        SEL openSelector = @selector(openPopUp);
+        if ([self respondsToSelector:openSelector]) {
+            [self performSelector:openSelector];
+        }
     }
 }
 @end

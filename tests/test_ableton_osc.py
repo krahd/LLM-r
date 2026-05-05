@@ -16,6 +16,8 @@ def test_capabilities_include_transport_tools():
     assert ToolName.midi_notes_add in names
     assert ToolName.clip_set_gain in names
     assert ToolName.device_load in names
+    by_tool = {cap.tool: cap for cap in capabilities()}
+    assert by_tool[ToolName.device_load].transport == "device_bridge"
 
 
 def test_to_action_validates_volume_range():

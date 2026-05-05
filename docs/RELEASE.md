@@ -44,7 +44,7 @@ Local install helpers:
   it exposes provider/model settings, Chat and Raw JSON response tabs, explicit
   Save/Cancel settings, Advanced Settings for API keys and Ollama status/model
   control, prompt entry, plan review, dry-run, destructive-action approval, and
-  direct AbletonOSC execution.
+  direct AbletonOSC plus Device Bridge execution.
 - The PyQt desktop GUI exposes the same plan/review/execute workflow with
   processed Chat, Actions, Execution, and Raw `.json` response tabs. Its main
   Settings screen is intentionally limited to provider/model and execution

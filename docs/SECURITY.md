@@ -63,6 +63,14 @@ chmod 600 ~/.llmr/gui.json
 
 OSC messages are sent over unencrypted UDP. An attacker with network access to the Ableton host/port can send arbitrary OSC commands to Ableton Live. Keep `LLMR_ABLETON_HOST=127.0.0.1` (the default) to restrict OSC to loopback only.
 
+## Device Bridge transport
+
+LLMRDeviceBridge listens on `127.0.0.1:8788` inside Ableton Live and accepts
+local HTTP requests for browser/device loading. Keep `LLMR_DEVICE_BRIDGE_HOST`
+pointing at loopback unless you are deliberately testing a nonstandard bridge.
+Treat `device_load` as a real Live-set mutation even though it is not marked
+destructive.
+
 ## Destructive actions
 
 Tools that irreversibly modify a session (track/scene/clip/device deletion,

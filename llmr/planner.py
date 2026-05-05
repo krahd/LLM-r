@@ -16,7 +16,7 @@ from llmr.schemas import PlanEnvelope, PlannedToolCall, ToolName, parse_plan_env
 def _system_prompt(extra_prompt: str = "") -> str:
     available_tools = "\n".join(
         (
-            f"- {cap.tool.value} ({cap.domain}, safety={cap.safety}): "
+            f"- {cap.tool.value} ({cap.domain}, transport={cap.transport}, safety={cap.safety}): "
             f"{cap.description}; args={cap.args_schema}"
         )
         for cap in capabilities()

@@ -985,6 +985,7 @@ def capabilities() -> list[Capability]:
             destructive=spec.destructive,
             domain=spec.domain,
             safety=spec.safety,
+            transport=spec.transport,
         )
         for spec in _TOOL_SPECS.values()
     ]

@@ -412,7 +412,7 @@ def _execute_actions(actions: list[Any], *, approved: bool, dry_run: bool) -> tu
         _raise_api_error(status_code=400, code="approval_required", message=str(exc))
         return [], None  # unreachable
     except RuntimeError as exc:
-        _raise_api_error(status_code=502, code="osc_send_failed", message=str(exc))
+        _raise_api_error(status_code=502, code="action_send_failed", message=str(exc))
         return [], None  # unreachable
 
     if not dry_run:
@@ -583,6 +583,7 @@ def get_capabilities(
                 "destructive": cap.destructive,
                 "domain": cap.domain,
                 "safety": cap.safety,
+                "transport": cap.transport,
             }
         )
     return {"capabilities": rows, "count": len(rows)}

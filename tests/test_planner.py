@@ -128,6 +128,7 @@ def test_system_prompt_reflects_capabilities():
     assert "song_play" in prompt
     assert "song_metronome" in prompt
     assert "track_rename" in prompt
+    assert "device_load (devices, transport=device_bridge" in prompt
 
 
 def test_system_prompt_can_include_optional_guidance():
