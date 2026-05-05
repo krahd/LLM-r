@@ -1,6 +1,6 @@
 # LLM-r
 
-**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. Describe what you want in plain language inside the VST3 plug-in; LLM-r translates it into OSC actions and sends them to Ableton Live via [AbletonOSC](https://github.com/ideoforms/AbletonOSC). The desktop app, server, and API are optional companion surfaces for the same workflow.
+**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. Describe what you want in plain language inside the VST3 plug-in; LLM-r translates it into AbletonOSC actions, plus optional Device Bridge requests for browser loading. The desktop app, server, and API are optional companion surfaces for the same workflow.
 
 ```text
 Natural language prompt in the VST3
@@ -12,7 +12,7 @@ Natural language prompt in the VST3
    Action plan  (dry-run or execute)
         │
         ▼
-   AbletonOSC  ────────────────────►  Ableton Live
+   AbletonOSC / Device Bridge ─────►  Ableton Live
 ```
 
 ---
@@ -24,6 +24,7 @@ Natural language prompt in the VST3
 - **Safe execution** — dry-run mode, destructive-action approval step, and a strict capability registry
 - **Macro system** — named sequences of actions (`idea_sketch`, `performance_prep`, …) with full CRUD via the API
 - **Live state introspection** — query song settings, tracks, devices, clips, and parameters at runtime
+- **Device loading** — load Live browser devices or plug-ins by name through the bundled LLMRDeviceBridge Remote Script
 - **MIDI and clip editing** — add/remove MIDI notes, set note velocity through note payloads, rename/duplicate clips, and adjust clip loop/marker settings
 - **Audio clip controls** — set clip gain, transpose/detune, warping, warp mode, and RAM mode for existing audio clips
 - **Session history** — plans, executions, and sessions are persisted to disk and survive restarts
@@ -39,6 +40,7 @@ Natural language prompt in the VST3
 | --- | --- |
 | Python | 3.11 or newer |
 | [AbletonOSC](https://github.com/ideoforms/AbletonOSC) | installed and running in Ableton Live |
+| LLMRDeviceBridge *(device loading only)* | installed and enabled in Ableton Live |
 | PyQt6 *(optional GUI)* | 6.7 or newer |
 
 ---
@@ -68,6 +70,10 @@ pip install -e .[gui]
 ### 1. Start AbletonOSC
 
 Install and enable the [AbletonOSC](https://github.com/ideoforms/AbletonOSC) MIDI Remote Script in Ableton Live. By default it listens on `127.0.0.1:11000`.
+
+For instrument/effect/plug-in loading, also install and enable the bundled
+`LLMRDeviceBridge` Remote Script. The VST3 can install it into Ableton's User
+Library Remote Scripts folder and will prompt you on first use.
 
 ### 2. Launch
 
@@ -251,15 +257,15 @@ LLM-r exposes a declarative OSC capability registry. The runtime source of truth
 | `clips` | Clip duplication, naming, color, launch, loop, and marker properties |
 | `midi` | MIDI note get/add/remove/clear |
 | `audio` | Existing audio clip gain, pitch, warping, warp mode, and RAM mode |
-| `devices` | Device and parameter inspection, device deletion |
+| `devices` | Device loading, parameter inspection, device deletion |
 | `parameters` | Parameter writes |
 
 Capabilities marked `destructive: true` require `"approved": true` in `POST /api/execute` (unless `dry_run` is enabled). Full catalog: [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
-Current AbletonOSC does not expose browser search/load, plugin-chain loading,
-warp marker CRUD, destructive sample-file edits, render/export, or loudness
-analysis. LLM-r documents those as bridge-extension work instead of pretending
-they are executable tools.
+Browser search/load for one named device or plug-in is handled by
+LLMRDeviceBridge. Plugin-chain loading, warp marker CRUD, destructive
+sample-file edits, render/export, and loudness analysis remain outside the
+current runtime contract.
 
 ---
 

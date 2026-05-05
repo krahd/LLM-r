@@ -4,7 +4,7 @@ This is the single planning and audit document for the current pre-release LLM-r
 codebase. Older roadmap, audit, and patch-plan documents have been removed so
 the project has one source of truth.
 
-Current package version: `0.6.6`
+Current package version: `0.6.7`
 
 ## Product Stance
 
@@ -71,8 +71,9 @@ Known limits:
   for AbletonOSC replies.
 - No warp marker CRUD, export, render, resampling, destructive sample-file
   editing, or loudness analysis yet.
-- No browser/device loading, preset browsing, plugin-chain construction, rack
-  editing, or return/master-specific controls yet.
+- Browser/device loading for one named item is available through
+  LLMRDeviceBridge. Preset browsing UI, plugin-chain construction, rack editing,
+  and return/master-specific controls are not available yet.
 - Live state is an optimistic cache, not a full bidirectional sync with Ableton
   Live.
 - Device parameter writes still require known indexes. Semantic mapping such as
@@ -104,8 +105,8 @@ AbletonOSC as the DAW control surface. Important references:
 3. **Capability expansion for core workflows**
    - Track reorder, color, routing, monitoring, returns, and master controls.
    - Clip follow actions, arrangement clips, and richer clip readback.
-   - Device enable/bypass, list/load/reorder, racks, and semantic parameter maps.
-   - Browser lookup and loading for instruments, effects, samples, and presets.
+  - Device enable/bypass, list/reorder, racks, and semantic parameter maps.
+  - Rich browser browsing, preset selection, samples, and plug-in chains.
 
 4. **MIDI and audio editing**
    - Add an OSC reply listener for `midi_notes_get` and device/clip queries.

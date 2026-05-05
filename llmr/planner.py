@@ -116,6 +116,7 @@ class PlanStore:
                         "args": a.args,
                         "description": a.description,
                         "destructive": a.destructive,
+                        "transport": getattr(a, "transport", "osc"),
                     }
                     for a in p.actions
                 ],
@@ -143,6 +144,7 @@ class PlanStore:
                     args=a["args"],
                     description=a["description"],
                     destructive=bool(a.get("destructive", False)),
+                    transport=str(a.get("transport", "osc")),
                 )
                 for a in item.get("actions", [])
             ]

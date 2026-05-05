@@ -1,11 +1,12 @@
 # LLM-r User Manual
 
-LLM-r is a VST3 assistant for Ableton Live. You type a production request, LLM-r asks your selected language model for an executable plan, shows you the plan in plain language, and can send the resulting OSC commands to Ableton Live through AbletonOSC.
+LLM-r is a VST3 assistant for Ableton Live. You type a production request, LLM-r asks your selected language model for an executable plan, shows you the plan in plain language, and can send the resulting commands to Ableton Live through AbletonOSC and the optional LLM-r Device Bridge.
 
 ## Requirements
 
 - macOS with Ableton Live
 - AbletonOSC installed and running in Live
+- LLMRDeviceBridge installed and enabled in Live for device/browser loading
 - The LLM-r VST3 plug-in installed in your VST3 folder
 - One model provider:
   - OpenAI, Anthropic, or Google with an API key
@@ -27,7 +28,7 @@ Settings are only applied when you click **Save**. Click **Cancel** to close set
 ## Main Screen
 
 The main screen has a prompt field, an assistant response area, and execution controls.
-Press **Return** in the prompt field to send the request, or click **Send**.
+Press **Return** in the prompt field to create a plan, or click **Plan**.
 
 ### Chat Tab
 
@@ -159,7 +160,7 @@ Start Ollama first. Then click **Refresh Online**, choose a model, and click **D
 
 ### Ableton does not change
 
-Check that AbletonOSC is installed, active, and listening on the host/port shown in Advanced Settings. Keep **Dry run** off when you actually want to execute.
+Check that AbletonOSC is installed, active, and listening on the host/port shown in Advanced Settings. If the failed step is `device_load`, also check that LLMRDeviceBridge is enabled in a Control Surface slot after restarting Live. Keep **Dry run** off when you actually want to execute.
 
 ### I still see an older UI
 

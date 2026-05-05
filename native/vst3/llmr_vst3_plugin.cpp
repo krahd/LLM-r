@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define LLMR_VERSION "0.6.6"
+#define LLMR_VERSION "0.6.7"
 
 #if defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
@@ -908,6 +908,26 @@ private:
         return fallback;
     }
 
+    static NSString *normalizedDeviceType(NSString *raw)
+    {
+        NSString *value = [(raw ? raw : @"instrument") lowercaseString];
+        value = [value stringByReplacingOccurrencesOfString:@" " withString:@"_"];
+        if ([value isEqualToString:@"instruments"]) return @"instrument";
+        if ([value isEqualToString:@"audio_effects"] || [value isEqualToString:@"effect"] || [value isEqualToString:@"effects"]) return @"audio_effect";
+        if ([value isEqualToString:@"midi_effects"]) return @"midi_effect";
+        if ([value isEqualToString:@"plugins"]) return @"plugin";
+        if ([value isEqualToString:@"drums"]) return @"drum";
+        if ([value isEqualToString:@"audio_effect"] ||
+            [value isEqualToString:@"midi_effect"] ||
+            [value isEqualToString:@"instrument"] ||
+            [value isEqualToString:@"plugin"] ||
+            [value isEqualToString:@"drum"] ||
+            [value isEqualToString:@"all"]) {
+            return value;
+        }
+        return @"instrument";
+    }
+
     // ─── Color helpers ────────────────────────────────────────
     static NSColor *cBg()     { return [NSColor colorWithCalibratedRed:0.10 green:0.11 blue:0.12 alpha:1.0]; }
     static NSColor *cHdr()    { return [NSColor colorWithCalibratedRed:0.14 green:0.15 blue:0.17 alpha:1.0]; }
@@ -1032,7 +1052,10 @@ private:
         // Prompt to install AbletonOSC if missing (once per session)
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-            if (view_) checkAbletonOSCOnFirstUse();
+            if (view_) {
+                checkAbletonOSCOnFirstUse();
+                checkLLMRDeviceBridgeOnFirstUse();
+            }
         });
     }
 
@@ -1097,7 +1120,7 @@ private:
         [chatView_ addSubview:btm]; [btm release];
 
         // Status label
-        chatStatusLabel_ = labelIn(btm, @"Ready. Type a request and press Send.",
+        chatStatusLabel_ = labelIn(btm, @"Ready. Type a request and press Plan.",
                                    NSMakeRect(kPad, 4, width - kPad*2, 18),
                                    [NSFont systemFontOfSize:11.0], cSec());
         [chatStatusLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
@@ -1121,7 +1144,7 @@ private:
         [inputTarget release];
 
         chatSendButton_ = btnIn(btm, NSMakeRect(width - kPad - 72, 58, 72, 28),
-                                @"Send", kLlmrEditorActionPlan);
+                                @"Plan", kLlmrEditorActionPlan);
         [chatSendButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
 
         // Populate model badge from saved settings
@@ -1988,7 +2011,7 @@ private:
                "- clip_set_color {track_index,clip_index,color}; clip_set_color_index {track_index,clip_index,color_index}; clip_set_start_marker/end_marker/loop_start/loop_end/position {track_index,clip_index,value}; clip_set_looping {track_index,clip_index,looping};\n"
                "- clip_set_gain {track_index,clip_index,gain}; clip_set_pitch_coarse {track_index,clip_index,semitones}; clip_set_pitch_fine {track_index,clip_index,cents}; clip_set_warping {track_index,clip_index,warping}; clip_set_warp_mode {track_index,clip_index,warp_mode}; clip_set_ram_mode {track_index,clip_index,ram_mode};\n"
                "- midi_notes_get {track_index,clip_index,start_pitch?,pitch_span?,start_time?,time_span?}; midi_notes_add {track_index,clip_index,notes:[{pitch,start_time,duration,velocity,mute?}]}; midi_notes_remove {track_index,clip_index,...range?} destructive; midi_notes_clear {track_index,clip_index} destructive;\n"
-               "- device_get_parameters/device_get_parameter/device_get_parameter_name/device_get_parameter_value_string/device_get_parameter_names/device_get_parameter_min_values/device_get_parameter_max_values {track_index,device_index,parameter_index?}; device_set_parameters {track_index,device_index,values}; device_set_parameter {track_index,device_index,parameter_index,value}; device_delete {track_index,device_index} destructive; utility_undo {}; utility_redo {}.\n";
+               "- device_load {track_index,query,device_type? instrument|audio_effect|midi_effect|plugin|drum|all}; device_get_parameters/device_get_parameter/device_get_parameter_name/device_get_parameter_value_string/device_get_parameter_names/device_get_parameter_min_values/device_get_parameter_max_values {track_index,device_index,parameter_index?}; device_set_parameters {track_index,device_index,values}; device_set_parameter {track_index,device_index,parameter_index,value}; device_delete {track_index,device_index} destructive; utility_undo {}; utility_redo {}.\n";
     }
 
     NSString *systemPrompt()
@@ -1999,7 +2022,8 @@ private:
              "{\"explanation\":\"short explanation\",\"confidence\":0.0,\"calls\":[{\"tool\":\"set_tempo\",\"args\":{\"bpm\":128}}]}. "
              "Do not include Markdown, prose, numbered lists, comments, or code fences outside the JSON object. "
              "The top-level JSON object must contain a calls array. Every call must contain tool and args. "
-             "Plan only executable LLM-r tools. Do not claim to export/render, master, load plug-ins, analyze loudness, or inspect unavailable Live state unless a listed tool supports it. "
+             "Plan only executable LLM-r tools. Do not claim to export/render, master, analyze loudness, or inspect unavailable Live state unless a listed tool supports it. "
+             "Use device_load when the user asks to load an instrument, audio effect, MIDI effect, drum device, preset, or plug-in by name. "
              "For composition requests, create tracks/clips and MIDI notes when enough musical detail is provided. "
              "For drum-loop requests, create a MIDI track, create a clip, add General MIDI drum notes with midi_notes_add, and fire the clip. "
              "Do not use unsupported tools such as set_track_quantization, clip_set_start_time, or clip_set_end_time. "
@@ -2081,12 +2105,13 @@ private:
             @{@"pitch": @38, @"start_time": @7.67, @"duration": @0.12, @"velocity": @44, @"mute": @NO},
         ];
         return @{
-            @"explanation": @"Built-in fallback: create a 2-bar jazzy MIDI drum loop using General MIDI drum notes. Add a Drum Rack or drum instrument on the created track to hear it.",
+            @"explanation": @"Built-in fallback: create a 2-bar jazzy MIDI drum loop, load Drum Rack through the Device Bridge, and add General MIDI drum notes.",
             @"confidence": @0.72,
             @"calls": @[
                 @{@"tool": @"set_tempo", @"args": @{@"bpm": @92}},
                 @{@"tool": @"create_midi_track", @"args": @{@"index": @0}},
                 @{@"tool": @"track_rename", @"args": @{@"track_index": @0, @"name": @"Jazzy Drum Loop"}},
+                @{@"tool": @"device_load", @"args": @{@"track_index": @0, @"query": @"Drum Rack", @"device_type": @"drum"}},
                 @{@"tool": @"clip_create", @"args": @{@"track_index": @0, @"clip_index": @0, @"length_beats": @8}},
                 @{@"tool": @"clip_rename", @"args": @{@"track_index": @0, @"clip_index": @0, @"name": @"2-bar jazz ride loop"}},
                 @{@"tool": @"midi_notes_add", @"args": @{@"track_index": @0, @"clip_index": @0, @"notes": notes}},
@@ -2249,6 +2274,37 @@ private:
         });
     }
 
+    NSString *deviceBridgeURL(NSString *path)
+    {
+        NSString *cleanPath = path ?: @"";
+        if (![cleanPath hasPrefix:@"/"]) {
+            cleanPath = [@"/" stringByAppendingString:cleanPath];
+        }
+        return [NSString stringWithFormat:@"http://127.0.0.1:%d%@", deviceBridgePort_, cleanPath];
+    }
+
+    bool sendDeviceBridgeAction(NSDictionary *act, NSString **error)
+    {
+        NSDictionary *body = [act objectForKey:@"body"];
+        if (![body isKindOfClass:[NSDictionary class]]) {
+            NSArray *args = [act objectForKey:@"args"];
+            if (![args isKindOfClass:[NSArray class]] || [args count] < 3) {
+                if (error) *error = @"Device Bridge action is missing arguments.";
+                return false;
+            }
+            body = @{
+                @"track_index": [args objectAtIndex:0],
+                @"query": [args objectAtIndex:1],
+                @"device_type": [args objectAtIndex:2],
+            };
+        }
+        NSInteger code = 0;
+        NSString *path = [act objectForKey:@"address"] ?: @"/api/devices/load";
+        NSString *response = httpRequest(deviceBridgeURL(path), @"POST", body, nil, 20.0, &code, error);
+        (void)response;
+        return code >= 200 && code < 300 && (!error || !*error);
+    }
+
     void executeLastPlan(bool dryRun)
     {
         if (!lastActions_ || [lastActions_ count] == 0) {
@@ -2256,30 +2312,55 @@ private:
             return;
         }
         bool allowDestructive = buttonOn(settingsDestructiveButton_);
-        NSString *host = controlString(settingsOscHostField_);
+        NSString *host = [controlString(settingsOscHostField_) copy];
         int port = static_cast<int>([controlString(settingsOscPortField_) integerValue]);
-        NSMutableString *report = [NSMutableString string];
-        for (NSDictionary *act in lastActions_) {
-            bool destructive = [[act objectForKey:@"destructive"] boolValue];
-            if (destructive && !dryRun && !allowDestructive) {
-                [report appendFormat:@"Skipped destructive: %@\n", [act objectForKey:@"tool"]];
-                continue;
+        NSArray *actions = [lastActions_ retain];
+        setBusy(true);
+        setStatus(dryRun ? @"Preparing dry run..." : @"Executing plan...");
+
+        addRef();
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            @autoreleasepool {
+                NSMutableString *report = [NSMutableString string];
+                for (NSDictionary *act in actions) {
+                    bool destructive = [[act objectForKey:@"destructive"] boolValue];
+                    if (destructive && !dryRun && !allowDestructive) {
+                        [report appendFormat:@"Skipped destructive: %@\n", [act objectForKey:@"tool"]];
+                        continue;
+                    }
+                    if (dryRun) {
+                        [report appendFormat:@"DRY RUN %@ %@\n",
+                            [act objectForKey:@"address"], [[act objectForKey:@"args"] description]];
+                        continue;
+                    }
+                    NSString *err = nil;
+                    NSString *transport = [act objectForKey:@"transport"] ?: @"osc";
+                    bool ok = false;
+                    if ([transport isEqualToString:@"device_bridge"]) {
+                        ok = sendDeviceBridgeAction(act, &err);
+                    } else {
+                        ok = sendOsc(host, port, [act objectForKey:@"address"],
+                                     [act objectForKey:@"args"], &err);
+                    }
+                    [report appendFormat:@"%@ %@ %@\n", ok ? @"SENT" : @"ERROR",
+                        [act objectForKey:@"address"],
+                        ok ? [[act objectForKey:@"args"] description] : err];
+                }
+                NSString *statusMsg = dryRun ? @"Dry run complete." : @"Execution complete.";
+                NSString *message = [[NSString stringWithFormat:@"%@\n%@", statusMsg, report] retain];
+                NSString *status = [statusMsg retain];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    appendToChat(@"assistant", message);
+                    setStatus(status);
+                    setBusy(false);
+                    [message release];
+                    [status release];
+                    [actions release];
+                    [host release];
+                    this->release();
+                });
             }
-            if (dryRun) {
-                [report appendFormat:@"DRY RUN %@ %@\n",
-                    [act objectForKey:@"address"], [[act objectForKey:@"args"] description]];
-                continue;
-            }
-            NSString *err = nil;
-            bool ok = sendOsc(host, port, [act objectForKey:@"address"],
-                              [act objectForKey:@"args"], &err);
-            [report appendFormat:@"%@ %@ %@\n", ok ? @"SENT" : @"ERROR",
-                [act objectForKey:@"address"],
-                ok ? [[act objectForKey:@"args"] description] : err];
-        }
-        NSString *statusMsg = dryRun ? @"Dry run complete." : @"Execution complete.";
-        appendToChat(@"assistant", [NSString stringWithFormat:@"%@\n%@", statusMsg, report]);
-        setStatus(statusMsg);
+        });
     }
 
     NSString *callLLM(NSString *provider, NSString *model, NSString *endpoint, NSString *apiKey,
@@ -2627,6 +2708,28 @@ private:
         };
     }
 
+    NSDictionary *deviceLoadAction(NSString *tool, NSDictionary *args)
+    {
+        int trackIndex = intValue(args, @"track_index", 0);
+        NSString *query = stringValue(args, @"query", stringValue(args, @"device_name", @""));
+        query = [query stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([query length] == 0) return nil;
+        NSString *deviceType = normalizedDeviceType(stringValue(args, @"device_type", @"instrument"));
+        return @{
+            @"tool": tool ?: @"device_load",
+            @"address": @"/api/devices/load",
+            @"description": @"Load device through LLM-r Device Bridge",
+            @"args": @[@(trackIndex), query, deviceType],
+            @"destructive": @NO,
+            @"transport": @"device_bridge",
+            @"body": @{
+                @"track_index": @(trackIndex),
+                @"query": query,
+                @"device_type": deviceType,
+            },
+        };
+    }
+
     NSDictionary *actionForTool(NSString *tool, NSDictionary *args)
     {
         if (![tool isKindOfClass:[NSString class]] || ![args isKindOfClass:[NSDictionary class]]) {
@@ -2690,6 +2793,7 @@ private:
         if ([tool isEqualToString:@"midi_notes_clear"]) return action(tool, @"/live/clip/remove/notes", @"Clear MIDI notes", @[@(intValue(args, @"track_index", 0)), @(intValue(args, @"clip_index", 0))], true);
         if ([tool isEqualToString:@"midi_notes_add"]) return midiAddAction(tool, args);
         if ([tool hasPrefix:@"device_get_parameter"]) return deviceGetAction(tool, args);
+        if ([tool isEqualToString:@"device_load"]) return deviceLoadAction(tool, args);
         if ([tool isEqualToString:@"device_set_parameter"]) return action(tool, @"/live/device/set/parameter/value", @"Set device parameter", @[@(intValue(args, @"track_index", 0)), @(intValue(args, @"device_index", 0)), @(intValue(args, @"parameter_index", 0)), @(numberValue(args, @"value", 0.0))], false);
         if ([tool isEqualToString:@"device_set_parameters"]) return deviceSetParametersAction(tool, args);
         if ([tool isEqualToString:@"device_delete"]) return action(tool, @"/live/track/delete_device", @"Delete device", @[@(intValue(args, @"track_index", 0)), @(intValue(args, @"device_index", 0))], true);
@@ -2938,7 +3042,8 @@ private:
                     [a setMessageText:@"AbletonOSC Installed"];
                     [a setInformativeText:
                         @"AbletonOSC has been installed successfully.\n\n"
-                        @"To activate it:\n"
+                        @"⚠️ You must restart Ableton Live for the installation to take effect.\n\n"
+                        @"Then enable it:\n"
                         @"1. Open Ableton Live → Preferences → Link/Tempo/MIDI\n"
                         @"2. Set a Control Surface slot to ‘AbletonOSC’\n"
                         @"3. Click OK — LLM-r will start working immediately."];
@@ -2989,7 +3094,108 @@ private:
         }
     }
 
-    // ─────────────────────────────────────────────────────────────
+    static NSString *userRemoteScriptsPath()
+    {
+        NSString *music = [NSSearchPathForDirectoriesInDomains(NSMusicDirectory, NSUserDomainMask, YES) firstObject];
+        if ([music length] == 0) {
+            music = [NSHomeDirectory() stringByAppendingPathComponent:@"Music"];
+        }
+        return [[music stringByAppendingPathComponent:@"Ableton/User Library"]
+            stringByAppendingPathComponent:@"Remote Scripts"];
+    }
+
+    NSString *llmrDeviceBridgeInstallSource()
+    {
+        NSString *bundlePath = [[NSBundle bundleWithIdentifier:@"net.tomaslaurenzo.llm-r.vst3"] resourcePath];
+        NSString *scriptPath = [[bundlePath stringByAppendingPathComponent:@"RemoteScripts"]
+            stringByAppendingPathComponent:@"LLMRDeviceBridge"];
+        BOOL isDir = NO;
+        if ([[NSFileManager defaultManager] fileExistsAtPath:scriptPath isDirectory:&isDir] && isDir) {
+            return scriptPath;
+        }
+
+        const char *home = getenv("HOME");
+        NSString *devPath = [NSString stringWithFormat:
+            @"%s/devel/ml-llm/llm/LLM-r/remote_scripts/LLMRDeviceBridge",
+            home ? home : ""];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:devPath isDirectory:&isDir] && isDir) {
+            return devPath;
+        }
+        return nil;
+    }
+
+    bool llmrDeviceBridgeInstalled()
+    {
+        NSString *dst = [userRemoteScriptsPath() stringByAppendingPathComponent:@"LLMRDeviceBridge"];
+        BOOL isDir = NO;
+        return [[NSFileManager defaultManager] fileExistsAtPath:dst isDirectory:&isDir] && isDir;
+    }
+
+    bool installLLMRDeviceBridge(NSString **errorText)
+    {
+        NSString *src = llmrDeviceBridgeInstallSource();
+        if (!src) {
+            if (errorText) *errorText = @"Bundled LLMRDeviceBridge Remote Script was not found.";
+            return false;
+        }
+        NSString *scriptsPath = userRemoteScriptsPath();
+        NSString *dst = [scriptsPath stringByAppendingPathComponent:@"LLMRDeviceBridge"];
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSError *err = nil;
+        if (![fm createDirectoryAtPath:scriptsPath withIntermediateDirectories:YES attributes:nil error:&err]) {
+            if (errorText) *errorText = [err localizedDescription];
+            return false;
+        }
+        if ([fm fileExistsAtPath:dst]) {
+            return true;
+        }
+        if (![fm copyItemAtPath:src toPath:dst error:&err]) {
+            if (errorText) *errorText = [err localizedDescription];
+            return false;
+        }
+        return true;
+    }
+
+    void checkLLMRDeviceBridgeOnFirstUse()
+    {
+        static bool s_checked = false;
+        if (s_checked) return;
+        s_checked = true;
+        if (llmrDeviceBridgeInstalled()) return;
+        if (!llmrDeviceBridgeInstallSource()) return;
+
+        NSAlert *alert = [[NSAlert alloc] init];
+        [alert setMessageText:@"LLM-r Device Bridge Not Found"];
+        [alert setInformativeText:
+            @"Loading instruments, audio effects, MIDI effects, and plug-ins requires "
+            @"the LLM-r Device Bridge Remote Script.\n\n"
+            @"Install it now? After installing, restart Ableton Live and enable "
+            @"LLMRDeviceBridge in an empty Control Surface slot."];
+        [alert addButtonWithTitle:@"Install Device Bridge"];
+        [alert addButtonWithTitle:@"Not Now"];
+        [alert setAlertStyle:NSAlertStyleInformational];
+
+        NSModalResponse resp = [alert runModal];
+        [alert release];
+        if (resp != NSAlertFirstButtonReturn) return;
+
+        NSString *error = nil;
+        bool ok = installLLMRDeviceBridge(&error);
+        NSAlert *done = [[NSAlert alloc] init];
+        if (ok) {
+            [done setMessageText:@"LLM-r Device Bridge Installed"];
+            [done setInformativeText:
+                @"Restart Ableton Live, then open Preferences -> Link/Tempo/MIDI "
+                @"and set a Control Surface slot to LLMRDeviceBridge."];
+            setStatus(@"Device Bridge installed - restart Ableton Live and enable it.");
+        } else {
+            [done setMessageText:@"Device Bridge Installation Failed"];
+            [done setInformativeText:error ?: @"Could not install LLMRDeviceBridge."];
+            setStatus(@"Device Bridge installation failed.");
+        }
+        [done runModal];
+        [done release];
+    }
 
     static void appendPaddedString(NSMutableData *data, NSString *string)
     {
@@ -3143,6 +3349,9 @@ private:
     NSComboBox *ollamaModelsCombo_{nullptr};
     bool ollamaOnlineModelsLoaded_{false};
     bool ollamaOnlineLoadInFlight_{false};
+
+    // Local Remote Script bridge for browser/device loading.
+    int deviceBridgePort_{8788};
 #endif
 };
 

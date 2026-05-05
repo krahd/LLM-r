@@ -26,6 +26,7 @@ class AbletonAction:
     args: list[Any]
     description: str
     destructive: bool = False
+    transport: str = "osc"
 
 
 @dataclass
@@ -38,6 +39,7 @@ class ToolSpec:
     destructive: bool = False
     domain: str = "utility"
     safety: str = "safe"
+    transport: str = "osc"
 
 
 def _int_arg(args: dict[str, Any], key: str, default: int) -> int:
@@ -331,6 +333,37 @@ def _build_device_set_parameter(args: dict[str, Any]) -> list[Any]:
     parameter_index = _int_arg(args, "parameter_index", 0)
     value = _float_arg(args, "value", 0.0)
     return [track_index, device_index, parameter_index, value]
+
+
+def _build_device_load(args: dict[str, Any]) -> list[Any]:
+    query = str(args.get("query") or args.get("device_name") or "").strip()
+    if not query:
+        raise ValueError("'query' is required")
+    device_type = str(args.get("device_type") or "instrument").strip().lower()
+    aliases = {
+        "audio effect": "audio_effect",
+        "audio effects": "audio_effect",
+        "audio_effects": "audio_effect",
+        "effect": "audio_effect",
+        "effects": "audio_effect",
+        "instrument": "instrument",
+        "instruments": "instrument",
+        "midi effect": "midi_effect",
+        "midi effects": "midi_effect",
+        "midi_effects": "midi_effect",
+        "plugin": "plugin",
+        "plugins": "plugin",
+        "drum": "drum",
+        "drums": "drum",
+        "all": "all",
+    }
+    normalized = aliases.get(device_type)
+    if not normalized:
+        raise ValueError(
+            "'device_type' must be one of instrument, audio_effect, midi_effect, "
+            "plugin, drum, or all"
+        )
+    return [_int_arg(args, "track_index", 0), query, normalized]
 
 
 def _build_device_delete(args: dict[str, Any]) -> list[Any]:
@@ -853,6 +886,19 @@ _TOOL_SPECS: dict[ToolName, ToolSpec] = {
         args_builder=_build_device_get_parameters,
         domain="devices",
     ),
+    ToolName.device_load: ToolSpec(
+        tool=ToolName.device_load,
+        address="/api/devices/load",
+        description="Load a browser device or plug-in onto a track through the LLM-r Device Bridge",
+        args_schema={
+            "track_index": "int",
+            "query": "device, preset, or plug-in name",
+            "device_type": "instrument|audio_effect|midi_effect|plugin|drum|all optional",
+        },
+        args_builder=_build_device_load,
+        domain="devices",
+        transport="device_bridge",
+    ),
     ToolName.device_set_parameters: ToolSpec(
         tool=ToolName.device_set_parameters,
         address="/live/device/set/parameters/value",
@@ -908,6 +954,8 @@ class AbletonOSCClient:
         self._udp = SimpleUDPClient(host, port)
 
     def send(self, action: AbletonAction) -> None:
+        if action.transport != "osc":
+            raise RuntimeError(f"Action '{action.tool.value}' is not an OSC action")
         self._udp.send_message(action.address, action.args)
 
     def to_action(self, tool: ToolName, args: dict[str, Any]) -> AbletonAction:
@@ -924,6 +972,7 @@ class AbletonOSCClient:
             args=normalized_args,
             description=spec.description,
             destructive=spec.destructive,
+            transport=spec.transport,
         )
 
 

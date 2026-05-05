@@ -52,6 +52,9 @@ class Settings(BaseModel):
     macro_store_path: str
     session_store_path: str
     api_token: str
+    device_bridge_enabled: bool
+    device_bridge_host: str
+    device_bridge_port: int
 
     def save(self) -> None:
         """Persist runtime-editable settings to disk."""
@@ -66,6 +69,9 @@ class Settings(BaseModel):
                     "planner_extra_prompt_enabled": self.planner_extra_prompt_enabled,
                     "planner_extra_prompt_path": self.planner_extra_prompt_path,
                     "api_token": self.api_token,
+                    "device_bridge_enabled": self.device_bridge_enabled,
+                    "device_bridge_host": self.device_bridge_host,
+                    "device_bridge_port": self.device_bridge_port,
                 },
                 indent=2,
             )
@@ -93,4 +99,17 @@ settings = Settings(
     macro_store_path=os.getenv("LLMR_MACRO_STORE_PATH", ".llmr/macros.json"),
     session_store_path=os.getenv("LLMR_SESSION_STORE_PATH", ".llmr/sessions.json"),
     api_token=_resolve("LLMR_API_TOKEN", "api_token", ""),
+    device_bridge_enabled=_resolve_bool(
+        "LLMR_DEVICE_BRIDGE_ENABLED",
+        "device_bridge_enabled",
+        _resolve_bool("LLMR_EMBED_BACKEND_ENABLED", "embed_backend_enabled", True),
+    ),
+    device_bridge_host=_resolve("LLMR_DEVICE_BRIDGE_HOST", "device_bridge_host", "127.0.0.1"),
+    device_bridge_port=int(
+        _resolve(
+            "LLMR_DEVICE_BRIDGE_PORT",
+            "device_bridge_port",
+            _resolve("LLMR_EMBED_BACKEND_PORT", "embed_backend_port", 8788),
+        )
+    ),
 )

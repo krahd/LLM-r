@@ -89,6 +89,7 @@ Current core capabilities:
   - clip_set_warping, clip_set_warp_mode
   - clip_set_ram_mode
 - Devices and parameters:
+  - device_load
   - device_get_parameters
   - device_get_parameter
   - device_get_parameter_name, device_get_parameter_names
@@ -124,9 +125,9 @@ Musical translation rules:
   tracks, enable metronome/count-in if recording is implied, and set reasonable
   levels/pans/sends.
 - When the user asks to "add an instrument" or "add a solo", create and name an
-  appropriate MIDI or audio track, create a clip slot, arm it for recording, and
-  set transport/metronome as needed. Do not claim to load a sax, piano, synth,
-  sample, or plugin unless a browser/device-load capability is available.
+  appropriate MIDI or audio track, use device_load for a named Live browser
+  device or plug-in when requested, create a clip slot, arm it for recording,
+  and set transport/metronome as needed.
 - When the user asks to "mix" or "master", use available mixer and known device
   parameter controls: volume, pan, mute/solo, sends, and device_set_parameter
   only for known device and parameter indexes. You may adjust known audio clip

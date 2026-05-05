@@ -28,7 +28,7 @@ entirely from within the host — no terminal, no server, no extra windows requi
 1. Load **LLM-r** as a VST3 instrument in any Ableton Live track.
 2. Open ⚙ Settings and configure your LLM provider (API key, model, endpoint).
 3. Type a request — e.g. *"Create a 4-bar bass line at 90 BPM on a new MIDI
-   track"* — and press **Send**.
+   track"* — and press **Plan**.
 4. LLM-r calls the configured LLM and returns a plan in the chat.
 5. Review the plan, then click **▶ Execute** (or enable Dry run to preview).
 

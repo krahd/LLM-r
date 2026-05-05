@@ -13,6 +13,7 @@ BUNDLE_DIR="$OUT_DIR/$BUNDLE_NAME"
 EXECUTABLE_NAME="${BUNDLE_NAME%.vst3}"
 MACOS_DIR="$BUNDLE_DIR/Contents/MacOS"
 RESOURCES_DIR="$BUNDLE_DIR/Contents/Resources"
+REMOTE_SCRIPT_SRC="$REPO_ROOT/remote_scripts/LLMRDeviceBridge"
 INFO_PLIST="$BUNDLE_DIR/Contents/Info.plist"
 PKG_INFO="$BUNDLE_DIR/Contents/PkgInfo"
 BINARY="$MACOS_DIR/$EXECUTABLE_NAME"
@@ -42,6 +43,10 @@ fi
 
 rm -rf "$BUNDLE_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+if [[ -d "$REMOTE_SCRIPT_SRC" ]]; then
+  mkdir -p "$RESOURCES_DIR/RemoteScripts"
+  cp -R "$REMOTE_SCRIPT_SRC" "$RESOURCES_DIR/RemoteScripts/"
+fi
 
 cat > "$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -67,9 +72,9 @@ cat > "$INFO_PLIST" <<PLIST
   <key>CFBundleSignature</key>
   <string>????</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.6.6</string>
+  <string>0.6.7</string>
   <key>CFBundleVersion</key>
-  <string>0.6.6</string>
+  <string>0.6.7</string>
   <key>CSResourcesFileMapped</key>
   <true/>
 </dict>

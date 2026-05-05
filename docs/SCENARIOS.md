@@ -1,8 +1,8 @@
 # Scenarios
 
 These recipes describe workflows the current capability set can execute. They do
-not imply audio rendering, plugin loading, browser search, warp marker editing,
-or semantic mix/master processing.
+not imply audio rendering, plug-in chains, rich browser browsing, warp marker
+editing, or semantic mix/master processing.
 
 ## Sketch Starter
 

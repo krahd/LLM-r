@@ -66,6 +66,7 @@ class ToolName(str, Enum):
     device_get_parameter_names = "device_get_parameter_names"
     device_get_parameter_min_values = "device_get_parameter_min_values"
     device_get_parameter_max_values = "device_get_parameter_max_values"
+    device_load = "device_load"
     device_set_parameters = "device_set_parameters"
     device_set_parameter = "device_set_parameter"
     device_delete = "device_delete"

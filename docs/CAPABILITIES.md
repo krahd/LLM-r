@@ -13,7 +13,7 @@ table below is derived from `llmr/ableton_osc.py` and kept in sync manually.
 | `clips` | Clip duplication, names, colors, launch behavior, loop/marker properties |
 | `midi` | MIDI note read requests, note insertion, note removal |
 | `audio` | Audio clip gain, pitch, warp mode, RAM mode, warping toggle |
-| `devices` | Device and parameter inspection, device deletion |
+| `devices` | Device loading, parameter inspection, device deletion |
 | `parameters` | Device parameter writes |
 | `utility` | Undo / redo |
 
@@ -74,6 +74,7 @@ table below is derived from `llmr/ableton_osc.py` and kept in sync manually.
 | `clip_set_warping` | audio | - | `track_index: int`, `clip_index: int`, `warping: bool` |
 | `clip_set_warp_mode` | audio | - | `track_index: int`, `clip_index: int`, `warp_mode: 0..6` |
 | `clip_set_ram_mode` | audio | - | `track_index: int`, `clip_index: int`, `ram_mode: bool` |
+| `device_load` | devices | - | `track_index: int`, `query: string`, optional `device_type: instrument|audio_effect|midi_effect|plugin|drum|all` |
 | `device_get_parameters` | devices | - | `track_index: int`, `device_index: int` |
 | `device_get_parameter` | devices | - | `track_index: int`, `device_index: int`, `parameter_index: int` |
 | `device_get_parameter_name` | devices | - | `track_index: int`, `device_index: int`, `parameter_index: int` |
@@ -98,10 +99,10 @@ unless `dry_run` is enabled.
 - Audio clip operations are non-destructive clip-property edits: gain, pitch,
   start/end markers, loop settings, warping, warp mode, RAM mode, and clip
   launch behavior.
-- Upstream AbletonOSC does not currently expose browser search/load, plugin
-  loading, preset loading, destructive sample-file editing, arrangement clip
-  insertion, or warp marker CRUD. Those need an AbletonOSC/Remote Script
-  extension before they can be executable LLM-r tools.
+- Browser search/load and plug-in loading are handled by the LLMRDeviceBridge
+  Remote Script, not upstream AbletonOSC. It must be installed and enabled in
+  Live for `device_load` to execute. Destructive sample-file editing,
+  arrangement clip insertion, and warp marker CRUD are still not exposed.
 
 ## Filtering
 

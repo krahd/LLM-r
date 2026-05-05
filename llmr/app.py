@@ -87,6 +87,9 @@ class SettingsPatch(BaseModel):
     planner_extra_prompt_path: str | None = None
     ableton_host: str | None = None
     ableton_port: int | None = None
+    device_bridge_enabled: bool | None = None
+    device_bridge_host: str | None = None
+    device_bridge_port: int | None = None
     api_token: str | None = None
 
 
@@ -368,6 +371,15 @@ def _apply_action_to_live_state(action) -> None:
         while len(track["devices"]) <= device_index:
             track["devices"].append({"device_index": len(track["devices"]), "name": "Device", "parameters": {}})
         track["devices"][device_index]["parameters"][int(args[2])] = float(args[3])
+    elif tool == "device_load":
+        track = _ensure_track(int(args[0]))
+        device = {
+            "device_index": len(track["devices"]),
+            "name": str(args[1]),
+            "type": str(args[2]) if len(args) > 2 else "all",
+            "parameters": {},
+        }
+        track["devices"].append(device)
     elif tool == "device_set_parameters":
         track = _ensure_track(int(args[0]))
         device_index = int(args[1])
@@ -392,6 +404,9 @@ def _execute_actions(actions: list[Any], *, approved: bool, dry_run: bool) -> tu
             ableton_port=settings.ableton_port,
             approved=approved,
             dry_run=dry_run,
+            device_bridge_enabled=settings.device_bridge_enabled,
+            device_bridge_host=settings.device_bridge_host,
+            device_bridge_port=settings.device_bridge_port,
         )
     except PermissionError as exc:
         _raise_api_error(status_code=400, code="approval_required", message=str(exc))
@@ -497,6 +512,7 @@ def _serialize_plan(plan) -> dict:
                 "args": a.args,
                 "description": a.description,
                 "destructive": a.destructive,
+                "transport": getattr(a, "transport", "osc"),
             }
             for a in plan.actions
         ],
@@ -618,6 +634,9 @@ def get_settings() -> dict:
         "planner_extra_prompt_path": settings.planner_extra_prompt_path,
         "ableton_host": settings.ableton_host,
         "ableton_port": settings.ableton_port,
+        "device_bridge_enabled": settings.device_bridge_enabled,
+        "device_bridge_host": settings.device_bridge_host,
+        "device_bridge_port": settings.device_bridge_port,
     }
 
 
@@ -635,6 +654,12 @@ def update_settings(req: SettingsPatch) -> dict:
         settings.ableton_host = req.ableton_host
     if req.ableton_port is not None:
         settings.ableton_port = req.ableton_port
+    if req.device_bridge_enabled is not None:
+        settings.device_bridge_enabled = req.device_bridge_enabled
+    if req.device_bridge_host is not None:
+        settings.device_bridge_host = req.device_bridge_host
+    if req.device_bridge_port is not None:
+        settings.device_bridge_port = req.device_bridge_port
     if req.api_token is not None:
         settings.api_token = req.api_token
     settings.save()
@@ -873,6 +898,7 @@ def execute_plan(req: ExecuteRequest) -> dict:
                 "address": a.address,
                 "args": a.args,
                 "description": a.description,
+                "transport": getattr(a, "transport", "osc"),
             }
             for a in plan.actions
         ],

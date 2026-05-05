@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LLM-r - AI assistant VST3 plug-in for Ableton Live</title>
-  <meta name="description" content="LLM-r is a self-contained VST3 plug-in that brings large-language-model control directly inside Ableton Live. Chat interface, settings panel, Ollama support, and full AbletonOSC execution — no server required." />
+  <meta name="description" content="LLM-r is a VST3 plug-in that brings large-language-model control directly inside Ableton Live. Chat interface, settings panel, Ollama support, AbletonOSC execution, and optional Device Bridge loading." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -348,7 +348,7 @@
 <div class="hero">
   <div class="badge">Pre-release · v0.6 · MIT License</div>
   <h1>AI assistant <span>inside</span><br>Ableton Live</h1>
-  <p>LLM-r is a self-contained VST3 plug-in. Load it in any track, type what you want, and it plans and executes AbletonOSC actions — all from a chat interface built right into the plug-in editor. No server required.</p>
+  <p>LLM-r is a self-contained VST3 plug-in. Load it in any track, type what you want, and it plans AbletonOSC actions plus optional Device Bridge loads — all from a chat interface built right into the plug-in editor.</p>
   <div class="hero-actions">
     <a class="btn-primary" href="https://github.com/krahd/LLM-r">Get started</a>
     <a class="btn-secondary" href="#quickstart">See how it works</a>
@@ -366,7 +366,7 @@
   Action plan  (dry-run preview or execute)
         |
         v
-  <span class="hl-green">AbletonOSC</span>  ──────────────────────▶  <span class="hl-green">Ableton Live</span>
+  <span class="hl-green">AbletonOSC / Device Bridge</span>  ───────▶  <span class="hl-green">Ableton Live</span>
 
   <span style="color:#64748b">Alternatives: desktop GUI (PyQt6) · HTTP API · web UI</span></div>
 </div>
@@ -459,7 +459,7 @@
         <div class="step-num">2</div>
         <div class="step-body">
           <h4>Enable AbletonOSC</h4>
-          <p>Install <a href="https://github.com/ideoforms/AbletonOSC">AbletonOSC</a> as a MIDI Remote Script. It listens on <code>127.0.0.1:11000</code> by default.</p>
+          <p>Install <a href="https://github.com/ideoforms/AbletonOSC">AbletonOSC</a> as a MIDI Remote Script. For device loading, also enable the bundled LLMRDeviceBridge Remote Script.</p>
         </div>
       </div>
       <div class="step">
@@ -473,7 +473,7 @@
         <div class="step-num">4</div>
         <div class="step-body">
           <h4>Chat with your session</h4>
-          <p>Type a request and press Send. Review the plan, then click ▶ Execute — or keep Dry run on to preview first.</p>
+          <p>Type a request and press Plan. Review the plan, then click ▶ Execute — or keep Dry run on to preview first.</p>
         </div>
       </div>
     </div>
@@ -541,13 +541,14 @@ curl -s -X POST http://127.0.0.1:<span class="num">8787</span>/api/plan \
         <tr><td>midi_notes_remove / midi_notes_clear</td><td><span class="tag tag-green">midi</span></td><td><span class="tag tag-red">yes</span></td><td>track_index, clip_index, optional range</td></tr>
         <tr><td>clip_set_gain / clip_set_pitch_*</td><td><span class="tag tag-blue">audio</span></td><td></td><td>track_index, clip_index, value</td></tr>
         <tr><td>clip_set_warping / clip_set_warp_mode</td><td><span class="tag tag-blue">audio</span></td><td></td><td>track_index, clip_index, value</td></tr>
+        <tr><td>device_load</td><td><span class="tag tag-blue">devices</span></td><td></td><td>track_index, query, device_type</td></tr>
         <tr><td>device_get_* / device_set_*</td><td><span class="tag tag-blue">devices</span></td><td></td><td>track_index, device_index, parameter index</td></tr>
         <tr><td>device_delete</td><td><span class="tag tag-blue">devices</span></td><td><span class="tag tag-red">yes</span></td><td>track_index, device_index</td></tr>
         <tr><td>utility_undo / utility_redo</td><td><span class="tag tag-green">utility</span></td><td></td><td>-</td></tr>
       </tbody>
     </table>
   </div>
-  <p class="section-sub" style="margin-top:1.5rem">Browser search/load, plugin-chain loading, warp marker CRUD, render/export, and destructive sample editing still require a deeper AbletonOSC or Remote Script extension.</p>
+  <p class="section-sub" style="margin-top:1.5rem">Device browser loading uses LLMRDeviceBridge. Plugin-chain loading, warp marker CRUD, render/export, and destructive sample editing remain outside the current runtime contract.</p>
 </section>
 
 <!-- FOOTER -->
