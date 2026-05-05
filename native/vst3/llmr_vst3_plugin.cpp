@@ -2795,27 +2795,61 @@ private:
             NSString *tmpZip  = @"/tmp/llmr_AbletonOSC.zip";
             NSString *tmpDir  = @"/tmp/llmr_aosc_extract";
 
-            // Download (--fail so HTTP errors produce non-zero exit)
-            NSTask *curl = [[NSTask alloc] init];
-            [curl setLaunchPath:@"/usr/bin/curl"];
-            [curl setArguments:@[@"-L", @"--fail", @"-s", @"-o", tmpZip,
-                @"https://github.com/ideoforms/AbletonOSC/archive/refs/heads/main.zip"]];
-            [curl launch];
-            [curl waitUntilExit];
-            int curlExit = [curl terminationStatus];
-            [curl release];
+            // Download via NSURLSession (avoids child-process sandbox restrictions)
+            __block NSError *dlError = nil;
+            __block BOOL dlDone = NO;
+            dispatch_semaphore_t sema = dispatch_semaphore_create(0);
 
-            if (curlExit != 0) {
+            NSURL *archiveURL = [NSURL URLWithString:
+                @"https://codeload.github.com/ideoforms/AbletonOSC/zip/refs/heads/main"];
+            NSURLSessionDownloadTask *dlTask =
+                [[NSURLSession sharedSession]
+                    downloadTaskWithURL:archiveURL
+                    completionHandler:^(NSURL *location, NSURLResponse *resp, NSError *err) {
+                        if (err) {
+                            dlError = [err retain];
+                        } else {
+                            NSHTTPURLResponse *http = (NSHTTPURLResponse *)resp;
+                            if ([http statusCode] == 200 && location) {
+                                [[NSFileManager defaultManager]
+                                    removeItemAtPath:tmpZip error:nil];
+                                [[NSFileManager defaultManager]
+                                    moveItemAtURL:location
+                                    toURL:[NSURL fileURLWithPath:tmpZip]
+                                    error:&dlError];
+                                if (!dlError) dlDone = YES;
+                            } else {
+                                dlError = [[NSError alloc]
+                                    initWithDomain:@"HTTP"
+                                    code:([http statusCode] ?: 0)
+                                    userInfo:nil];
+                            }
+                        }
+                        dispatch_semaphore_signal(sema);
+                    }];
+            [dlTask resume];
+            dispatch_semaphore_wait(sema,
+                dispatch_time(DISPATCH_TIME_NOW, 60LL * NSEC_PER_SEC));
+
+            if (!dlDone) {
+                NSString *errMsg = dlError
+                    ? [dlError localizedDescription]
+                    : @"Request timed out.";
+                [dlError release];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     setStatus(@"AbletonOSC download failed.");
                     NSAlert *a = [[NSAlert alloc] init];
                     [a setMessageText:@"Download Failed"];
-                    [a setInformativeText:@"Could not download AbletonOSC. Check your internet connection and try again."];
+                    [a setInformativeText:[NSString stringWithFormat:
+                        @"Could not download AbletonOSC: %@\n\n"
+                        @"Please install manually from https://github.com/ideoforms/AbletonOSC",
+                        errMsg]];
                     [a runModal]; [a release];
                     release();
                 });
                 return;
             }
+            [dlError release];
 
             // Extract
             [[NSFileManager defaultManager] removeItemAtPath:tmpDir error:nil];
