@@ -2873,13 +2873,13 @@ private:
                 return;
             }
 
-            // Find AbletonOSC subfolder anywhere in the extracted dir
+            // Find the top-level extracted folder (e.g. AbletonOSC-master/) —
+            // the archive root itself is the MIDI Remote Script (contains __init__.py)
             NSString *src = nil;
-            NSDirectoryEnumerator *enumerator =
-                [[NSFileManager defaultManager] enumeratorAtPath:tmpDir];
-            NSString *item;
-            while ((item = [enumerator nextObject])) {
-                if ([[item lastPathComponent] isEqualToString:@"AbletonOSC"]) {
+            NSArray *topLevel = [[NSFileManager defaultManager]
+                contentsOfDirectoryAtPath:tmpDir error:nil];
+            for (NSString *item in topLevel) {
+                if ([item hasPrefix:@"AbletonOSC"]) {
                     NSString *candidate = [tmpDir stringByAppendingPathComponent:item];
                     BOOL isDir = NO;
                     if ([[NSFileManager defaultManager]
