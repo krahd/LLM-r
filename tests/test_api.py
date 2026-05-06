@@ -89,7 +89,8 @@ def test_health():
 
 def test_models_and_metadata(monkeypatch):
     monkeypatch.setattr(app_module, "ModelitoClient", DummyModelitoClient)
-    monkeypatch.setattr(app_module, "modelito_models", lambda provider, model: [model, "dummy-model"])
+    monkeypatch.setattr(app_module, "modelito_models",
+                        lambda provider, model: [model, "dummy-model"])
 
     models = app_module.get_models()
     assert models["models"][0]["id"] == "dummy-model"
@@ -108,16 +109,20 @@ def test_models_and_metadata(monkeypatch):
 
 def test_ollama_management_endpoints_delegate(monkeypatch):
     monkeypatch.setattr(app_module, "ollama_status", lambda: {"ok": True, "running": False})
-    monkeypatch.setattr(app_module, "ollama_local_models", lambda: {"ok": True, "models": ["llama3"]})
-    monkeypatch.setattr(app_module, "ollama_remote_models", lambda: {"ok": True, "models": ["mistral"]})
-    monkeypatch.setattr(app_module, "ollama_running_models", lambda: {"ok": True, "models": ["llama3"]})
+    monkeypatch.setattr(app_module, "ollama_local_models",
+                        lambda: {"ok": True, "models": ["llama3"]})
+    monkeypatch.setattr(app_module, "ollama_remote_models",
+                        lambda: {"ok": True, "models": ["mistral"]})
+    monkeypatch.setattr(app_module, "ollama_running_models",
+                        lambda: {"ok": True, "models": ["llama3"]})
     monkeypatch.setattr(app_module, "ollama_start", lambda: {"ok": True, "message": "started"})
     monkeypatch.setattr(app_module, "ollama_stop", lambda: {"ok": True, "message": "stopped"})
     monkeypatch.setattr(app_module, "ollama_install", lambda: {"ok": True, "message": "installed"})
     monkeypatch.setattr(app_module, "ollama_download", lambda model: {"ok": True, "model": model})
     monkeypatch.setattr(app_module, "ollama_delete", lambda model: {"ok": True, "model": model})
     monkeypatch.setattr(app_module, "ollama_serve", lambda model: {"ok": True, "model": model})
-    monkeypatch.setattr(app_module, "ollama_stop_serving", lambda model: {"ok": True, "model": model})
+    monkeypatch.setattr(app_module, "ollama_stop_serving",
+                        lambda model: {"ok": True, "model": model})
 
     assert app_module.get_ollama_status()["ok"] is True
     assert app_module.get_ollama_local_models()["models"] == ["llama3"]
@@ -260,10 +265,12 @@ def test_macro_crud():
 
 
 def test_execute_plan_dry_run(monkeypatch):
-    monkeypatch.setattr(app_module, "_build_planner", lambda: DummyPlanner(_build_plan("plan-exec")))
+    monkeypatch.setattr(app_module, "_build_planner",
+                        lambda: DummyPlanner(_build_plan("plan-exec")))
     plan_resp = app_module.create_plan(app_module.PromptRequest(prompt="set tempo to 120"))
 
-    execute = app_module.execute_plan(app_module.ExecuteRequest(plan_id=plan_resp["plan_id"], dry_run=True))
+    execute = app_module.execute_plan(app_module.ExecuteRequest(
+        plan_id=plan_resp["plan_id"], dry_run=True))
     assert execute["dry_run"] is True
     assert execute["execution_report"][0]["status"] == "dry_run"
 
@@ -295,7 +302,8 @@ def test_capabilities_filters_on_single_endpoint():
 
 
 def test_capabilities_has_single_route():
-    capability_paths = [route.path for route in app_module.app.routes if route.path.endswith("/capabilities")]
+    capability_paths = [
+        route.path for route in app_module.app.routes if route.path.endswith("/capabilities")]
     assert capability_paths == ["/api/capabilities"]
 
 
@@ -351,17 +359,29 @@ def test_device_parameter_maps_endpoint():
 
 def test_osc_reply_reconciles_live_state():
     app_module._record_osc_reply("/live/song/get/tempo", [126.0])
+    app_module._record_osc_reply("/live/song/get/current_song_time", [8.5])
     app_module._record_osc_reply("/live/track/get/name", [0, "Lead"])
+    app_module._record_osc_reply("/live/track/get/color_index", [0, 34])
+    app_module._record_osc_reply("/live/clip/get/name", [0, 0, "Hook"])
+    app_module._record_osc_reply("/live/clip/get/looping", [0, 0, 1])
+    app_module._record_osc_reply("/live/device/get/name", [0, 0, "Auto Filter"])
     app_module._record_osc_reply("/live/device/get/parameter/name", [0, 0, 1, "Frequency"])
     app_module._record_osc_reply("/live/device/get/parameter/value", [0, 0, 1, 0.42])
+    app_module._record_osc_reply("/live/device/get/parameter/value/string", [0, 0, 1, "1.20 kHz"])
 
     assert app_module.get_live_song_state()["song"]["tempo"] == 126.0
+    assert app_module.get_live_song_state()["song"]["song_time"] == 8.5
     track = app_module.get_live_tracks()["tracks"][0]
     assert track["name"] == "Lead"
+    assert track["color_index"] == 34
+    assert track["clips"][0]["name"] == "Hook"
+    assert track["clips"][0]["looping"] is True
+    assert track["devices"][0]["name"] == "Auto Filter"
     params = app_module.get_live_track_parameters(0)
     assert params["parameters"][0]["name"] == "Frequency"
     assert params["parameters"][0]["value"] == 0.42
-    assert app_module.get_recent_osc_replies()["count"] == 4
+    assert params["parameters"][0]["value_string"] == "1.20 kHz"
+    assert app_module.get_recent_osc_replies()["count"] == 10
 
 
 def test_live_refresh_sends_read_requests(monkeypatch):

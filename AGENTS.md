@@ -55,7 +55,10 @@ touched.
   `llm_r.egg-info/` are ignored.
 - Keep `STATUS.md` current as part of implementation work. If you close a risk,
   add a feature, change validation coverage, or discover a new limitation, update
-  `STATUS.md` in the same change set.
+  `STATUS.md` in the same change set. Keep `STATUS.md` up to date and accurately
+  timestamped at all times. Always update the `Last updated` field at the top of
+  `STATUS.md` with the current date **and time** (format: `YYYY-MM-DD HH:MM`)
+  whenever the file is modified.
 
 ## Versioning
 

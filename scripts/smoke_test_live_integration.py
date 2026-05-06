@@ -17,6 +17,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from pythonosc.udp_client import SimpleUDPClient
@@ -44,7 +46,8 @@ def device_payload(args: argparse.Namespace) -> dict[str, Any]:
     if args.preset_query:
         payload["preset_query"] = args.preset_query
     if args.browser_path:
-        payload["browser_path"] = [part.strip() for part in args.browser_path.split(">") if part.strip()]
+        payload["browser_path"] = [part.strip()
+                                   for part in args.browser_path.split(">") if part.strip()]
     if args.allow_ambiguous:
         payload["allow_ambiguous"] = True
     return payload
@@ -74,7 +77,8 @@ def check_device_bridge(args: argparse.Namespace) -> bool:
 
     print("Device Bridge: resolving load request without mutation")
     try:
-        resolved = http_json(f"{base}/api/devices/resolve", method="POST", body=device_payload(args))
+        resolved = http_json(f"{base}/api/devices/resolve",
+                             method="POST", body=device_payload(args))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         print(f"  FAIL: HTTP {exc.code}: {detail}")
@@ -144,6 +148,25 @@ def execute_mutations(args: argparse.Namespace) -> bool:
     return True
 
 
+def write_report(args: argparse.Namespace, result: dict[str, Any]) -> None:
+    if not args.report_json:
+        return
+    report_path = Path(args.report_json)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: list[Any] = []
+    if report_path.exists():
+        try:
+            loaded = json.loads(report_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, list):
+                existing = loaded
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            existing = []
+
+    existing.append(result)
+    report_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--osc-host", default="127.0.0.1")
@@ -156,21 +179,75 @@ def main() -> int:
     parser.add_argument("--device-query", default="Drum Rack")
     parser.add_argument("--device-type", default="drum")
     parser.add_argument("--preset-query", default="")
-    parser.add_argument("--browser-path", default="", help="Exact candidate path separated by ' > '")
+    parser.add_argument("--browser-path", default="",
+                        help="Exact candidate path separated by ' > '")
     parser.add_argument("--allow-ambiguous", action="store_true")
     parser.add_argument("--track-index", type=int, default=0)
     parser.add_argument("--tempo", type=float, default=120.0)
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--skip-device-load", action="store_true")
+    parser.add_argument("--live-version", default="",
+                        help="Manual label for tested Ableton Live version")
+    parser.add_argument("--run-label", default="", help="Optional freeform label for this run")
+    parser.add_argument("--report-json", default="",
+                        help="Optional path to append JSON smoke-test reports")
     args = parser.parse_args()
+
+    if args.live_version:
+        print(f"Live version label: {args.live_version}")
+    if args.run_label:
+        print(f"Run label: {args.run_label}")
 
     bridge_ok = check_device_bridge(args)
     osc_ok = check_abletonosc(args)
+    mutation_ok = True
     if not (bridge_ok and osc_ok):
+        result = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "live_version": args.live_version,
+            "run_label": args.run_label,
+            "execute": args.execute,
+            "bridge_ok": bridge_ok,
+            "osc_ok": osc_ok,
+            "mutation_ok": False,
+            "success": False,
+            "device_query": args.device_query,
+            "device_type": args.device_type,
+        }
+        write_report(args, result)
         return 1
 
-    if args.execute and not execute_mutations(args):
-        return 1
+    if args.execute:
+        mutation_ok = execute_mutations(args)
+        if not mutation_ok:
+            result = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "live_version": args.live_version,
+                "run_label": args.run_label,
+                "execute": args.execute,
+                "bridge_ok": bridge_ok,
+                "osc_ok": osc_ok,
+                "mutation_ok": mutation_ok,
+                "success": False,
+                "device_query": args.device_query,
+                "device_type": args.device_type,
+            }
+            write_report(args, result)
+            return 1
+
+    result = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "live_version": args.live_version,
+        "run_label": args.run_label,
+        "execute": args.execute,
+        "bridge_ok": bridge_ok,
+        "osc_ok": osc_ok,
+        "mutation_ok": mutation_ok,
+        "success": True,
+        "device_query": args.device_query,
+        "device_type": args.device_type,
+    }
+    write_report(args, result)
 
     print("Smoke test complete.")
     return 0

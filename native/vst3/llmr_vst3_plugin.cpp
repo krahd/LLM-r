@@ -2467,6 +2467,123 @@ private:
         return payload;
     }
 
+    NSArray *deviceBridgeCandidatesFromResponse(NSString *response)
+    {
+        if ([response length] == 0) return @[];
+        NSData *data = [response dataUsingEncoding:NSUTF8StringEncoding];
+        id json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+        NSArray *items = [json isKindOfClass:[NSDictionary class]] ? [json objectForKey:@"candidates"] : nil;
+        if (![items isKindOfClass:[NSArray class]]) return @[];
+        NSMutableArray *out = [NSMutableArray array];
+        for (id item in items) {
+            if ([item isKindOfClass:[NSDictionary class]]) {
+                [out addObject:item];
+            }
+        }
+        return out;
+    }
+
+    NSString *deviceBridgeCandidateLabel(NSDictionary *candidate)
+    {
+        NSString *name = [candidate objectForKey:@"name"] ?: @"(unnamed)";
+        NSArray *path = [candidate objectForKey:@"path"];
+        NSString *pathText = @"";
+        if ([path isKindOfClass:[NSArray class]] && [path count] > 0) {
+            pathText = [path componentsJoinedByString:@" > "];
+        }
+        NSNumber *score = [candidate objectForKey:@"score"];
+        if ([pathText length] > 0 && score) {
+            return [NSString stringWithFormat:@"%@ — %@ (score %@)", name, pathText, score];
+        }
+        if ([pathText length] > 0) {
+            return [NSString stringWithFormat:@"%@ — %@", name, pathText];
+        }
+        return name;
+    }
+
+    NSDictionary *deviceBridgeActionWithBrowserPath(NSDictionary *act, NSArray *browserPath)
+    {
+        if (![browserPath isKindOfClass:[NSArray class]] || [browserPath count] == 0) return nil;
+
+        NSDictionary *body = [act objectForKey:@"body"];
+        if ([body isKindOfClass:[NSDictionary class]]) {
+            NSMutableDictionary *updatedBody = [NSMutableDictionary dictionaryWithDictionary:body];
+            [updatedBody setObject:browserPath forKey:@"browser_path"];
+            [updatedBody removeObjectForKey:@"allow_ambiguous"];
+            NSMutableDictionary *updatedAction = [NSMutableDictionary dictionaryWithDictionary:act];
+            [updatedAction setObject:updatedBody forKey:@"body"];
+            return updatedAction;
+        }
+
+        NSArray *args = [act objectForKey:@"args"];
+        if (![args isKindOfClass:[NSArray class]] || [args count] < 3) return nil;
+        NSMutableArray *updatedArgs = [NSMutableArray arrayWithArray:args];
+        NSMutableDictionary *options = [NSMutableDictionary dictionary];
+        if ([updatedArgs count] > 3 && [[updatedArgs objectAtIndex:3] isKindOfClass:[NSDictionary class]]) {
+            [options addEntriesFromDictionary:[updatedArgs objectAtIndex:3]];
+        }
+        [options setObject:browserPath forKey:@"browser_path"];
+        [options removeObjectForKey:@"allow_ambiguous"];
+        if ([updatedArgs count] > 3) {
+            [updatedArgs replaceObjectAtIndex:3 withObject:options];
+        } else {
+            [updatedArgs addObject:options];
+        }
+        NSMutableDictionary *updatedAction = [NSMutableDictionary dictionaryWithDictionary:act];
+        [updatedAction setObject:updatedArgs forKey:@"args"];
+        return updatedAction;
+    }
+
+    NSDictionary *chooseDeviceBridgeCandidateForAction(NSDictionary *act,
+                                                       NSString *resolveResponse,
+                                                       NSString **error)
+    {
+        NSArray *candidates = deviceBridgeCandidatesFromResponse(resolveResponse);
+        if ([candidates count] == 0) {
+            if (error) *error = @"Ambiguous Device Bridge match returned no selectable candidates.";
+            return nil;
+        }
+
+        __block NSInteger selectedIndex = -1;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            NSAlert *alert = [[NSAlert alloc] init];
+            [alert setMessageText:@"Choose Device Candidate"];
+            NSString *tool = [act objectForKey:@"tool"] ?: @"device_load";
+            [alert setInformativeText:[NSString stringWithFormat:
+                @"The Device Bridge found multiple matches for %@. Choose the exact browser path to continue.",
+                tool]];
+            [alert addButtonWithTitle:@"Use Selected Candidate"];
+            [alert addButtonWithTitle:@"Cancel Execution"];
+
+            NSPopUpButton *picker = [[[NSPopUpButton alloc] initWithFrame:NSMakeRect(0, 0, 560, 30)] autorelease];
+            for (NSDictionary *candidate in candidates) {
+                [picker addItemWithTitle:deviceBridgeCandidateLabel(candidate)];
+            }
+            [picker selectItemAtIndex:0];
+            [alert setAccessoryView:picker];
+
+            NSInteger response = [alert runModal];
+            if (response == NSAlertFirstButtonReturn) {
+                selectedIndex = [picker indexOfSelectedItem];
+            }
+            [alert release];
+        });
+
+        if (selectedIndex < 0 || selectedIndex >= (NSInteger)[candidates count]) {
+            if (error) *error = @"Device Bridge candidate selection was cancelled.";
+            return nil;
+        }
+
+        NSDictionary *candidate = [candidates objectAtIndex:(NSUInteger)selectedIndex];
+        NSArray *path = [candidate objectForKey:@"path"];
+        NSDictionary *updatedAction = deviceBridgeActionWithBrowserPath(act, path);
+        if (!updatedAction) {
+            if (error) *error = @"Selected candidate did not provide a valid browser path.";
+            return nil;
+        }
+        return updatedAction;
+    }
+
     bool sendDeviceBridgeAction(NSDictionary *act, NSString **error)
     {
         NSDictionary *body = deviceBridgeBodyForAction(act, error);
@@ -2488,6 +2605,7 @@ private:
         NSString *host = [controlString(settingsOscHostField_) copy];
         int port = static_cast<int>([controlString(settingsOscPortField_) integerValue]);
         NSArray *actions = [lastActions_ retain];
+        NSMutableArray *runtimeActions = [actions mutableCopy];
         setBusy(true);
         setStatus(dryRun ? @"Preparing dry run..." : @"Executing plan...");
 
@@ -2515,7 +2633,8 @@ private:
                                 deviceBridgePort_, err ?: @"Enable LLMRDeviceBridge in Ableton Live."];
                         }
                         if (!blocked) {
-                            for (NSDictionary *act in actions) {
+                            for (NSUInteger actionIndex = 0; actionIndex < [runtimeActions count]; ++actionIndex) {
+                                NSDictionary *act = [runtimeActions objectAtIndex:actionIndex];
                                 NSString *transport = [act objectForKey:@"transport"] ?: @"osc";
                                 if (![transport isEqualToString:@"device_bridge"]) continue;
                                 NSString *resolveError = nil;
@@ -2527,7 +2646,24 @@ private:
                                     break;
                                 }
                                 NSInteger resolveCode = 0;
-                                httpRequest(deviceBridgeURL(@"/api/devices/resolve"), @"POST", body, nil, 10.0, &resolveCode, &resolveError);
+                                NSString *resolveResponse = httpRequest(deviceBridgeURL(@"/api/devices/resolve"), @"POST", body, nil, 10.0, &resolveCode, &resolveError);
+                                if (resolveCode == 409) {
+                                    NSString *pickerError = nil;
+                                    NSDictionary *updatedAction = chooseDeviceBridgeCandidateForAction(act, resolveResponse, &pickerError);
+                                    if (!updatedAction) {
+                                        blocked = true;
+                                        [report appendFormat:@"BLOCKED Device Bridge resolve failed for %@. %@\n",
+                                            [act objectForKey:@"tool"] ?: @"device_load",
+                                            pickerError ?: @"Choose a specific candidate path."];
+                                        break;
+                                    }
+                                    [runtimeActions replaceObjectAtIndex:actionIndex withObject:updatedAction];
+                                    act = updatedAction;
+                                    resolveError = nil;
+                                    body = deviceBridgeBodyForAction(act, &resolveError);
+                                    resolveCode = 0;
+                                    resolveResponse = httpRequest(deviceBridgeURL(@"/api/devices/resolve"), @"POST", body, nil, 10.0, &resolveCode, &resolveError);
+                                }
                                 if (resolveCode < 200 || resolveCode >= 300 || resolveError) {
                                     blocked = true;
                                     [report appendFormat:@"BLOCKED Device Bridge resolve failed for %@. %@\n",
@@ -2540,7 +2676,7 @@ private:
                     }
                 }
                 if (!blocked) {
-                    for (NSDictionary *act in actions) {
+                    for (NSDictionary *act in runtimeActions) {
                         bool destructive = [[act objectForKey:@"destructive"] boolValue];
                         if (destructive && !dryRun && !allowDestructive) {
                             [report appendFormat:@"Skipped destructive: %@\n", [act objectForKey:@"tool"]];
@@ -2575,6 +2711,7 @@ private:
                     [message release];
                     [status release];
                     [actions release];
+                    [runtimeActions release];
                     [host release];
                     this->release();
                 });

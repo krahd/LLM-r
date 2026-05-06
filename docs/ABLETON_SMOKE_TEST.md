@@ -26,12 +26,33 @@ Expected result:
   loading the item.
 - AbletonOSC replies to `/live/song/get/tempo` on reply port `11001`.
 
+For cross-version tracking, label each run and append results to a shared report:
+
+```bash
+python3 scripts/smoke_test_live_integration.py \
+  --live-version "Live 12.1.5" \
+  --run-label "macOS-sonoma" \
+  --report-json test_assets/smoke_reports/live_matrix.json
+```
+
+Repeat with each supported Live version and compare the accumulated JSON report.
+
 ## Mutating Smoke Test
 
 This changes the current Live set. Run it only in the disposable set.
 
 ```bash
 python3 scripts/smoke_test_live_integration.py --execute
+```
+
+You can combine execution with run labeling and reporting:
+
+```bash
+python3 scripts/smoke_test_live_integration.py \
+  --execute \
+  --live-version "Live 12.1.5" \
+  --run-label "mutation-check" \
+  --report-json test_assets/smoke_reports/live_matrix.json
 ```
 
 Expected result:

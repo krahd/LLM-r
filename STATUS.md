@@ -1,6 +1,6 @@
-# LLM-r Status
+# LLM-r – Project Status
 
-Date: 2026-05-06
+Last updated: 2026-05-06 09:00
 
 ## Current State
 
@@ -85,9 +85,17 @@ Reviewed:
   unavailable or ambiguous.
 - Added exact Device Bridge resolve preflight for `device_load`, including
   confirmed browser paths and preset queries.
+- Added a first-class VST3 ambiguous-candidate picker for Device Bridge
+  `device_load` preflight. When resolve returns `409`, the plug-in now prompts
+  for an exact candidate path and retries preflight with that path.
 - Changed the API default bind host from `0.0.0.0` to `127.0.0.1`.
 - Added `/api/live/refresh` to request AbletonOSC readback for supported
   song/track/device/clip data and reconcile recognized replies into live state.
+- Expanded OSC reply reconciliation coverage for additional song/track/clip and
+  device parameter reply shapes, including parameter value strings exposed by
+  `/api/live/tracks/{track_id}/parameters`.
+- Enhanced the real Ableton smoke-test harness with run labels and JSON report
+  output to support repeatable multi-version validation tracking.
 - Modernized the VST3, PyQt, web UI, docs site hero, and screenshot mockup
   around a darker DAW-style command surface with readiness chips, action cards,
   clearer run logs, and Details/debug panes.
@@ -110,6 +118,10 @@ Passed:
   `llm_r-0.6.8-py3-none-any.whl`.
 - Inline web UI script syntax check with `node -e`.
 - `git diff --check`
+- `python3 -m pytest -q tests/test_api.py tests/test_executor.py` -> 29 tests
+  passed.
+- `./scripts/build_vst3.sh` -> built `build/vst3/LLM-r.vst3` after adding the
+  VST3 candidate picker flow.
 - Real Ableton smoke test harness added at
   `scripts/smoke_test_live_integration.py`; it still requires a manual
   disposable Live set and was not executed in this audit environment.
@@ -151,9 +163,8 @@ Not verified in this run:
 
 1. Run and refine the real Ableton smoke-test harness against multiple Ableton
    Live versions.
-2. Add a first-class VST3 candidate picker for ambiguous Device Bridge browser
-   matches.
-3. Expand OSC reply parsing for additional AbletonOSC response shapes.
-4. Grow safe semantic parameter maps only from verified Live readback data.
-5. Keep release packaging focused on one primary install path: VST3 bundle plus
+2. Validate the new VST3 candidate picker in real Ableton sessions by forcing
+  ambiguous browser queries and confirming the selected path loads correctly.
+3. Grow safe semantic parameter maps only from verified Live readback data.
+4. Keep release packaging focused on one primary install path: VST3 bundle plus
    bundled Remote Script, with server/GUI clearly marked as companion tools.

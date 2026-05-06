@@ -160,6 +160,7 @@ def _ensure_device(track: dict[str, Any], device_index: int) -> dict[str, Any]:
     device = track["devices"][device_index]
     device.setdefault("parameters", {})
     device.setdefault("parameter_names", {})
+    device.setdefault("parameter_value_strings", {})
     return device
 
 
@@ -257,11 +258,20 @@ def _apply_osc_reply_to_live_state(address: str, args: list[Any]) -> bool:
     if "tempo" in normalized:
         song["tempo"] = float(args[-1])
         return True
+    if "current_song_time" in normalized or normalized.endswith("/song_time"):
+        song["song_time"] = float(args[-1])
+        return True
     if "is_playing" in normalized or normalized.endswith("/playing"):
         song["is_playing"] = _reply_bool(args[-1])
         return True
     if "session_record" in normalized or normalized.endswith("/record"):
         song["session_record"] = _reply_bool(args[-1])
+        return True
+    if "session_automation_record" in normalized:
+        song["session_automation_record"] = _reply_bool(args[-1])
+        return True
+    if "arrangement_overdub" in normalized:
+        song["arrangement_overdub"] = _reply_bool(args[-1])
         return True
     if "metronome" in normalized:
         song["metronome"] = _reply_bool(args[-1])
@@ -300,15 +310,91 @@ def _apply_osc_reply_to_live_state(address: str, args: list[Any]) -> bool:
         if "arm" in normalized:
             track["arm"] = _reply_bool(value)
             return True
+        if "color_index" in normalized:
+            track["color_index"] = int(value)
+            return True
+
+    if "/live/clip" in normalized and len(args) >= 3:
+        clip = _ensure_clip(int(args[0]), int(args[1]))
+        value = args[-1]
+        if "name" in normalized:
+            clip["name"] = str(value)
+            return True
+        if "color_index" in normalized:
+            clip["color_index"] = int(value)
+            return True
+        if normalized.endswith("/color"):
+            clip["color"] = int(value)
+            return True
+        if "gain" in normalized:
+            clip["gain"] = float(value)
+            return True
+        if "start_marker" in normalized:
+            clip["start_marker"] = float(value)
+            return True
+        if "end_marker" in normalized:
+            clip["end_marker"] = float(value)
+            return True
+        if "loop_start" in normalized:
+            clip["loop_start"] = float(value)
+            return True
+        if "loop_end" in normalized:
+            clip["loop_end"] = float(value)
+            return True
+        if "looping" in normalized:
+            clip["looping"] = _reply_bool(value)
+            return True
+        if "position" in normalized:
+            clip["position"] = float(value)
+            return True
+        if "warping" in normalized:
+            clip["warping"] = _reply_bool(value)
+            return True
+        if "warp_mode" in normalized:
+            clip["warp_mode"] = int(value)
+            return True
+        if "muted" in normalized:
+            clip["muted"] = _reply_bool(value)
+            return True
+        if "launch_mode" in normalized:
+            clip["launch_mode"] = int(value)
+            return True
+        if "launch_quantization" in normalized:
+            clip["launch_quantization"] = int(value)
+            return True
+        if "velocity_amount" in normalized:
+            clip["velocity_amount"] = float(value)
+            return True
+        if normalized.endswith("/length") or normalized.endswith("/length_beats"):
+            clip["length_beats"] = float(value)
+            return True
+        if "is_playing" in normalized:
+            clip["is_playing"] = _reply_bool(value)
+            return True
+
+    if (
+        "/live/device" in normalized
+        and len(args) >= 3
+        and "name" in normalized
+        and "parameter/name" not in normalized
+        and "parameters/name" not in normalized
+    ):
+        track = _ensure_track(int(args[0]))
+        device = _ensure_device(track, int(args[1]))
+        device["name"] = str(args[2])
+        return True
 
     if "/live/device" in normalized and len(args) >= 4:
         track = _ensure_track(int(args[0]))
         device = _ensure_device(track, int(args[1]))
         parameter_index = int(args[2])
-        if "parameter/name" in normalized:
+        if "parameter/name" in normalized or "parameters/name" in normalized:
             device["parameter_names"][parameter_index] = str(args[3])
             return True
-        if "parameter/value" in normalized:
+        if "parameter/value/string" in normalized or "parameters/value/string" in normalized:
+            device["parameter_value_strings"][parameter_index] = str(args[3])
+            return True
+        if "parameter/value" in normalized or "parameters/value" in normalized:
             device["parameters"][parameter_index] = float(args[3])
             return True
 
@@ -396,7 +482,8 @@ def _apply_action_to_live_state(action) -> None:
         if index < 0 or index >= len(_live_state["scenes"]):
             _ensure_scene(len(_live_state["scenes"]))
         else:
-            _live_state["scenes"].insert(index, {"scene_index": index, "name": f"Scene {index + 1}"})
+            _live_state["scenes"].insert(
+                index, {"scene_index": index, "name": f"Scene {index + 1}"})
             for idx, sc in enumerate(_live_state["scenes"]):
                 sc["scene_index"] = idx
     elif tool == "scene_delete":
@@ -412,7 +499,8 @@ def _apply_action_to_live_state(action) -> None:
         clip_index = int(args[1])
         _ensure_track(track_index)
         _ensure_clip(track_index, clip_index)
-        _live_state["tracks"][track_index]["clips"][clip_index] = _new_clip(clip_index, length_beats=float(args[2]))
+        _live_state["tracks"][track_index]["clips"][clip_index] = _new_clip(
+            clip_index, length_beats=float(args[2]))
     elif tool == "clip_delete":
         track = _ensure_track(int(args[0]))
         clip_index = int(args[1])
@@ -508,7 +596,8 @@ def _apply_action_to_live_state(action) -> None:
         if len(args) == 2:
             clip["notes"] = []
         else:
-            start_pitch, pitch_span, start_time, time_span = int(args[2]), int(args[3]), float(args[4]), float(args[5])
+            start_pitch, pitch_span, start_time, time_span = int(
+                args[2]), int(args[3]), float(args[4]), float(args[5])
             end_pitch = start_pitch + pitch_span
             end_time = start_time + time_span
             clip["notes"] = [
@@ -532,6 +621,7 @@ def _apply_action_to_live_state(action) -> None:
             "type": str(args[2]) if len(args) > 2 else "all",
             "parameters": {},
             "parameter_names": {},
+            "parameter_value_strings": {},
         }
         track["devices"].append(device)
     elif tool == "device_set_parameters":
@@ -953,6 +1043,7 @@ def get_live_track_parameters(track_id: int) -> dict:
             "parameter_index": p_idx,
             "name": device.get("parameter_names", {}).get(p_idx),
             "value": value,
+            "value_string": device.get("parameter_value_strings", {}).get(p_idx),
         }
         for device in devices
         for p_idx, value in device.get("parameters", {}).items()
@@ -1201,7 +1292,8 @@ def create_macro_plan(req: MacroPlanRequest) -> dict:
 def get_plan(plan_id: str) -> dict:
     plan = store.get(plan_id)
     if not plan:
-        _raise_api_error(status_code=404, code="plan_not_found", message="Plan not found or expired")
+        _raise_api_error(status_code=404, code="plan_not_found",
+                         message="Plan not found or expired")
     return _serialize_plan(plan)
 
 
@@ -1209,10 +1301,12 @@ def get_plan(plan_id: str) -> dict:
 def execute_plan(req: ExecuteRequest) -> dict:
     plan = store.get(req.plan_id)
     if not plan:
-        _raise_api_error(status_code=404, code="plan_not_found", message="Plan not found or expired")
+        _raise_api_error(status_code=404, code="plan_not_found",
+                         message="Plan not found or expired")
 
     if plan.executed_at:
-        _raise_api_error(status_code=409, code="plan_already_executed", message="Plan already executed")
+        _raise_api_error(status_code=409, code="plan_already_executed",
+                         message="Plan already executed")
 
     execution_report, _ = _execute_actions(plan.actions, approved=req.approved, dry_run=req.dry_run)
     if not req.dry_run:
@@ -1253,13 +1347,15 @@ def execute_plan(req: ExecuteRequest) -> dict:
 @app.post("/api/execute_batch", dependencies=[Depends(_require_auth)])
 def execute_batch(req: ExecuteBatchRequest) -> dict:
     if not req.calls:
-        _raise_api_error(status_code=400, code="empty_batch", message="At least one call is required")
+        _raise_api_error(status_code=400, code="empty_batch",
+                         message="At least one call is required")
     ableton = AbletonOSCClient(settings.ableton_host, settings.ableton_port)
     try:
         actions = [ableton.to_action(call.tool, call.args) for call in req.calls]
     except ValueError as exc:
         _raise_api_error(status_code=400, code="invalid_call", message=str(exc))
-    execution_report, executed_at = _execute_actions(actions, approved=req.approved, dry_run=req.dry_run)
+    execution_report, executed_at = _execute_actions(
+        actions, approved=req.approved, dry_run=req.dry_run)
     return {
         "executed_count": len(actions),
         "requires_approval": any(a.destructive for a in actions),
