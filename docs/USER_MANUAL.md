@@ -24,28 +24,37 @@ LLM-r is a VST3 assistant for Ableton Live. You type a production request, LLM-r
 8. If you want device loading, accept the LLMRDeviceBridge install prompt, restart Live, and enable it in a Control Surface slot.
 9. Click **Save**.
 
+Use **Advanced Settings** to check Device Bridge reachability before executing
+plans that include `device_load`. Execution also resolves each device-load
+candidate before sending any mutations, so ambiguous browser matches block until
+the plan uses a specific candidate path or a confirmed ambiguous choice.
+
 Settings are only applied when you click **Save**. Click **Cancel** to close settings without applying changes.
 
 ## Main Screen
 
-The main screen has a prompt field, an assistant response area, and execution controls.
+The main screen is a command surface with readiness chips, a prompt field, a
+Plan Board, execution controls, and an **Auto-approve** checkbox.
 Press **Return** in the prompt field to create a plan, or click **Plan**.
 
-### Chat Tab
+### Plan Tab
 
-The **Chat** tab is the normal user-facing view. It shows:
+The **Plan** tab is the normal user-facing view. It shows:
 
 - your request
-- the assistant's interpreted plan
-- planned Ableton steps in plain language
+- the assistant's interpreted Plan Board
+- planned Ableton steps with safety and transport labels
 - safety notes for destructive operations
 - execution or dry-run results
 
-The chat view is selectable. Use standard macOS shortcuts such as `Cmd+C`, `Cmd+A`, and normal text selection.
+The plan view is selectable. Use standard macOS shortcuts such as `Cmd+C`, `Cmd+A`, and normal text selection.
 
-### Raw JSON Tab
+### Details Tab
 
-The **Raw JSON** tab is for debugging. It shows the provider response and the internal action payload that LLM-r built from it. Use it when a plan fails, a provider returns invalid JSON, or you need to inspect the exact OSC/action details.
+The **Details** tab is for debugging. It shows the provider response and the
+internal action payload that LLM-r built from it. Use it when a plan fails, a
+provider returns invalid JSON, or you need to inspect the exact OSC/action
+details.
 
 LLM-r asks supported providers for structured JSON responses. If a model still
 answers with prose, LLM-r first asks the model to repair the answer into the
@@ -58,6 +67,10 @@ Keep **Dry run** enabled when testing. A dry run shows what would be sent to Abl
 
 Click **Execute** only after reviewing the plan. Destructive actions, such as deleting tracks or clips, require **Allow destructive actions** in Settings and dry run must be off.
 
+Enable **Auto-approve** only when you want LLM-r to run the plan immediately
+after planning. If Dry run is enabled, Auto-approve runs a preview. If Dry run is
+off, Auto-approve sends the actions to Ableton after the same preflight checks.
+
 ## Settings
 
 The basic Settings screen is intentionally short:
@@ -65,6 +78,7 @@ The basic Settings screen is intentionally short:
 - **Provider**: `openai`, `anthropic`, `google`, `ollama`, or `custom`
 - **Model**: a provider-specific pull-down
 - **Dry run default**: whether the main screen starts in dry-run mode
+- **Auto-approve plans**: whether plans run immediately after planning
 - **Allow destructive actions**: permits destructive actions when dry run is off
 
 Use **Save** to apply changes. Use **Cancel** to discard changes.
@@ -145,7 +159,7 @@ For cloud providers, choose a fast and inexpensive model first, then move to a s
 
 ### The assistant says it could not build actions
 
-Open **Raw JSON**. The model may have returned invalid JSON, used unsupported tool names, or answered conversationally instead of returning an action plan.
+Open **Details**. The model may have returned invalid JSON, used unsupported tool names, or answered conversationally instead of returning an action plan.
 
 For local models, try a stronger instruction-following model if this happens
 often. The plug-in can repair some non-JSON responses, but models that ignore
@@ -161,7 +175,7 @@ Start Ollama first. Then click **Refresh Online**, choose a model, and click **D
 
 ### Ableton does not change
 
-Check that AbletonOSC is installed, active, and listening on the host/port shown in Advanced Settings. If the failed step is `device_load`, also check that LLMRDeviceBridge is enabled in a Control Surface slot after restarting Live. Keep **Dry run** off when you actually want to execute.
+Check that AbletonOSC is installed, active, and listening on the host/port shown in Advanced Settings. If the failed step is `device_load`, also check that LLMRDeviceBridge is enabled in a Control Surface slot after restarting Live. A `409` or ambiguous-candidate error means the browser query needs a more specific device name, preset query, or candidate path. Keep **Dry run** off when you actually want to execute.
 
 ### I still see an older UI
 

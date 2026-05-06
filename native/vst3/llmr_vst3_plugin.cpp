@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define LLMR_VERSION "0.6.7"
+#define LLMR_VERSION "0.6.8"
 
 #if defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
@@ -34,6 +34,8 @@ enum LlmrEditorAction : NSInteger {
     kLlmrEditorActionProviderChanged = 20,
     kLlmrEditorActionOllamaTestModel = 21,
     kLlmrEditorActionPreview = 22,
+    kLlmrEditorActionDeviceBridgeStatus = 23,
+    kLlmrEditorActionAutoApproveChanged = 24,
 };
 
 static void llmrEditorHandleAction(void *owner, NSInteger action);
@@ -661,9 +663,13 @@ public:
         chatInputField_ = nullptr;
         chatStatusLabel_ = nullptr;
         chatModelLabel_ = nullptr;
+        chatOscLabel_ = nullptr;
+        chatBridgeLabel_ = nullptr;
+        chatDryRunLabel_ = nullptr;
         chatSendButton_ = nullptr;
         chatExecuteButton_ = nullptr;
         chatPreviewButton_ = nullptr;
+        chatAutoApproveButton_ = nullptr;
         chatSettingsButton_ = nullptr;
         chatTabButton_ = nullptr;
         rawTabButton_ = nullptr;
@@ -676,11 +682,13 @@ public:
         settingsExtraPromptButton_ = nullptr;
         settingsDestructiveButton_ = nullptr;
         settingsDryRunButton_ = nullptr;
+        settingsAutoApproveButton_ = nullptr;
         settingsMainView_ = nullptr;
         settingsAdvancedView_ = nullptr;
         settingsAdvancedButton_ = nullptr;
         settingsBasicButton_ = nullptr;
         ollamaStatusLabel_ = nullptr;
+        deviceBridgeStatusLabel_ = nullptr;
         ollamaModelField_ = nullptr;
         ollamaModelsCombo_ = nullptr;
 #endif
@@ -785,6 +793,8 @@ public:
         case kLlmrEditorActionOllamaRefreshOnlineModels: ollamaRefreshOnlineModels(true); break;
         case kLlmrEditorActionProviderChanged: providerChanged(); break;
         case kLlmrEditorActionOllamaTestModel: ollamaTestModel(); break;
+        case kLlmrEditorActionDeviceBridgeStatus: checkDeviceBridgeStatus(); break;
+        case kLlmrEditorActionAutoApproveChanged: saveAutoApproveSetting(); break;
         default: break;
         }
     }
@@ -899,11 +909,34 @@ private:
         return [NSNumber numberWithInt:(value ? [value boolValue] : fallback) ? 1 : 0];
     }
 
+    static double clampedNumberValue(NSDictionary *dict, NSString *key, double fallback, double minimum, double maximum)
+    {
+        double value = numberValue(dict, key, fallback);
+        if (value < minimum) return minimum;
+        if (value > maximum) return maximum;
+        return value;
+    }
+
     static NSString *stringValue(NSDictionary *dict, NSString *key, NSString *fallback)
     {
         id value = [dict objectForKey:key];
         if ([value isKindOfClass:[NSString class]] && [value length] > 0) {
             return value;
+        }
+        return fallback;
+    }
+
+    static int semanticParameterIndex(NSDictionary *args, int fallback)
+    {
+        NSString *raw = stringValue(args, @"parameter_name", @"");
+        NSString *name = [[raw lowercaseString] stringByReplacingOccurrencesOfString:@"_" withString:@" "];
+        name = [name stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([name isEqualToString:@"device on"] ||
+            [name isEqualToString:@"on"] ||
+            [name isEqualToString:@"enabled"] ||
+            [name isEqualToString:@"activator"] ||
+            [name isEqualToString:@"device activator"]) {
+            return 0;
         }
         return fallback;
     }
@@ -946,6 +979,17 @@ private:
         [v setLineBreakMode:NSLineBreakByTruncatingTail];
         [v setFont:font]; [v setTextColor:col];
         [p addSubview:v]; [v release]; return v;
+    }
+    NSTextField *chipIn(NSView *p, NSString *txt, NSRect f, NSColor *fg, NSColor *bg, NSColor *border)
+    {
+        NSTextField *v = labelIn(p, txt, f, [NSFont boldSystemFontOfSize:10.0], fg);
+        [v setAlignment:NSTextAlignmentCenter];
+        [v setWantsLayer:YES];
+        v.layer.backgroundColor = bg.CGColor;
+        v.layer.cornerRadius = 7.0;
+        v.layer.borderWidth = 1.0;
+        v.layer.borderColor = border.CGColor;
+        return v;
     }
     NSTextField *fieldIn(NSView *p, NSRect f, NSString *ph, BOOL secure)
     {
@@ -1074,10 +1118,22 @@ private:
         labelIn(hdr, [NSString stringWithFormat:@"v%s", LLMR_VERSION],
                 NSMakeRect(kPad + 60, 14, 52, 16),
                 [NSFont systemFontOfSize:10.0], cSec());
-        chatModelLabel_ = labelIn(hdr, @"",
-                NSMakeRect(kPad + 118, 12, width - kPad - 332, 20),
-                [NSFont systemFontOfSize:11.0], cAccent());
-        [chatModelLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+        chatModelLabel_ = chipIn(hdr, @"Model: unset",
+                NSMakeRect(kPad + 104, 10, 108, 22),
+                cAccent(),
+                [NSColor colorWithCalibratedRed:0.07 green:0.13 blue:0.22 alpha:1.0],
+                [NSColor colorWithCalibratedRed:0.18 green:0.42 blue:0.72 alpha:1.0]);
+        [chatModelLabel_ setAutoresizingMask:NSViewMaxXMargin | NSViewMaxYMargin];
+        chatOscLabel_ = chipIn(hdr, @"OSC",
+                NSMakeRect(kPad + 220, 10, 76, 22),
+                cPri(),
+                [NSColor colorWithCalibratedRed:0.12 green:0.14 blue:0.18 alpha:1.0],
+                [NSColor colorWithCalibratedRed:0.30 green:0.35 blue:0.42 alpha:1.0]);
+        chatBridgeLabel_ = chipIn(hdr, @"Bridge",
+                NSMakeRect(kPad + 304, 10, 88, 22),
+                cPri(),
+                [NSColor colorWithCalibratedRed:0.12 green:0.14 blue:0.18 alpha:1.0],
+                [NSColor colorWithCalibratedRed:0.30 green:0.35 blue:0.42 alpha:1.0]);
 
         NSButton *helpBtn = btnIn(hdr, NSMakeRect(width - 190, 8, 74, 28),
                                   @"Help", kLlmrEditorActionOpenHelp);
@@ -1091,8 +1147,8 @@ private:
         [tabs setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
         [chatView_ addSubview:tabs]; [tabs release];
 
-        chatTabButton_ = btnIn(tabs, NSMakeRect(kPad, 4, 86, 26), @"Chat", kLlmrEditorActionShowChatTab);
-        rawTabButton_ = btnIn(tabs, NSMakeRect(kPad + 92, 4, 96, 26), @"Raw JSON", kLlmrEditorActionShowRawTab);
+        chatTabButton_ = btnIn(tabs, NSMakeRect(kPad, 4, 86, 26), @"Plan", kLlmrEditorActionShowChatTab);
+        rawTabButton_ = btnIn(tabs, NSMakeRect(kPad + 92, 4, 96, 26), @"Details", kLlmrEditorActionShowRawTab);
 
         // Chat history scroll (fills middle, auto-resizes)
         chatHistoryView_ = chatTextViewIn(chatView_,
@@ -1103,7 +1159,7 @@ private:
         [rawResponseView_ setRichText:NO];
         [rawResponseView_ setTextColor:cPri()];
         [rawResponseView_ setFont:[NSFont userFixedPitchFontOfSize:11.0]];
-        [rawResponseView_ setString:@"Raw JSON will appear here after the model returns a response."];
+        [rawResponseView_ setString:@"Execution details and raw JSON will appear here after the model returns a response."];
         if (lastRawResponse_) {
             [rawResponseView_ setString:lastRawResponse_];
         }
@@ -1132,6 +1188,13 @@ private:
         chatPreviewButton_ = btnIn(btm, NSMakeRect(kPad + 96, 26, 80, 26),
                                    @"◯ Preview", kLlmrEditorActionPreview);
         [chatPreviewButton_ setEnabled:NO];
+        chatAutoApproveButton_ = checkIn(btm,
+            NSMakeRect(kPad + 186, 27, 126, 24), @"Auto-approve", false);
+        LlmrEditorTarget *autoTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionAutoApproveChanged];
+        [targets_ addObject:autoTarget];
+        [chatAutoApproveButton_ setTarget:autoTarget];
+        [chatAutoApproveButton_ setAction:@selector(performAction:)];
+        [autoTarget release];
 
         // Input field + Send button (top row of bottom)
         chatInputField_ = promptFieldIn(btm, NSMakeRect(kPad, 58, width - kPad*2 - 80, 28),
@@ -1221,6 +1284,9 @@ private:
         settingsDryRunButton_ = checkIn(settingsMainView_,
             NSMakeRect(kPad + kLblW + kGap, y - 24.0, 160, 24), @"Dry run default", true);
         y -= 30.0;
+        settingsAutoApproveButton_ = checkIn(settingsMainView_,
+            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 170, 24), @"Auto-approve plans", false);
+        y -= 30.0;
         settingsDestructiveButton_ = checkIn(settingsMainView_,
             NSMakeRect(kPad + kLblW + kGap, y - 24.0, 230, 24), @"Allow destructive actions", false);
         y -= 48.0;
@@ -1233,7 +1299,7 @@ private:
         [settingsAdvancedView_ setHidden:YES];
         [settingsView_ addSubview:settingsAdvancedView_]; [settingsAdvancedView_ release];
 
-        static const CGFloat kContentH = 720.0;
+        static const CGFloat kContentH = 800.0;
         NSScrollView *sc = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
         [sc setHasVerticalScroller:YES]; [sc setBorderType:NSNoBorder];
         [sc setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
@@ -1285,6 +1351,15 @@ private:
         settingsOscPortField_ = fieldIn(cv,
             NSMakeRect(kPad + kLblW + kGap + 232, ay - 28.0, 90, 28.0), @"11000", NO);
         ay -= 38.0;
+
+        SECT(@"Device Bridge")
+        deviceBridgeStatusLabel_ = labelIn(cv,
+            @"Device Bridge: status unknown. Click Check Bridge before executing device_load plans.",
+            NSMakeRect(kPad, ay - 36.0, width - 2*kPad, 36.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        ay -= 48.0;
+        btnIn(cv, NSMakeRect(kPad, ay - 28.0, 128, 28), @"Check Bridge", kLlmrEditorActionDeviceBridgeStatus);
+        ay -= 44.0;
 
         SECT(@"Ollama")
         ollamaStatusLabel_ = labelIn(cv,
@@ -1344,12 +1419,24 @@ private:
         if (!chatModelLabel_) return;
         NSString *provider = settingsProviderCombo_ ? controlString(settingsProviderCombo_) : @"";
         NSString *model = settingsModelField_ ? controlString(settingsModelField_) : @"";
+        NSString *modelBadge = @"Model: unset";
         if ([provider length] > 0 && [model length] > 0) {
-            [chatModelLabel_ setStringValue:[NSString stringWithFormat:@"%@ / %@", provider, model]];
+            modelBadge = [NSString stringWithFormat:@"%@ / %@", provider, model];
         } else if ([provider length] > 0) {
-            [chatModelLabel_ setStringValue:provider];
-        } else {
-            [chatModelLabel_ setStringValue:@""];
+            modelBadge = provider;
+        }
+        if ([modelBadge length] > 18) {
+            modelBadge = [NSString stringWithFormat:@"%@…", [modelBadge substringToIndex:17]];
+        }
+        [chatModelLabel_ setStringValue:modelBadge];
+        NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+        NSInteger port = [d integerForKey:@"llmr.vst3.osc_port"];
+        if (port <= 0) port = 11000;
+        if (chatOscLabel_) {
+            [chatOscLabel_ setStringValue:[NSString stringWithFormat:@"OSC %ld", (long)port]];
+        }
+        if (chatBridgeLabel_) {
+            [chatBridgeLabel_ setStringValue:@"Bridge"];
         }
     }
 
@@ -1391,6 +1478,7 @@ private:
         if (settingsAdvancedView_) [settingsAdvancedView_ setHidden:NO];
         if (settingsAdvancedButton_) [settingsAdvancedButton_ setHidden:YES];
         if (settingsBasicButton_) [settingsBasicButton_ setHidden:NO];
+        checkDeviceBridgeStatus();
         ollamaListModels();
         if (!ollamaOnlineModelsLoaded_) {
             ollamaRefreshOnlineModels(false);
@@ -1482,10 +1570,16 @@ private:
                        ? [d boolForKey:@"llmr.vst3.extra_prompt_enabled"] : true;
         bool dryOn   = [d objectForKey:@"llmr.vst3.dry_run"]
                        ? [d boolForKey:@"llmr.vst3.dry_run"] : false;
+        bool autoOn  = [d objectForKey:@"llmr.vst3.auto_approve"]
+                       ? [d boolForKey:@"llmr.vst3.auto_approve"] : false;
         [settingsExtraPromptButton_ setState:extraOn ? NSControlStateValueOn : NSControlStateValueOff];
         [settingsDestructiveButton_ setState:[d boolForKey:@"llmr.vst3.allow_destructive"]
                                                ? NSControlStateValueOn : NSControlStateValueOff];
         [settingsDryRunButton_      setState:dryOn  ? NSControlStateValueOn : NSControlStateValueOff];
+        [settingsAutoApproveButton_ setState:autoOn ? NSControlStateValueOn : NSControlStateValueOff];
+        if (chatAutoApproveButton_) {
+            [chatAutoApproveButton_ setState:autoOn ? NSControlStateValueOn : NSControlStateValueOff];
+        }
         updateModelBadge();
     }
 
@@ -1591,8 +1685,28 @@ private:
         [d setBool:buttonOn(settingsExtraPromptButton_) forKey:@"llmr.vst3.extra_prompt_enabled"];
         [d setBool:buttonOn(settingsDestructiveButton_) forKey:@"llmr.vst3.allow_destructive"];
         [d setBool:buttonOn(settingsDryRunButton_)      forKey:@"llmr.vst3.dry_run"];
+        [d setBool:buttonOn(settingsAutoApproveButton_) forKey:@"llmr.vst3.auto_approve"];
         [d synchronize];
+        if (chatAutoApproveButton_) {
+            [chatAutoApproveButton_ setState:buttonOn(settingsAutoApproveButton_) ? NSControlStateValueOn : NSControlStateValueOff];
+        }
         updateModelBadge();
+    }
+
+    void saveAutoApproveSetting()
+    {
+        NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+        bool enabled = buttonOn(chatAutoApproveButton_);
+        [d setBool:enabled forKey:@"llmr.vst3.auto_approve"];
+        [d synchronize];
+        if (settingsAutoApproveButton_) {
+            [settingsAutoApproveButton_ setState:enabled ? NSControlStateValueOn : NSControlStateValueOff];
+        }
+        if (enabled) {
+            setStatus(@"Auto-approve enabled. Plans will run after planning using the dry-run default.");
+        } else {
+            setStatus(@"Auto-approve disabled.");
+        }
     }
 
     void cancelSettings()
@@ -2011,7 +2125,7 @@ private:
                "- clip_set_color {track_index,clip_index,color}; clip_set_color_index {track_index,clip_index,color_index}; clip_set_start_marker/end_marker/loop_start/loop_end/position {track_index,clip_index,value}; clip_set_looping {track_index,clip_index,looping};\n"
                "- clip_set_gain {track_index,clip_index,gain}; clip_set_pitch_coarse {track_index,clip_index,semitones}; clip_set_pitch_fine {track_index,clip_index,cents}; clip_set_warping {track_index,clip_index,warping}; clip_set_warp_mode {track_index,clip_index,warp_mode}; clip_set_ram_mode {track_index,clip_index,ram_mode};\n"
                "- midi_notes_get {track_index,clip_index,start_pitch?,pitch_span?,start_time?,time_span?}; midi_notes_add {track_index,clip_index,notes:[{pitch,start_time,duration,velocity,mute?}]}; midi_notes_remove {track_index,clip_index,...range?} destructive; midi_notes_clear {track_index,clip_index} destructive;\n"
-               "- device_load {track_index,query,device_type? instrument|audio_effect|midi_effect|plugin|drum|all}; device_get_parameters/device_get_parameter/device_get_parameter_name/device_get_parameter_value_string/device_get_parameter_names/device_get_parameter_min_values/device_get_parameter_max_values {track_index,device_index,parameter_index?}; device_set_parameters {track_index,device_index,values}; device_set_parameter {track_index,device_index,parameter_index,value}; device_delete {track_index,device_index} destructive; utility_undo {}; utility_redo {}.\n";
+               "- device_load {track_index,query,device_type? instrument|audio_effect|midi_effect|plugin|drum|all,preset_query?,browser_path?,allow_ambiguous?}; device_get_parameters/device_get_parameter/device_get_parameter_name/device_get_parameter_value_string/device_get_parameter_names/device_get_parameter_min_values/device_get_parameter_max_values {track_index,device_index,parameter_index?}; device_set_parameters {track_index,device_index,values 0..1}; device_set_parameter {track_index,device_index,parameter_index or device_name+parameter_name,value 0..1}; device_delete {track_index,device_index} destructive; utility_undo {}; utility_redo {}.\n";
     }
 
     NSString *systemPrompt()
@@ -2024,6 +2138,7 @@ private:
              "The top-level JSON object must contain a calls array. Every call must contain tool and args. "
              "Plan only executable LLM-r tools. Do not claim to export/render, master, analyze loudness, or inspect unavailable Live state unless a listed tool supports it. "
              "Use device_load when the user asks to load an instrument, audio effect, MIDI effect, drum device, preset, or plug-in by name. "
+             "Use preset_query for named presets and allow_ambiguous only when the user chose a specific ambiguous candidate. "
              "For composition requests, create tracks/clips and MIDI notes when enough musical detail is provided. "
              "For drum-loop requests, create a MIDI track, create a clip, add General MIDI drum notes with midi_notes_add, and fire the clip. "
              "Do not use unsupported tools such as set_track_quantization, clip_set_start_time, or clip_set_end_time. "
@@ -2068,7 +2183,7 @@ private:
         } else if ([raw length] > 0) {
             [out appendString:@"\n\nThe model replied, but the reply did not match the LLM-r action schema."];
         }
-        [out appendString:@"\n\nOpen Raw JSON for the exact provider response."];
+        [out appendString:@"\n\nOpen Details for the exact provider response."];
         return out;
     }
 
@@ -2263,6 +2378,15 @@ private:
                         showResponseTab(false);
                         setStatus(status);
                         setBusy(false);
+                        if (buttonOn(chatAutoApproveButton_) && lastActions_ && [lastActions_ count] > 0) {
+                            NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+                            bool dryDefault = [d objectForKey:@"llmr.vst3.dry_run"]
+                                ? [d boolForKey:@"llmr.vst3.dry_run"] : false;
+                            setStatus(dryDefault
+                                ? @"Auto-approve enabled — running preview."
+                                : @"Auto-approve enabled — executing plan.");
+                            executeLastPlan(dryDefault);
+                        }
                     }
                     [retainedActions release];
                     [display release];
@@ -2283,21 +2407,70 @@ private:
         return [NSString stringWithFormat:@"http://127.0.0.1:%d%@", deviceBridgePort_, cleanPath];
     }
 
-    bool sendDeviceBridgeAction(NSDictionary *act, NSString **error)
+    void checkDeviceBridgeStatus()
+    {
+        if (deviceBridgeStatusLabel_) {
+            [deviceBridgeStatusLabel_ setStringValue:@"Device Bridge: checking local Remote Script..."];
+        }
+        addRef();
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            @autoreleasepool {
+                NSString *error = nil;
+                NSInteger code = 0;
+                NSString *out = httpRequest(deviceBridgeURL(@"/health"), @"GET", nil, nil, 2.0, &code, &error);
+                NSData *data = [out dataUsingEncoding:NSUTF8StringEncoding];
+                NSDictionary *json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+                NSString *bridge = [json isKindOfClass:[NSDictionary class]] ? [json objectForKey:@"bridge"] : nil;
+                BOOL ok = (code >= 200 && code < 300 && !error);
+                NSString *status = ok
+                    ? [NSString stringWithFormat:@"Device Bridge: reachable on 127.0.0.1:%d%@%@.",
+                       deviceBridgePort_, [bridge length] ? @" - " : @"", bridge ?: @""]
+                    : [NSString stringWithFormat:@"Device Bridge: not reachable on 127.0.0.1:%d. %@",
+                       deviceBridgePort_, error ?: @"Enable LLMRDeviceBridge in Live."];
+                __block NSString *rs = [status retain];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (deviceBridgeStatusLabel_) [deviceBridgeStatusLabel_ setStringValue:rs];
+                    if (chatBridgeLabel_) [chatBridgeLabel_ setStringValue:ok ? @"Bridge ok" : @"Bridge off"];
+                    setStatus(rs);
+                    [rs release];
+                    this->release();
+                });
+            }
+        });
+    }
+
+    NSDictionary *deviceBridgeBodyForAction(NSDictionary *act, NSString **error)
     {
         NSDictionary *body = [act objectForKey:@"body"];
-        if (![body isKindOfClass:[NSDictionary class]]) {
-            NSArray *args = [act objectForKey:@"args"];
-            if (![args isKindOfClass:[NSArray class]] || [args count] < 3) {
-                if (error) *error = @"Device Bridge action is missing arguments.";
-                return false;
-            }
-            body = @{
-                @"track_index": [args objectAtIndex:0],
-                @"query": [args objectAtIndex:1],
-                @"device_type": [args objectAtIndex:2],
-            };
+        if ([body isKindOfClass:[NSDictionary class]]) {
+            return body;
         }
+        NSArray *args = [act objectForKey:@"args"];
+        if (![args isKindOfClass:[NSArray class]] || [args count] < 3) {
+            if (error) *error = @"Device Bridge action is missing arguments.";
+            return nil;
+        }
+        NSMutableDictionary *payload = [NSMutableDictionary dictionaryWithDictionary:@{
+            @"track_index": [args objectAtIndex:0],
+            @"query": [args objectAtIndex:1],
+            @"device_type": [args objectAtIndex:2],
+        }];
+        if ([args count] > 3 && [[args objectAtIndex:3] isKindOfClass:[NSDictionary class]]) {
+            NSDictionary *options = [args objectAtIndex:3];
+            for (NSString *key in @[@"preset_query", @"browser_path", @"allow_ambiguous"]) {
+                id value = [options objectForKey:key];
+                if (value) {
+                    [payload setObject:value forKey:key];
+                }
+            }
+        }
+        return payload;
+    }
+
+    bool sendDeviceBridgeAction(NSDictionary *act, NSString **error)
+    {
+        NSDictionary *body = deviceBridgeBodyForAction(act, error);
+        if (!body) return false;
         NSInteger code = 0;
         NSString *path = [act objectForKey:@"address"] ?: @"/api/devices/load";
         NSString *response = httpRequest(deviceBridgeURL(path), @"POST", body, nil, 20.0, &code, error);
@@ -2322,31 +2495,77 @@ private:
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             @autoreleasepool {
                 NSMutableString *report = [NSMutableString string];
-                for (NSDictionary *act in actions) {
-                    bool destructive = [[act objectForKey:@"destructive"] boolValue];
-                    if (destructive && !dryRun && !allowDestructive) {
-                        [report appendFormat:@"Skipped destructive: %@\n", [act objectForKey:@"tool"]];
-                        continue;
+                bool blocked = false;
+                if (!dryRun) {
+                    bool needsDeviceBridge = false;
+                    for (NSDictionary *act in actions) {
+                        NSString *transport = [act objectForKey:@"transport"] ?: @"osc";
+                        if ([transport isEqualToString:@"device_bridge"]) {
+                            needsDeviceBridge = true;
+                            break;
+                        }
                     }
-                    if (dryRun) {
-                        [report appendFormat:@"DRY RUN %@ %@\n",
-                            [act objectForKey:@"address"], [[act objectForKey:@"args"] description]];
-                        continue;
+                    if (needsDeviceBridge) {
+                        NSString *err = nil;
+                        NSInteger code = 0;
+                        httpRequest(deviceBridgeURL(@"/health"), @"GET", nil, nil, 2.0, &code, &err);
+                        if (code < 200 || code >= 300 || err) {
+                            blocked = true;
+                            [report appendFormat:@"BLOCKED Device Bridge preflight failed on 127.0.0.1:%d. %@\n",
+                                deviceBridgePort_, err ?: @"Enable LLMRDeviceBridge in Ableton Live."];
+                        }
+                        if (!blocked) {
+                            for (NSDictionary *act in actions) {
+                                NSString *transport = [act objectForKey:@"transport"] ?: @"osc";
+                                if (![transport isEqualToString:@"device_bridge"]) continue;
+                                NSString *resolveError = nil;
+                                NSDictionary *body = deviceBridgeBodyForAction(act, &resolveError);
+                                if (!body) {
+                                    blocked = true;
+                                    [report appendFormat:@"BLOCKED Device Bridge preflight failed: %@\n",
+                                        resolveError ?: @"invalid device_load action"];
+                                    break;
+                                }
+                                NSInteger resolveCode = 0;
+                                httpRequest(deviceBridgeURL(@"/api/devices/resolve"), @"POST", body, nil, 10.0, &resolveCode, &resolveError);
+                                if (resolveCode < 200 || resolveCode >= 300 || resolveError) {
+                                    blocked = true;
+                                    [report appendFormat:@"BLOCKED Device Bridge resolve failed for %@. %@\n",
+                                        [act objectForKey:@"tool"] ?: @"device_load",
+                                        resolveError ?: @"Choose a specific candidate path or confirm allow_ambiguous."];
+                                    break;
+                                }
+                            }
+                        }
                     }
-                    NSString *err = nil;
-                    NSString *transport = [act objectForKey:@"transport"] ?: @"osc";
-                    bool ok = false;
-                    if ([transport isEqualToString:@"device_bridge"]) {
-                        ok = sendDeviceBridgeAction(act, &err);
-                    } else {
-                        ok = sendOsc(host, port, [act objectForKey:@"address"],
-                                     [act objectForKey:@"args"], &err);
-                    }
-                    [report appendFormat:@"%@ %@ %@\n", ok ? @"SENT" : @"ERROR",
-                        [act objectForKey:@"address"],
-                        ok ? [[act objectForKey:@"args"] description] : err];
                 }
-                NSString *statusMsg = dryRun ? @"Dry run complete." : @"Execution complete.";
+                if (!blocked) {
+                    for (NSDictionary *act in actions) {
+                        bool destructive = [[act objectForKey:@"destructive"] boolValue];
+                        if (destructive && !dryRun && !allowDestructive) {
+                            [report appendFormat:@"Skipped destructive: %@\n", [act objectForKey:@"tool"]];
+                            continue;
+                        }
+                        if (dryRun) {
+                            [report appendFormat:@"DRY RUN %@ %@\n",
+                                [act objectForKey:@"address"], [[act objectForKey:@"args"] description]];
+                            continue;
+                        }
+                        NSString *err = nil;
+                        NSString *transport = [act objectForKey:@"transport"] ?: @"osc";
+                        bool ok = false;
+                        if ([transport isEqualToString:@"device_bridge"]) {
+                            ok = sendDeviceBridgeAction(act, &err);
+                        } else {
+                            ok = sendOsc(host, port, [act objectForKey:@"address"],
+                                         [act objectForKey:@"args"], &err);
+                        }
+                        [report appendFormat:@"%@ %@ %@\n", ok ? @"SENT" : @"ERROR",
+                            [act objectForKey:@"address"],
+                            ok ? [[act objectForKey:@"args"] description] : err];
+                    }
+                }
+                NSString *statusMsg = dryRun ? @"Dry run complete." : (blocked ? @"Execution blocked." : @"Execution complete.");
                 NSString *message = [[NSString stringWithFormat:@"%@\n%@", statusMsg, report] retain];
                 NSString *status = [statusMsg retain];
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -2592,22 +2811,25 @@ private:
         NSString *explanation = [plan objectForKey:@"explanation"] ?: @"No explanation provided.";
         double confidence = [[plan objectForKey:@"confidence"] doubleValue];
         if (confidence <= 1.0) confidence *= 100.0;
-        [out appendFormat:@"I can do this in Ableton as %lu step%@.\n\n",
+        [out appendFormat:@"PLAN BOARD — %lu action%@ ready\n\n",
             (unsigned long)[actions count], [actions count] == 1 ? @"" : @"s"];
         [out appendFormat:@"%@\n\n", explanation];
         [out appendFormat:@"Confidence: %.0f%%\n\n", confidence];
-        [out appendString:@"Planned steps:\n"];
+        [out appendString:@"Actions:\n"];
         NSUInteger index = 1;
         for (NSDictionary *action in actions) {
             BOOL destructive = [[action objectForKey:@"destructive"] boolValue];
-            NSString *safety = destructive ? @"requires destructive-actions permission" : @"safe";
+            NSString *safety = destructive ? @"DESTRUCTIVE - requires permission" : @"SAFE";
+            NSString *transport = [[action objectForKey:@"transport"] isKindOfClass:[NSString class]]
+                ? [action objectForKey:@"transport"] : @"osc";
             NSString *description = [action objectForKey:@"description"] ?: [action objectForKey:@"tool"] ?: @"Action";
-            [out appendFormat:@"%lu. %@\n", (unsigned long)index, description];
-            [out appendFormat:@"   Tool: %@. Safety: %@.\n", [action objectForKey:@"tool"] ?: @"unknown", safety];
-            [out appendFormat:@"   %@\n", humanArgs([action objectForKey:@"args"])];
+            [out appendFormat:@"[%lu] %@\n", (unsigned long)index, description];
+            [out appendFormat:@"    Tool: %@    Safety: %@    Transport: %@\n",
+                [action objectForKey:@"tool"] ?: @"unknown", safety, transport];
+            [out appendFormat:@"    %@\n", humanArgs([action objectForKey:@"args"])];
             index++;
         }
-        [out appendString:@"\nRaw provider output and OSC addresses are available in the Raw JSON tab."];
+        [out appendString:@"\nExecution details, provider output, and OSC addresses are available in Details."];
         return out;
     }
 
@@ -2713,20 +2935,45 @@ private:
         int trackIndex = intValue(args, @"track_index", 0);
         NSString *query = stringValue(args, @"query", stringValue(args, @"device_name", @""));
         query = [query stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        if ([query length] == 0) return nil;
+        id browserPath = [args objectForKey:@"browser_path"] ?: [args objectForKey:@"path"];
+        bool hasBrowserPath = [browserPath isKindOfClass:[NSArray class]]
+            ? [(NSArray *)browserPath count] > 0
+            : ([browserPath isKindOfClass:[NSString class]] && [(NSString *)browserPath length] > 0);
+        if ([query length] == 0 && !hasBrowserPath) return nil;
         NSString *deviceType = normalizedDeviceType(stringValue(args, @"device_type", @"instrument"));
+        NSMutableArray *actionArgs = [NSMutableArray arrayWithObjects:@(trackIndex), query, deviceType, nil];
+        NSMutableDictionary *body = [NSMutableDictionary dictionaryWithDictionary:@{
+            @"track_index": @(trackIndex),
+            @"query": query,
+            @"device_type": deviceType,
+        }];
+        NSMutableDictionary *options = [NSMutableDictionary dictionary];
+        NSString *presetQuery = stringValue(args, @"preset_query", stringValue(args, @"preset", @""));
+        presetQuery = [presetQuery stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([presetQuery length] > 0) {
+            [body setObject:presetQuery forKey:@"preset_query"];
+            [options setObject:presetQuery forKey:@"preset_query"];
+        }
+        if (hasBrowserPath) {
+            [body setObject:browserPath forKey:@"browser_path"];
+            [options setObject:browserPath forKey:@"browser_path"];
+        }
+        id allowAmbiguous = [args objectForKey:@"allow_ambiguous"];
+        if (allowAmbiguous && [allowAmbiguous boolValue]) {
+            [body setObject:@YES forKey:@"allow_ambiguous"];
+            [options setObject:@YES forKey:@"allow_ambiguous"];
+        }
+        if ([options count] > 0) {
+            [actionArgs addObject:options];
+        }
         return @{
             @"tool": tool ?: @"device_load",
             @"address": @"/api/devices/load",
             @"description": @"Load device through LLM-r Device Bridge",
-            @"args": @[@(trackIndex), query, deviceType],
+            @"args": actionArgs,
             @"destructive": @NO,
             @"transport": @"device_bridge",
-            @"body": @{
-                @"track_index": @(trackIndex),
-                @"query": query,
-                @"device_type": deviceType,
-            },
+            @"body": body,
         };
     }
 
@@ -2794,7 +3041,7 @@ private:
         if ([tool isEqualToString:@"midi_notes_add"]) return midiAddAction(tool, args);
         if ([tool hasPrefix:@"device_get_parameter"]) return deviceGetAction(tool, args);
         if ([tool isEqualToString:@"device_load"]) return deviceLoadAction(tool, args);
-        if ([tool isEqualToString:@"device_set_parameter"]) return action(tool, @"/live/device/set/parameter/value", @"Set device parameter", @[@(intValue(args, @"track_index", 0)), @(intValue(args, @"device_index", 0)), @(intValue(args, @"parameter_index", 0)), @(numberValue(args, @"value", 0.0))], false);
+        if ([tool isEqualToString:@"device_set_parameter"]) return action(tool, @"/live/device/set/parameter/value", @"Set device parameter", @[@(intValue(args, @"track_index", 0)), @(intValue(args, @"device_index", 0)), @(semanticParameterIndex(args, intValue(args, @"parameter_index", 0))), @(clampedNumberValue(args, @"value", 0.0, 0.0, 1.0))], false);
         if ([tool isEqualToString:@"device_set_parameters"]) return deviceSetParametersAction(tool, args);
         if ([tool isEqualToString:@"device_delete"]) return action(tool, @"/live/track/delete_device", @"Delete device", @[@(intValue(args, @"track_index", 0)), @(intValue(args, @"device_index", 0))], true);
         if ([tool isEqualToString:@"utility_undo"]) return action(tool, @"/live/song/undo", @"Undo", @[], false);
@@ -2859,7 +3106,10 @@ private:
     {
         NSMutableArray *payload = [NSMutableArray arrayWithObjects:@(intValue(args, @"track_index", 0)), @(intValue(args, @"device_index", 0)), nil];
         for (id value in [args objectForKey:@"values"]) {
-            [payload addObject:@([value doubleValue])];
+            double normalized = [value doubleValue];
+            if (normalized < 0.0) normalized = 0.0;
+            if (normalized > 1.0) normalized = 1.0;
+            [payload addObject:@(normalized)];
         }
         return action(tool, @"/live/device/set/parameters/value", @"Set device parameters", payload, false);
     }
@@ -3320,9 +3570,13 @@ private:
     NSTextField *chatInputField_{nullptr};
     NSTextField *chatStatusLabel_{nullptr};
     NSTextField *chatModelLabel_{nullptr};
+    NSTextField *chatOscLabel_{nullptr};
+    NSTextField *chatBridgeLabel_{nullptr};
+    NSTextField *chatDryRunLabel_{nullptr};
     NSButton *chatSendButton_{nullptr};
     NSButton *chatExecuteButton_{nullptr};
     NSButton *chatPreviewButton_{nullptr};
+    NSButton *chatAutoApproveButton_{nullptr};
     NSButton *chatSettingsButton_{nullptr};
     NSButton *chatTabButton_{nullptr};
     NSButton *rawTabButton_{nullptr};
@@ -3338,6 +3592,7 @@ private:
     NSButton *settingsExtraPromptButton_{nullptr};
     NSButton *settingsDestructiveButton_{nullptr};
     NSButton *settingsDryRunButton_{nullptr};
+    NSButton *settingsAutoApproveButton_{nullptr};
     NSView *settingsMainView_{nullptr};
     NSView *settingsAdvancedView_{nullptr};
     NSButton *settingsAdvancedButton_{nullptr};
@@ -3345,6 +3600,7 @@ private:
 
     // Ollama controls (inside settings)
     NSTextField *ollamaStatusLabel_{nullptr};
+    NSTextField *deviceBridgeStatusLabel_{nullptr};
     NSComboBox *ollamaModelField_{nullptr};
     NSComboBox *ollamaModelsCombo_{nullptr};
     bool ollamaOnlineModelsLoaded_{false};

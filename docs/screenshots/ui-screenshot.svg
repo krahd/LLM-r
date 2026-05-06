@@ -1,18 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="520" viewBox="0 0 980 520">
-  <rect width="100%" height="100%" fill="#0b1020" rx="12"/>
-  <g font-family="Inter, system-ui, sans-serif" fill="#f8fafc">
-    <text x="28" y="48" font-size="24" font-weight="700">LLM-r Web UI (demo)</text>
-    <rect x="28" y="72" width="924" height="120" fill="#0f1724" rx="8" stroke="#374151"/>
-    <text x="44" y="100" font-size="14">Prompt</text>
-    <rect x="44" y="110" width="420" height="64" fill="#0b1220" rx="6" stroke="#1f2937"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="650" viewBox="0 0 1120 650">
+  <rect width="1120" height="650" fill="#0b0d12" rx="14"/>
+  <rect x="22" y="22" width="1076" height="606" fill="#111318" rx="10" stroke="#2a3340"/>
+  <g font-family="Inter, system-ui, sans-serif">
+    <text x="48" y="66" fill="#f8fafc" font-size="24" font-weight="800">LLM-r</text>
+    <text x="122" y="66" fill="#7de2a0" font-size="13" font-weight="700">openai / gpt-4.1-mini</text>
+    <rect x="334" y="44" width="92" height="26" fill="#10251c" rx="7" stroke="#1f7a46"/>
+    <text x="354" y="62" fill="#7de2a0" font-size="11" font-weight="800">OSC OK</text>
+    <rect x="436" y="44" width="116" height="26" fill="#102039" rx="7" stroke="#2f64aa"/>
+    <text x="454" y="62" fill="#a9c9ff" font-size="11" font-weight="800">BRIDGE OK</text>
+    <rect x="878" y="42" width="82" height="30" fill="#1b2230" rx="8" stroke="#343b48"/>
+    <text x="901" y="62" fill="#eef2f7" font-size="12" font-weight="700">Help</text>
+    <rect x="970" y="42" width="96" height="30" fill="#2f7cf6" rx="8"/>
+    <text x="992" y="62" fill="#ffffff" font-size="12" font-weight="800">Settings</text>
 
-    <rect x="480" y="110" width="120" height="40" fill="#22c55e" rx="6"/>
-    <text x="500" y="136" font-size="14" fill="#052e16">Create Plan</text>
+    <rect x="48" y="98" width="1024" height="364" fill="#0d1016" rx="8" stroke="#2a3340"/>
+    <text x="72" y="132" fill="#aeb7c6" font-size="12" font-weight="800">PLAN BOARD</text>
+    <rect x="72" y="154" width="976" height="74" fill="#151b25" rx="8" stroke="#2a3340"/>
+    <text x="94" y="184" fill="#eef2f7" font-size="17" font-weight="800">1. Create MIDI track</text>
+    <rect x="276" y="166" width="52" height="22" fill="#10251c" rx="7" stroke="#1f7a46"/>
+    <text x="290" y="181" fill="#7de2a0" font-size="10" font-weight="800">SAFE</text>
+    <rect x="338" y="166" width="54" height="22" fill="#102039" rx="7" stroke="#2f64aa"/>
+    <text x="352" y="181" fill="#a9c9ff" font-size="10" font-weight="800">OSC</text>
+    <text x="94" y="210" fill="#aeb7c6" font-size="13">Create a focused track for the generated drum loop.</text>
 
-    <rect x="610" y="110" width="120" height="40" fill="#93c5fd" rx="6"/>
-    <text x="634" y="136" font-size="14" fill="#0c4a6e">Execute Plan</text>
+    <rect x="72" y="244" width="976" height="74" fill="#151b25" rx="8" stroke="#2a3340"/>
+    <text x="94" y="274" fill="#eef2f7" font-size="17" font-weight="800">2. Load Drum Rack</text>
+    <rect x="254" y="256" width="52" height="22" fill="#10251c" rx="7" stroke="#1f7a46"/>
+    <text x="268" y="271" fill="#7de2a0" font-size="10" font-weight="800">SAFE</text>
+    <rect x="316" y="256" width="118" height="22" fill="#102039" rx="7" stroke="#2f64aa"/>
+    <text x="330" y="271" fill="#a9c9ff" font-size="10" font-weight="800">DEVICE BRIDGE</text>
+    <text x="94" y="300" fill="#aeb7c6" font-size="13">Resolve the browser candidate before loading it into Live.</text>
 
-    <text x="44" y="214" font-size="14">Result / Plan JSON</text>
-    <rect x="44" y="220" width="860" height="220" fill="#071024" rx="8" stroke="#1f2937"/>
+    <rect x="72" y="334" width="976" height="74" fill="#151b25" rx="8" stroke="#2a3340"/>
+    <text x="94" y="364" fill="#eef2f7" font-size="17" font-weight="800">3. Add MIDI notes and start playback</text>
+    <rect x="390" y="346" width="52" height="22" fill="#10251c" rx="7" stroke="#1f7a46"/>
+    <text x="404" y="361" fill="#7de2a0" font-size="10" font-weight="800">SAFE</text>
+    <rect x="452" y="346" width="54" height="22" fill="#102039" rx="7" stroke="#2f64aa"/>
+    <text x="466" y="361" fill="#a9c9ff" font-size="10" font-weight="800">OSC</text>
+    <text x="94" y="390" fill="#aeb7c6" font-size="13">Write the pattern, fire the clip, and keep destructive actions blocked.</text>
+
+    <rect x="48" y="486" width="1024" height="104" fill="#0d1016" rx="8" stroke="#2a3340"/>
+    <text x="72" y="520" fill="#aeb7c6" font-size="12" font-weight="800">COMMAND</text>
+    <rect x="72" y="536" width="674" height="34" fill="#080b10" rx="8" stroke="#343b48"/>
+    <text x="90" y="558" fill="#697386" font-size="13">Create a 2-bar jazzy drum loop with Drum Rack...</text>
+    <rect x="760" y="536" width="80" height="34" fill="#2f7cf6" rx="8"/>
+    <text x="786" y="558" fill="#ffffff" font-size="13" font-weight="800">Plan</text>
+    <rect x="852" y="536" width="88" height="34" fill="#1b2230" rx="8" stroke="#343b48"/>
+    <text x="872" y="558" fill="#eef2f7" font-size="13" font-weight="800">Execute</text>
+    <rect x="956" y="542" width="14" height="14" fill="#2f7cf6" rx="4"/>
+    <text x="978" y="555" fill="#d9e0ea" font-size="12">Auto-approve</text>
   </g>
 </svg>

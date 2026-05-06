@@ -87,118 +87,126 @@ from llmr import __version__  # noqa: E402
 
 _STYLESHEET = """
 QWidget {
-    background-color: #f3f5f8;
-    color: #1c1c1e;
+    background-color: #111318;
+    color: #eef2f7;
     font-size: 13px;
 }
 QMainWindow, QDialog {
-    background-color: #f3f5f8;
+    background-color: #111318;
 }
 QPushButton {
-    padding: 5px 14px;
-    border-radius: 5px;
-    border: 1px solid #b0b8c8;
-    background-color: #e8edf5;
-    color: #1c1c1e;
-    font-weight: 500;
-    min-height: 22px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid #343b48;
+    background-color: #1b2029;
+    color: #eef2f7;
+    font-weight: 600;
+    min-height: 26px;
 }
-QPushButton:hover  { background-color: #d0d8ea; border-color: #8090b0; }
-QPushButton:pressed { background-color: #b8c8de; }
-QPushButton:disabled { background-color: #f0f0f0; color: #9a9a9a; border-color: #d0d0d0; }
+QPushButton:hover  { background-color: #222a35; border-color: #526174; }
+QPushButton:pressed { background-color: #151922; }
+QPushButton:disabled { background-color: #171a21; color: #697386; border-color: #2a303a; }
 
 QPushButton[role="primary"] {
-    background-color: #2563eb;
+    background-color: #2f7cf6;
     color: #ffffff;
-    border: none;
+    border: 1px solid #2f7cf6;
 }
-QPushButton[role="primary"]:hover  { background-color: #1d4ed8; }
-QPushButton[role="primary"]:pressed { background-color: #1e40af; }
+QPushButton[role="primary"]:hover  { background-color: #1f6fe8; border-color: #65a0ff; }
+QPushButton[role="primary"]:pressed { background-color: #185ec6; }
 QPushButton[role="primary"]:disabled {
-    background-color: #f0f0f0;
-    color: #9a9a9a;
-    border: 1px solid #d0d0d0;
+    background-color: #202633;
+    color: #697386;
+    border: 1px solid #2a303a;
 }
 
 QPushButton[role="danger"] {
-    background-color: #dc2626;
-    color: #ffffff;
-    border: none;
+    background-color: #3a1d24;
+    color: #ffb4bd;
+    border: 1px solid #7f2635;
 }
-QPushButton[role="danger"]:hover  { background-color: #b91c1c; }
+QPushButton[role="danger"]:hover  { background-color: #51242e; border-color: #c24155; }
 QPushButton[role="danger"]:disabled {
-    background-color: #f0f0f0;
-    color: #9a9a9a;
-    border: 1px solid #d0d0d0;
+    background-color: #171a21;
+    color: #697386;
+    border: 1px solid #2a303a;
 }
+
+QPushButton[role="ghost"] {
+    background-color: transparent;
+    border: 1px solid #2a303a;
+    color: #aeb7c6;
+}
+QPushButton[role="ghost"]:hover { color: #eef2f7; border-color: #526174; }
 
 QLineEdit, QSpinBox {
-    background-color: #ffffff;
-    color: #1c1c1e;
-    border: 1px solid #c8d0dc;
-    border-radius: 5px;
-    padding: 4px 8px;
-    min-height: 22px;
-    selection-background-color: #2563eb;
+    background-color: #0d1016;
+    color: #eef2f7;
+    border: 1px solid #343b48;
+    border-radius: 8px;
+    padding: 5px 9px;
+    min-height: 26px;
+    selection-background-color: #2f7cf6;
     selection-color: #ffffff;
 }
-QLineEdit:focus, QSpinBox:focus { border-color: #2563eb; }
-QLineEdit:read-only { background-color: #f4f5f7; color: #555; }
+QLineEdit:focus, QSpinBox:focus { border-color: #65a0ff; }
+QLineEdit:read-only { background-color: #151922; color: #aeb7c6; }
 
 QTextEdit {
-    background-color: #ffffff;
-    color: #1c1c1e;
-    border: 1px solid #c8d0dc;
-    border-radius: 5px;
-    padding: 4px;
-    selection-background-color: #2563eb;
+    background-color: #0d1016;
+    color: #eef2f7;
+    border: 1px solid #343b48;
+    border-radius: 8px;
+    padding: 8px;
+    selection-background-color: #2f7cf6;
     selection-color: #ffffff;
 }
-QTextEdit:focus { border-color: #2563eb; }
-QTextEdit[readOnly="true"] { background-color: #f4f5f7; color: #1c1c1e; }
+QTextEdit:focus { border-color: #65a0ff; }
+QTextEdit[readOnly="true"] { background-color: #10141c; color: #d9e0ea; }
 
 QTextBrowser {
-    background-color: #f8f9fc;
-    color: #1c1c1e;
-    border: 1px solid #c8d0dc;
-    border-radius: 5px;
+    background-color: #0d1016;
+    color: #eef2f7;
+    border: 1px solid #343b48;
+    border-radius: 8px;
     padding: 8px;
 }
 
 QTableWidget {
-    background-color: #ffffff;
-    color: #1c1c1e;
-    border: 1px solid #c8d0dc;
-    border-radius: 5px;
-    gridline-color: #e5e7eb;
-    selection-background-color: #dbeafe;
-    selection-color: #111827;
+    background-color: #0d1016;
+    alternate-background-color: #111720;
+    color: #eef2f7;
+    border: 1px solid #343b48;
+    border-radius: 8px;
+    gridline-color: #222936;
+    selection-background-color: #263b60;
+    selection-color: #ffffff;
 }
 QHeaderView::section {
-    background-color: #e8edf5;
-    color: #374151;
+    background-color: #171c25;
+    color: #aeb7c6;
     border: none;
-    border-right: 1px solid #c8d0dc;
-    border-bottom: 1px solid #c8d0dc;
-    padding: 5px 7px;
-    font-weight: 600;
+    border-right: 1px solid #2a303a;
+    border-bottom: 1px solid #2a303a;
+    padding: 7px 8px;
+    font-weight: 700;
 }
 
 QComboBox {
-    background-color: #ffffff;
-    color: #1c1c1e;
-    border: 1px solid #c8d0dc;
-    border-radius: 5px;
-    padding: 4px 8px;
-    min-height: 22px;
-    min-width: 60px;
+    background-color: #0d1016;
+    color: #eef2f7;
+    border: 1px solid #343b48;
+    border-radius: 8px;
+    padding: 5px 9px;
+    min-height: 26px;
+    min-width: 64px;
 }
-QComboBox:focus { border-color: #2563eb; }
+QComboBox:focus { border-color: #65a0ff; }
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
-    width: 24px;
-    border-left: 1px solid #d5dde8;
+    width: 26px;
+    border-left: 1px solid #2a303a;
 }
 QComboBox::down-arrow {
     image: url(:/qt-project.org/styles/commonstyle/images/downarrow-16.png);
@@ -206,93 +214,93 @@ QComboBox::down-arrow {
     height: 10px;
 }
 QComboBox QAbstractItemView {
-    background-color: #ffffff;
-    color: #1c1c1e;
-    selection-background-color: #2563eb;
+    background-color: #10141c;
+    color: #eef2f7;
+    selection-background-color: #2f7cf6;
     selection-color: #ffffff;
-    border: 1px solid #c8d0dc;
+    border: 1px solid #343b48;
 }
 
-QCheckBox { color: #1c1c1e; spacing: 8px; }
+QCheckBox { color: #d9e0ea; spacing: 8px; }
 QCheckBox::indicator {
     width: 16px;
     height: 16px;
-    border-radius: 3px;
-    border: 1px solid #94a3b8;
-    background-color: #ffffff;
+    border-radius: 4px;
+    border: 1px solid #526174;
+    background-color: #0d1016;
 }
-QCheckBox::indicator:hover { border-color: #2563eb; }
+QCheckBox::indicator:hover { border-color: #65a0ff; }
 QCheckBox::indicator:checked {
-    background-color: #2563eb;
-    border-color: #2563eb;
+    background-color: #2f7cf6;
+    border-color: #65a0ff;
 }
 
-QLabel { color: #1c1c1e; }
+QLabel { color: #eef2f7; }
 
 QMenu {
-    background-color: #ffffff;
-    color: #1c1c1e;
-    border: 1px solid #c8d0dc;
+    background-color: #111720;
+    color: #eef2f7;
+    border: 1px solid #343b48;
 }
 QMenu::item:selected {
-    background-color: #dbeafe;
-    color: #111827;
+    background-color: #263b60;
+    color: #ffffff;
 }
 
 QProgressBar {
-    background-color: #e5e7eb;
-    color: #111827;
-    border: 1px solid #c8d0dc;
-    border-radius: 4px;
+    background-color: #1b2029;
+    color: #eef2f7;
+    border: 1px solid #343b48;
+    border-radius: 6px;
     height: 10px;
     text-align: center;
 }
 QProgressBar::chunk {
-    background-color: #2563eb;
-    border-radius: 3px;
+    background-color: #2f7cf6;
+    border-radius: 5px;
 }
 
 QGroupBox {
-    border: 1px solid #c8d0dc;
+    border: 1px solid #2a303a;
     border-radius: 8px;
-    margin-top: 10px;
-    padding: 10px 8px 8px 8px;
-    font-weight: bold;
-    color: #1c1c1e;
+    margin-top: 12px;
+    padding: 12px 10px 10px 10px;
+    font-weight: 700;
+    color: #eef2f7;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 12px;
-    padding: 0 4px;
-    color: #374151;
+    padding: 0 5px;
+    color: #aeb7c6;
 }
 
 QTabWidget::pane {
-    border: 1px solid #c8d0dc;
-    border-radius: 0 6px 6px 6px;
-    background-color: #f8f9fc;
+    border: 1px solid #2a303a;
+    border-radius: 8px;
+    background-color: #0d1016;
 }
-QTabWidget::tab-bar { left: 4px; }
+QTabWidget::tab-bar { left: 6px; }
 QTabBar::tab {
-    background-color: #e8edf5;
-    color: #374151;
-    border: 1px solid #c8d0dc;
+    background-color: #171c25;
+    color: #aeb7c6;
+    border: 1px solid #2a303a;
     border-bottom: none;
-    border-radius: 6px 6px 0 0;
-    padding: 6px 16px;
-    margin-right: 2px;
+    border-radius: 8px 8px 0 0;
+    padding: 7px 16px;
+    margin-right: 3px;
 }
-QTabBar::tab:selected { background-color: #f8f9fc; color: #1c1c1e; font-weight: bold; }
-QTabBar::tab:hover:!selected { background-color: #d8e2f0; }
+QTabBar::tab:selected { background-color: #0d1016; color: #eef2f7; font-weight: 700; }
+QTabBar::tab:hover:!selected { background-color: #202633; color: #d9e0ea; }
 
 QScrollArea { border: none; background-color: transparent; }
 QScrollArea > QWidget > QWidget { background-color: transparent; }
 
-QSplitter::handle { background-color: #c8d0dc; }
+QSplitter::handle { background-color: #252c37; }
 QSplitter::handle:horizontal { width: 1px; }
 QSplitter::handle:vertical { height: 1px; }
 
-QStatusBar { background-color: #e8edf5; color: #374151; border-top: 1px solid #c8d0dc; }
+QStatusBar { background-color: #0d1016; color: #aeb7c6; border-top: 1px solid #2a303a; }
 """
 
 
@@ -300,23 +308,23 @@ def _apply_theme(app: QApplication) -> None:
     app.setStyle("Fusion")
     pal = QPalette()
     W = QColor
-    pal.setColor(QPalette.ColorRole.Window,           W("#f0f2f5"))
-    pal.setColor(QPalette.ColorRole.WindowText,       W("#1c1c1e"))
-    pal.setColor(QPalette.ColorRole.Base,             W("#ffffff"))
-    pal.setColor(QPalette.ColorRole.AlternateBase,    W("#f0f2f5"))
-    pal.setColor(QPalette.ColorRole.Text,             W("#1c1c1e"))
+    pal.setColor(QPalette.ColorRole.Window,           W("#111318"))
+    pal.setColor(QPalette.ColorRole.WindowText,       W("#eef2f7"))
+    pal.setColor(QPalette.ColorRole.Base,             W("#0d1016"))
+    pal.setColor(QPalette.ColorRole.AlternateBase,    W("#111720"))
+    pal.setColor(QPalette.ColorRole.Text,             W("#eef2f7"))
     pal.setColor(QPalette.ColorRole.BrightText,       W("#ffffff"))
-    pal.setColor(QPalette.ColorRole.Button,           W("#e8edf5"))
-    pal.setColor(QPalette.ColorRole.ButtonText,       W("#1c1c1e"))
-    pal.setColor(QPalette.ColorRole.Highlight,        W("#2563eb"))
+    pal.setColor(QPalette.ColorRole.Button,           W("#1b2029"))
+    pal.setColor(QPalette.ColorRole.ButtonText,       W("#eef2f7"))
+    pal.setColor(QPalette.ColorRole.Highlight,        W("#2f7cf6"))
     pal.setColor(QPalette.ColorRole.HighlightedText,  W("#ffffff"))
-    pal.setColor(QPalette.ColorRole.Link,             W("#2563eb"))
-    pal.setColor(QPalette.ColorRole.PlaceholderText,  W("#9ca3af"))
-    pal.setColor(QPalette.ColorRole.ToolTipBase,      W("#ffffff"))
-    pal.setColor(QPalette.ColorRole.ToolTipText,      W("#1c1c1e"))
-    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text,       W("#9a9a9a"))
-    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, W("#9a9a9a"))
-    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, W("#9a9a9a"))
+    pal.setColor(QPalette.ColorRole.Link,             W("#65a0ff"))
+    pal.setColor(QPalette.ColorRole.PlaceholderText,  W("#697386"))
+    pal.setColor(QPalette.ColorRole.ToolTipBase,      W("#171c25"))
+    pal.setColor(QPalette.ColorRole.ToolTipText,      W("#eef2f7"))
+    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text,       W("#697386"))
+    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, W("#697386"))
+    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, W("#697386"))
     app.setPalette(pal)
     app.setStyleSheet(_STYLESHEET)
 
@@ -443,6 +451,29 @@ def _short_id(value: str) -> str:
 def _configure_tabs(tabs: QTabWidget) -> None:
     tabs.tabBar().setUsesScrollButtons(False)
     tabs.tabBar().setElideMode(Qt.TextElideMode.ElideNone)
+
+
+def _set_chip(label: QLabel, text: str, tone: str = "neutral") -> None:
+    palette = {
+        "neutral": ("#1a202a", "#aeb7c6", "#343b48"),
+        "ok": ("#10251c", "#7de2a0", "#1f7a46"),
+        "info": ("#102039", "#9bc2ff", "#2f7cf6"),
+        "warn": ("#2d2110", "#ffd28a", "#9a650f"),
+        "error": ("#321820", "#ffb4bd", "#9f2d3f"),
+    }
+    bg, fg, border = palette.get(tone, palette["neutral"])
+    label.setText(text)
+    label.setStyleSheet(
+        "font-size: 11px; font-weight: 700; padding: 4px 9px; "
+        f"border-radius: 8px; color: {fg}; background-color: {bg}; "
+        f"border: 1px solid {border};"
+    )
+
+
+def _new_chip(text: str, tone: str = "neutral") -> QLabel:
+    label = QLabel()
+    _set_chip(label, text, tone)
+    return label
 
 
 # ── Backend interface ─────────────────────────────────────────────────────────
@@ -749,9 +780,9 @@ class AdvancedSettingsDialog(QDialog):
         header_layout.setContentsMargins(16, 14, 16, 10)
         header_layout.setSpacing(4)
         title = QLabel("Advanced Settings")
-        title.setStyleSheet("font-size: 18px; font-weight: 700; color: #111827;")
+        title.setStyleSheet("font-size: 18px; font-weight: 700; color: #f8fafc;")
         self._summary_lbl = QLabel("")
-        self._summary_lbl.setStyleSheet("font-size: 12px; color: #6b7280;")
+        self._summary_lbl.setStyleSheet("font-size: 12px; color: #aeb7c6;")
         header_layout.addWidget(title)
         header_layout.addWidget(self._summary_lbl)
         header.setLayout(header_layout)
@@ -772,7 +803,7 @@ class AdvancedSettingsDialog(QDialog):
         footer.setContentsMargins(16, 10, 16, 12)
         footer.setSpacing(8)
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet("color: #6b7280; font-size: 12px;")
+        self._status_lbl.setStyleSheet("color: #aeb7c6; font-size: 12px;")
         self._save_btn = QPushButton("Save")
         self._save_btn.setProperty("role", "primary")
         self._save_btn.setStyle(self._save_btn.style())
@@ -843,7 +874,7 @@ class AdvancedSettingsDialog(QDialog):
         self.refresh_models_btn = QPushButton("Refresh Models")
         self.model_status = QLabel("Model list not loaded.")
         self.model_status.setWordWrap(True)
-        self.model_status.setStyleSheet("font-size: 12px; color: #6b7280;")
+        self.model_status.setStyleSheet("font-size: 12px; color: #aeb7c6;")
 
         model_row = QHBoxLayout()
         model_row.addWidget(self.model_combo, stretch=1)
@@ -899,7 +930,7 @@ class AdvancedSettingsDialog(QDialog):
             "Keys saved here are applied to this desktop GUI process as provider environment variables."
         )
         keys_note.setWordWrap(True)
-        keys_note.setStyleSheet("font-size: 12px; color: #6b7280;")
+        keys_note.setStyleSheet("font-size: 12px; color: #aeb7c6;")
         form.addRow(self.show_api_keys_chk)
         form.addRow("", keys_note)
         keys_grp.setLayout(form)
@@ -925,7 +956,7 @@ class AdvancedSettingsDialog(QDialog):
         svc_layout.setSpacing(8)
         self.ollama_status_lbl = QLabel("Status not checked.")
         self.ollama_status_lbl.setWordWrap(True)
-        self.ollama_status_lbl.setStyleSheet("font-size: 12px; color: #6b7280;")
+        self.ollama_status_lbl.setStyleSheet("font-size: 12px; color: #aeb7c6;")
 
         svc_btns = QHBoxLayout()
         self.ollama_install_btn = QPushButton("Install")
@@ -980,10 +1011,10 @@ class AdvancedSettingsDialog(QDialog):
         self.refresh_running_btn.setToolTip("Reload served Ollama models.")
 
         local_model_lbl = QLabel("Local model")
-        local_model_lbl.setStyleSheet("font-weight: 600; color: #374151;")
+        local_model_lbl.setStyleSheet("font-weight: 600; color: #d9e0ea;")
         local_model_lbl.setMinimumWidth(90)
         served_model_lbl = QLabel("Served model")
-        served_model_lbl.setStyleSheet("font-weight: 600; color: #374151;")
+        served_model_lbl.setStyleSheet("font-weight: 600; color: #d9e0ea;")
         served_model_lbl.setMinimumWidth(90)
 
         local_row = QHBoxLayout()
@@ -1069,8 +1100,10 @@ class AdvancedSettingsDialog(QDialog):
         exec_form = QFormLayout()
         exec_form.setSpacing(9)
         self.dry_run_default = QCheckBox("Dry run by default")
+        self.auto_approve_default = QCheckBox("Auto-approve plans after planning")
         self.allow_destructive = QCheckBox("Allow destructive execution after review")
         exec_form.addRow(self.dry_run_default)
+        exec_form.addRow(self.auto_approve_default)
         exec_form.addRow(self.allow_destructive)
         exec_grp.setLayout(exec_form)
 
@@ -1112,7 +1145,7 @@ class AdvancedSettingsDialog(QDialog):
         self.check_btn = QPushButton("Check Connection")
         self.conn_status = QLabel("Not checked.")
         self.conn_status.setWordWrap(True)
-        self.conn_status.setStyleSheet("font-size: 12px; color: #6b7280;")
+        self.conn_status.setStyleSheet("font-size: 12px; color: #aeb7c6;")
 
         url_row = QHBoxLayout()
         url_row.addWidget(self.url_edit, stretch=1)
@@ -1173,6 +1206,7 @@ class AdvancedSettingsDialog(QDialog):
             edit.setText(_provider_api_keys(cached).get(provider_name, ""))
 
         self.dry_run_default.setChecked(bool(cached.get("dry_run", True)))
+        self.auto_approve_default.setChecked(bool(cached.get("auto_approve", False)))
         self.allow_destructive.setChecked(bool(cached.get("allow_destructive", False)))
         self._loading = False
         self._update_summary()
@@ -1193,6 +1227,7 @@ class AdvancedSettingsDialog(QDialog):
         for check in (
             self.extra_prompt_enabled,
             self.dry_run_default,
+            self.auto_approve_default,
             self.allow_destructive,
         ):
             check.toggled.connect(self._mark_dirty)
@@ -1212,10 +1247,10 @@ class AdvancedSettingsDialog(QDialog):
 
     def _set_status(self, text: str, kind: str = "neutral") -> None:
         colors = {
-            "neutral": "#6b7280",
-            "ok": "#16a34a",
-            "warn": "#b45309",
-            "error": "#dc2626",
+            "neutral": "#aeb7c6",
+            "ok": "#7de2a0",
+            "warn": "#ffd28a",
+            "error": "#ff6b7a",
         }
         self._status_lbl.setText(text)
         self._status_lbl.setStyleSheet(f"color: {colors.get(kind, colors['neutral'])}; font-size: 12px;")
@@ -1234,18 +1269,18 @@ class AdvancedSettingsDialog(QDialog):
         url = self.url_edit.text().strip().rstrip("/")
         if not url:
             self.conn_status.setText("Enter a server URL.")
-            self.conn_status.setStyleSheet("color: #dc2626; font-size: 12px;")
+            self.conn_status.setStyleSheet("color: #ff6b7a; font-size: 12px;")
             return
         self.conn_status.setText("Checking...")
-        self.conn_status.setStyleSheet("color: #6b7280; font-size: 12px;")
+        self.conn_status.setStyleSheet("color: #aeb7c6; font-size: 12px;")
 
         def on_done(payload: dict) -> None:
             if payload.get("ok"):
                 self.conn_status.setText("Server reachable. Save will use HTTP mode.")
-                self.conn_status.setStyleSheet("color: #16a34a; font-size: 12px;")
+                self.conn_status.setStyleSheet("color: #7de2a0; font-size: 12px;")
             else:
                 self.conn_status.setText("Server not reachable. Save will use embedded mode.")
-                self.conn_status.setStyleSheet("color: #b45309; font-size: 12px;")
+                self.conn_status.setStyleSheet("color: #ffd28a; font-size: 12px;")
             self._update_summary()
 
         self._run_async(
@@ -1257,7 +1292,7 @@ class AdvancedSettingsDialog(QDialog):
 
     def _set_conn_error(self, msg: str) -> None:
         self.conn_status.setText(f"Check failed: {msg}")
-        self.conn_status.setStyleSheet("color: #dc2626; font-size: 12px;")
+        self.conn_status.setStyleSheet("color: #ff6b7a; font-size: 12px;")
 
     def _on_provider_changed(self, provider: str) -> None:
         if self._loading:
@@ -1454,12 +1489,12 @@ class AdvancedSettingsDialog(QDialog):
         ok = payload.get("ok", True)
         self.ollama_status_lbl.setText(payload.get("message", "Ollama status updated."))
         self.ollama_status_lbl.setStyleSheet(
-            f"font-size: 12px; color: {'#16a34a' if ok else '#dc2626'};"
+            f"font-size: 12px; color: {'#7de2a0' if ok else '#ff6b7a'};"
         )
 
     def _set_ollama_error(self, msg: str) -> None:
         self.ollama_status_lbl.setText(f"Ollama action failed: {msg}")
-        self.ollama_status_lbl.setStyleSheet("font-size: 12px; color: #dc2626;")
+        self.ollama_status_lbl.setStyleSheet("font-size: 12px; color: #ff6b7a;")
         self._log_ollama({"error": msg})
 
     def _log_ollama(self, payload) -> None:
@@ -1546,6 +1581,7 @@ class AdvancedSettingsDialog(QDialog):
             "planner_extra_prompt_enabled": self.extra_prompt_enabled.isChecked(),
             "planner_extra_prompt_path": self.extra_prompt_path_edit.text().strip(),
             "dry_run": self.dry_run_default.isChecked(),
+            "auto_approve": self.auto_approve_default.isChecked(),
             "allow_destructive": self.allow_destructive.isChecked(),
             "ableton_host": self.ableton_host_edit.text().strip() or "127.0.0.1",
             "ableton_port": self.ableton_port_spin.value(),
@@ -1622,10 +1658,10 @@ class SettingsDialog(QDialog):
         header_layout.setContentsMargins(18, 16, 18, 10)
         header_layout.setSpacing(4)
         title = QLabel("Settings")
-        title.setStyleSheet("font-size: 19px; font-weight: 700; color: #111827;")
+        title.setStyleSheet("font-size: 19px; font-weight: 700; color: #f8fafc;")
         subtitle = QLabel("Choose the planner provider and model used by the main GUI.")
         subtitle.setWordWrap(True)
-        subtitle.setStyleSheet("font-size: 12px; color: #6b7280;")
+        subtitle.setStyleSheet("font-size: 12px; color: #aeb7c6;")
         header_layout.addWidget(title)
         header_layout.addWidget(subtitle)
         header.setLayout(header_layout)
@@ -1648,7 +1684,7 @@ class SettingsDialog(QDialog):
         self.refresh_models_btn = QPushButton("Refresh")
         self.model_status = QLabel("")
         self.model_status.setWordWrap(True)
-        self.model_status.setStyleSheet("font-size: 12px; color: #6b7280;")
+        self.model_status.setStyleSheet("font-size: 12px; color: #aeb7c6;")
 
         model_row = QHBoxLayout()
         model_row.setSpacing(8)
@@ -1663,8 +1699,10 @@ class SettingsDialog(QDialog):
         exec_form = QFormLayout()
         exec_form.setSpacing(9)
         self.dry_run_default = QCheckBox("Dry run by default")
+        self.auto_approve_default = QCheckBox("Auto-approve plans after planning")
         self.allow_destructive = QCheckBox("Allow destructive execution after review")
         exec_form.addRow(self.dry_run_default)
+        exec_form.addRow(self.auto_approve_default)
         exec_form.addRow(self.allow_destructive)
         exec_grp.setLayout(exec_form)
 
@@ -1681,7 +1719,7 @@ class SettingsDialog(QDialog):
         footer.setContentsMargins(18, 10, 18, 14)
         footer.setSpacing(8)
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet("color: #6b7280; font-size: 12px;")
+        self._status_lbl.setStyleSheet("color: #aeb7c6; font-size: 12px;")
         self._help_btn = QPushButton("Open Help")
         self._advanced_btn = QPushButton("Advanced Settings")
         self._save_btn = QPushButton("Save")
@@ -1742,6 +1780,7 @@ class SettingsDialog(QDialog):
         values = _MODEL_FALLBACKS.get(provider, []) + ([model] if model else [])
         _set_combo_items(self.model_combo, values, model)
         self.dry_run_default.setChecked(bool(cached.get("dry_run", True)))
+        self.auto_approve_default.setChecked(bool(cached.get("auto_approve", False)))
         self.allow_destructive.setChecked(bool(cached.get("allow_destructive", False)))
         self._loading = False
         if live_error:
@@ -1754,6 +1793,7 @@ class SettingsDialog(QDialog):
         self.model_combo.currentTextChanged.connect(self._mark_dirty)
         self.refresh_models_btn.clicked.connect(self._populate_model_list)
         self.dry_run_default.toggled.connect(self._mark_dirty)
+        self.auto_approve_default.toggled.connect(self._mark_dirty)
         self.allow_destructive.toggled.connect(self._mark_dirty)
         self._help_btn.clicked.connect(self._open_help)
         self._advanced_btn.clicked.connect(self._open_advanced)
@@ -1860,10 +1900,10 @@ class SettingsDialog(QDialog):
 
     def _set_status(self, text: str, kind: str = "neutral") -> None:
         colors = {
-            "neutral": "#6b7280",
-            "ok": "#16a34a",
-            "warn": "#b45309",
-            "error": "#dc2626",
+            "neutral": "#aeb7c6",
+            "ok": "#7de2a0",
+            "warn": "#ffd28a",
+            "error": "#ff6b7a",
         }
         self._status_lbl.setText(text)
         self._status_lbl.setStyleSheet(f"color: {colors.get(kind, colors['neutral'])}; font-size: 12px;")
@@ -1941,6 +1981,7 @@ class SettingsDialog(QDialog):
             "planner_extra_prompt_enabled": vals.get("planner_extra_prompt_enabled", True),
             "planner_extra_prompt_path": vals.get("planner_extra_prompt_path", ""),
             "dry_run": self.dry_run_default.isChecked(),
+            "auto_approve": self.auto_approve_default.isChecked(),
             "allow_destructive": self.allow_destructive.isChecked(),
             "ableton_host": vals.get("ableton_host", "127.0.0.1"),
             "ableton_port": int(vals.get("ableton_port", 11000)),
@@ -2018,29 +2059,36 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         root   = QWidget()
         layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 6)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 8)
+        layout.setSpacing(10)
 
         # ── Top bar: server + settings ────────────────────────────────────────
         top_bar = QHBoxLayout()
         top_bar.setSpacing(6)
 
         self._version_lbl = QLabel(f"LLM-r v{__version__}")
-        self._version_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #111827;")
-        self._server_status_lbl = QLabel("Checking server…")
-        self._server_status_lbl.setStyleSheet("font-size: 12px; color: #6b7280;")
+        self._version_lbl.setStyleSheet("font-size: 18px; font-weight: 800; color: #f8fafc;")
+        self._model_chip = _new_chip("Model: not set", "warn")
+        self._osc_chip = _new_chip("OSC 127.0.0.1:11000", "neutral")
+        self._bridge_chip = _new_chip("Bridge unknown", "neutral")
+        self._server_status_lbl = _new_chip("Embedded mode", "neutral")
 
         self._start_server_btn = QPushButton("Start Server")
         self._stop_server_btn  = QPushButton("Stop Server")
         self._stop_server_btn.setProperty("role", "danger")
         self._stop_server_btn.setStyle(self._stop_server_btn.style())
 
-        self._settings_btn = QPushButton("⚙ Settings")
+        self._settings_btn = QPushButton("Settings")
         self._settings_btn.setProperty("role", "primary")
         self._settings_btn.setStyle(self._settings_btn.style())
-        self._help_btn = QPushButton("Open Help")
+        self._help_btn = QPushButton("Help")
+        self._help_btn.setProperty("role", "ghost")
+        self._help_btn.setStyle(self._help_btn.style())
 
         top_bar.addWidget(self._version_lbl)
+        top_bar.addWidget(self._model_chip)
+        top_bar.addWidget(self._osc_chip)
+        top_bar.addWidget(self._bridge_chip)
         top_bar.addWidget(self._server_status_lbl, stretch=1)
         top_bar.addWidget(self._start_server_btn)
         top_bar.addWidget(self._stop_server_btn)
@@ -2057,8 +2105,8 @@ class MainWindow(QMainWindow):
         pp_layout.setContentsMargins(0, 0, 0, 0)
         pp_layout.setSpacing(6)
 
-        prompt_lbl = QLabel("Prompt — describe what you want Ableton to do:")
-        prompt_lbl.setStyleSheet("font-weight: 600; font-size: 12px; color: #374151;")
+        prompt_lbl = QLabel("Command")
+        prompt_lbl.setStyleSheet("font-weight: 800; font-size: 13px; color: #f8fafc;")
 
         self.prompt = QTextEdit()
         self.prompt.setPlaceholderText(
@@ -2085,13 +2133,19 @@ class MainWindow(QMainWindow):
         self.dry_run = QCheckBox("Dry run")
         self.dry_run.setChecked(bool(self._gui_cfg.get("dry_run", True)))
         self.dry_run.setToolTip("Preview OSC messages without sending them to Ableton")
+        self.auto_approve = QCheckBox("Auto-approve")
+        self.auto_approve.setChecked(bool(self._gui_cfg.get("auto_approve", False)))
+        self.auto_approve.setToolTip(
+            "Automatically execute the reviewed plan after planning. Dry run still previews only."
+        )
 
         self._plan_id_lbl = QLabel("")
-        self._plan_id_lbl.setStyleSheet("color: #9ca3af; font-size: 11px;")
+        self._plan_id_lbl.setStyleSheet("color: #697386; font-size: 11px;")
 
         action_row.addWidget(self.plan_btn)
         action_row.addWidget(self.execute_btn)
         action_row.addWidget(self.dry_run)
+        action_row.addWidget(self.auto_approve)
         action_row.addStretch()
         action_row.addWidget(self._plan_id_lbl)
 
@@ -2107,10 +2161,10 @@ class MainWindow(QMainWindow):
         rp_layout.setSpacing(6)
 
         response_hdr = QHBoxLayout()
-        response_lbl = QLabel("Plan Review")
-        response_lbl.setStyleSheet("font-weight: 700; font-size: 13px; color: #111827;")
+        response_lbl = QLabel("Plan Board")
+        response_lbl.setStyleSheet("font-weight: 800; font-size: 14px; color: #f8fafc;")
         self._current_model_lbl = QLabel("")
-        self._current_model_lbl.setStyleSheet("font-size: 12px; color: #6b7280;")
+        self._current_model_lbl.setStyleSheet("font-size: 12px; color: #aeb7c6;")
         response_hdr.addWidget(response_lbl)
         response_hdr.addStretch()
         response_hdr.addWidget(self._current_model_lbl)
@@ -2131,14 +2185,14 @@ class MainWindow(QMainWindow):
         self._response_raw = QTextEdit()
         self._response_raw.setReadOnly(True)
         self._response_raw.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
-        self._response_raw.setPlaceholderText("Raw .json appears here after a plan or execution.")
+        self._response_raw.setPlaceholderText("Detailed JSON appears here after a plan or execution.")
         self._last_payload: dict = {}
         self._last_plan_payload: dict = {}
 
-        self._response_tabs.addTab(self._chat_view, "Chat")
-        self._response_tabs.addTab(self._actions_table, "Actions")
-        self._response_tabs.addTab(self._execution_table, "Execution")
-        self._response_tabs.addTab(self._response_raw, "Raw .json")
+        self._response_tabs.addTab(self._chat_view, "Plan")
+        self._response_tabs.addTab(self._actions_table, "Action Table")
+        self._response_tabs.addTab(self._execution_table, "Run Log")
+        self._response_tabs.addTab(self._response_raw, "Details")
 
         rp_layout.addLayout(response_hdr)
         rp_layout.addWidget(self._response_tabs, stretch=1)
@@ -2166,6 +2220,7 @@ class MainWindow(QMainWindow):
         self._help_btn.clicked.connect(self.on_help)
         self._start_server_btn.clicked.connect(self.on_start_server)
         self._stop_server_btn.clicked.connect(self.on_stop_server)
+        self.auto_approve.toggled.connect(self._on_auto_approve_changed)
         self._install_edit_menu()
         self._update_model_badge()
 
@@ -2181,23 +2236,23 @@ class MainWindow(QMainWindow):
         return """
           <style>
             body {
-              background: #f8f9fc;
-              color: #111827;
+              background: #0d1016;
+              color: #eef2f7;
               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
               font-size: 13px;
               margin: 0;
             }
             .thread { padding: 12px; }
             .bubble {
-              background: #ffffff;
-              border: 1px solid #d7deea;
+              background: #121720;
+              border: 1px solid #2a303a;
               border-radius: 8px;
               margin: 0 0 10px 0;
               padding: 11px 12px;
             }
-            .bubble.user { background: #eef4ff; border-color: #bfdbfe; }
+            .bubble.user { background: #102039; border-color: #2f7cf6; }
             .eyebrow {
-              color: #6b7280;
+              color: #aeb7c6;
               font-size: 11px;
               font-weight: 700;
               letter-spacing: 0;
@@ -2208,18 +2263,39 @@ class MainWindow(QMainWindow):
             p { margin: 4px 0 8px 0; line-height: 1.35; }
             ul { margin: 6px 0 0 18px; padding: 0; }
             li { margin-bottom: 5px; }
+            .action-grid { display: block; margin-top: 10px; }
+            .action-card {
+              background: #0d1016;
+              border: 1px solid #2a303a;
+              border-radius: 8px;
+              margin: 8px 0;
+              padding: 10px 11px;
+            }
+            .action-title { font-weight: 800; margin-bottom: 4px; }
+            .chip {
+              display: inline-block;
+              border-radius: 999px;
+              padding: 1px 7px;
+              margin-left: 6px;
+              font-size: 10px;
+              font-weight: 800;
+              text-transform: uppercase;
+            }
+            .chip.safe { background: #10251c; color: #7de2a0; border: 1px solid #1f7a46; }
+            .chip.destructive { background: #321820; color: #ffb4bd; border: 1px solid #9f2d3f; }
+            .chip.transport { background: #102039; color: #9bc2ff; border: 1px solid #2f7cf6; }
             code {
-              background: #eef2f7;
+              background: #1b2029;
               border-radius: 4px;
-              color: #111827;
+              color: #d9e0ea;
               padding: 1px 4px;
             }
-            .meta { color: #4b5563; margin-top: 8px; }
-            .warn { color: #b45309; font-weight: 700; }
-            .ok { color: #15803d; font-weight: 700; }
-            .error { color: #dc2626; font-weight: 700; }
+            .meta { color: #aeb7c6; margin-top: 8px; }
+            .warn { color: #ffd28a; font-weight: 700; }
+            .ok { color: #7de2a0; font-weight: 700; }
+            .error { color: #ffb4bd; font-weight: 700; }
             pre {
-              background: #111827;
+              background: #070a0f;
               border-radius: 6px;
               color: #f9fafb;
               padding: 10px;
@@ -2297,9 +2373,17 @@ class MainWindow(QMainWindow):
             tool = escape(str(action.get("tool", "")))
             desc = escape(str(action.get("description", "")))
             args = escape(_json_text(action.get("args", {})))
-            safety = " <span class='warn'>destructive</span>" if action.get("destructive") else ""
-            items.append(f"<li><code>{idx}. {tool}</code>{safety}<br>{desc}<br><code>{args}</code></li>")
-        return "<ul>" + "".join(items) + "</ul>"
+            transport = escape(str(action.get("transport") or action.get("address") or "osc"))
+            safety_class = "destructive" if action.get("destructive") else "safe"
+            safety_label = "Destructive" if action.get("destructive") else "Safe"
+            items.append(
+                "<div class='action-card'>"
+                f"<div class='action-title'>{idx}. <code>{tool}</code>"
+                f"<span class='chip {safety_class}'>{safety_label}</span>"
+                f"<span class='chip transport'>{transport}</span></div>"
+                f"<p>{desc}</p><code>{args}</code></div>"
+            )
+        return "<div class='action-grid'>" + "".join(items) + "</div>"
 
     def _execution_html(self, report: list, dry_run: bool) -> str:
         if not report:
@@ -2455,7 +2539,22 @@ class MainWindow(QMainWindow):
                 model = live.get("modelito_model", model)
             except Exception:
                 pass
-        self._current_model_lbl.setText(f"{provider} / {model}" if provider and model else "")
+        label = f"{provider} / {model}" if provider and model else ""
+        self._current_model_lbl.setText(label)
+        _set_chip(self._model_chip, f"Model {label}" if label else "Model not set", "ok" if label else "warn")
+        ableton_host = self._gui_cfg.get("ableton_host", "127.0.0.1")
+        ableton_port = self._gui_cfg.get("ableton_port", 11000)
+        _set_chip(self._osc_chip, f"OSC {ableton_host}:{ableton_port}", "neutral")
+
+    def _on_auto_approve_changed(self, checked: bool) -> None:
+        self._gui_cfg["auto_approve"] = checked
+        _save_gui_settings(self._gui_cfg)
+        state = "enabled" if checked else "disabled"
+        self._status_bar.showMessage(f"Auto-approve {state}.", 4000)
+        if checked and not self.dry_run.isChecked():
+            self._status_bar.showMessage(
+                "Auto-approve enabled for live execution. Review prompts carefully.", 6000
+            )
 
     def _install_edit_menu(self) -> None:
         edit_menu = self.menuBar().addMenu("Edit")
@@ -2558,6 +2657,11 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(
             f"Plan ready — {self._plan_action_count} action(s). Review and click Execute."
         )
+        if self.auto_approve.isChecked() and self._can_execute():
+            self._status_bar.showMessage(
+                "Plan ready — Auto-approve is on, executing immediately."
+            )
+            QTimer.singleShot(0, self.on_execute)
 
     # ── Execute ───────────────────────────────────────────────────────────────
 
@@ -2611,21 +2715,20 @@ class MainWindow(QMainWindow):
         self._stop_server_btn.setEnabled(running)
 
         if running:
-            self._server_status_lbl.setText(f"Server running at {self._server_url}")
-            self._server_status_lbl.setStyleSheet("font-size: 12px; color: #16a34a;")
+            _set_chip(self._server_status_lbl, f"Server {self._server_url}", "ok")
+            _set_chip(self._bridge_chip, "Bridge preflighted", "info")
         elif _ping(self._server_url):
-            self._server_status_lbl.setText(f"External server at {self._server_url}")
-            self._server_status_lbl.setStyleSheet("font-size: 12px; color: #2563eb;")
+            _set_chip(self._server_status_lbl, f"External {self._server_url}", "info")
+            _set_chip(self._bridge_chip, "Bridge via API", "info")
             self._start_server_btn.setEnabled(False)
             self._stop_server_btn.setEnabled(False)
         else:
-            self._server_status_lbl.setText("No server — using embedded mode")
-            self._server_status_lbl.setStyleSheet("font-size: 12px; color: #6b7280;")
+            _set_chip(self._server_status_lbl, "Embedded mode", "neutral")
+            _set_chip(self._bridge_chip, "Bridge preflighted", "neutral")
 
     def on_start_server(self) -> None:
         self._start_server_btn.setEnabled(False)
-        self._server_status_lbl.setText("Starting server…")
-        self._server_status_lbl.setStyleSheet("font-size: 12px; color: #d97706;")
+        _set_chip(self._server_status_lbl, "Starting server", "warn")
         backend_script = _PROJECT_ROOT / "backend" / "main.py"
         self._server_proc = subprocess.Popen(
             [sys.executable, str(backend_script)], cwd=str(_PROJECT_ROOT)
@@ -2642,8 +2745,7 @@ class MainWindow(QMainWindow):
         self._update_server_ui()
 
     def _on_server_failed(self, message: str) -> None:
-        self._server_status_lbl.setText(f"Server failed: {message}")
-        self._server_status_lbl.setStyleSheet("font-size: 12px; color: #dc2626;")
+        _set_chip(self._server_status_lbl, f"Server failed: {message}", "error")
         if self._server_proc and self._server_proc.poll() is None:
             self._server_proc.terminate()
         self._server_proc = None
@@ -2687,6 +2789,7 @@ class MainWindow(QMainWindow):
         self._update_server_ui()
         self._allow_destructive = bool(self._gui_cfg.get("allow_destructive", False))
         self.dry_run.setChecked(bool(self._gui_cfg.get("dry_run", True)))
+        self.auto_approve.setChecked(bool(self._gui_cfg.get("auto_approve", False)))
         self._update_model_badge()
 
 

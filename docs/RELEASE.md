@@ -8,8 +8,8 @@ How to create a release via GitHub (recommended):
    contain the intended version:
 
 ```bash
-git tag v0.6.7
-git push origin v0.6.7
+git tag v0.6.8
+git push origin v0.6.8
 ```
 
 2. The workflow `.github/workflows/release.yml` will run on tag push, build artifacts for multiple platforms, and create a GitHub Release attaching the built files.
@@ -41,15 +41,19 @@ Local install helpers:
 - The default local VST3 smoke bundle is named `LLM-r.vst3` and reports
   `Tomas Laurenzo` as its VST3 factory vendor. It is advertised as a minimal
   VST3 instrument with a native Cocoa editor view. The editor is self-contained:
-  it exposes provider/model settings, Chat and Raw JSON response tabs, explicit
-  Save/Cancel settings, Advanced Settings for API keys and Ollama status/model
-  control, prompt entry, plan review, dry-run, destructive-action approval, and
-  direct AbletonOSC plus Device Bridge execution.
+  it exposes provider/model settings, readiness chips for AbletonOSC and
+  LLMRDeviceBridge, Plan and Details response tabs, explicit Save/Cancel
+  settings, Advanced Settings for API keys and Ollama status/model control,
+  prompt entry, plan review, dry-run, auto-approve, destructive-action approval,
+  and direct AbletonOSC plus Device Bridge execution.
+- The primary release/install path should stay focused on the VST3 bundle plus
+  the bundled LLMRDeviceBridge Remote Script. Server, web UI, and PyQt GUI
+  artifacts are companion tools for advanced/headless workflows.
 - The PyQt desktop GUI exposes the same plan/review/execute workflow with
-  processed Chat, Actions, Execution, and Raw `.json` response tabs. Its main
-  Settings screen is intentionally limited to provider/model and execution
-  defaults; Advanced Settings owns API keys, Ollama controls, server connection,
-  AbletonOSC, and planner guidance.
+  Plan, Action Table, Run Log, and Details tabs, plus the same Auto-approve
+  option. Its main Settings screen is intentionally limited to provider/model
+  and execution defaults; Advanced Settings owns API keys, Ollama controls,
+  server connection, AbletonOSC, and planner guidance.
 
 Notes and caveats:
 

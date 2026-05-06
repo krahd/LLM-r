@@ -1,6 +1,9 @@
 # AGENTS.md
 
-Guidance for automated coding agents working in this repository.
+Canonical guidance for automated coding agents working in this repository.
+This file is the source of truth for Codex, Claude, GitHub Copilot, and other
+agents. Compatibility files may point back here, but these instructions must stay
+complete on their own.
 
 ## Project Shape
 
@@ -32,7 +35,9 @@ touched.
 - `native/vst3/llmr_vst3_plugin.cpp`: self-contained VST3 implementation.
 - `docs/` and `README.md`: user-facing documentation. Keep them synchronized
   with runtime behavior.
-- `REPORT.md`: latest audit summary and known next steps.
+- `STATUS.md`: latest project status, audit summary, validation notes, and known
+  next steps. Keep this file up to date whenever behavior, risk, validation, or
+  next steps change.
 
 ## Development Rules
 
@@ -48,6 +53,9 @@ touched.
   explicitly asks for remote access.
 - Keep generated build outputs out of git. `build/`, `dist/`, and
   `llm_r.egg-info/` are ignored.
+- Keep `STATUS.md` current as part of implementation work. If you close a risk,
+  add a feature, change validation coverage, or discover a new limitation, update
+  `STATUS.md` in the same change set.
 
 ## Versioning
 
@@ -67,7 +75,7 @@ behavior. For a general audit or release-facing change, run:
 
 ```bash
 python3 -m pytest -q
-PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile backend/device_server.py llmr/device_bridge.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py
+PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py llmr/osc_replies.py llmr/device_parameters.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py scripts/smoke_test_live_integration.py
 ./scripts/build_vst3.sh
 python3 -m build
 git diff --check
@@ -78,6 +86,8 @@ Notes:
 - `python3 -m build --no-isolation` can fail on local global packaging plugins;
   prefer normal isolated `python3 -m build`.
 - Native VST3 validation builds `build/vst3/LLM-r.vst3`.
+- Real Ableton smoke testing is documented in `docs/ABLETON_SMOKE_TEST.md` and
+  assisted by `scripts/smoke_test_live_integration.py`.
 - Real Ableton Live execution is not covered by unit tests. Call this out when
   relevant, especially for AbletonOSC, Device Bridge, or browser-loading work.
 
@@ -93,6 +103,7 @@ When capabilities change, update all affected docs:
 - `docs/SCENARIOS.md` for what the planner should or should not attempt
 - both prompt copies: `docs/LLM_ASSISTANT_PROMPT.md` and
   `llmr/LLM_ASSISTANT_PROMPT.md`
+- `STATUS.md` for current state, validation, residual risks, and next steps
 
 If a runtime field is exposed by `GET /api/capabilities`, make sure tests cover
 the Python registry and API serialization.

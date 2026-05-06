@@ -2,13 +2,16 @@
 
 ## Network exposure
 
-LLM-r is designed for local use. By default the API binds to `0.0.0.0` (all interfaces), which exposes it to any device on your network. Unless you have a specific reason, always set:
+LLM-r is designed for local use. By default the API binds to `127.0.0.1`, which
+keeps it on the local machine:
 
 ```bash
 export LLMR_HOST=127.0.0.1
 ```
 
-Never expose LLM-r directly to the public internet. If remote access is required, place it behind a reverse proxy (nginx, Caddy) with TLS and authentication.
+Setting `LLMR_HOST=0.0.0.0` exposes it to any device on your network. Never
+expose LLM-r directly to the public internet. If remote access is required,
+place it behind a reverse proxy (nginx, Caddy) with TLS and authentication.
 
 ## API authentication
 
@@ -62,6 +65,13 @@ chmod 600 ~/.llmr/gui.json
 ## OSC transport
 
 OSC messages are sent over unencrypted UDP. An attacker with network access to the Ableton host/port can send arbitrary OSC commands to Ableton Live. Keep `LLMR_ABLETON_HOST=127.0.0.1` (the default) to restrict OSC to loopback only.
+
+## OSC reply listener
+
+When enabled, LLM-r listens for AbletonOSC replies on
+`LLMR_OSC_REPLY_HOST:LLMR_OSC_REPLY_PORT` (`127.0.0.1:11001` by default) and
+uses recognized replies to update the live-state cache. Keep this listener bound
+to loopback unless remote OSC reply traffic is deliberate.
 
 ## Device Bridge transport
 

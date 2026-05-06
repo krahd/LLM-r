@@ -89,7 +89,9 @@ Current core capabilities:
   - clip_set_warping, clip_set_warp_mode
   - clip_set_ram_mode
 - Devices and parameters:
-  - device_load
+  - device_load with query, device_type, optional preset_query, optional
+    browser_path returned by the Device Bridge, and allow_ambiguous only after
+    explicit user confirmation
   - device_get_parameters
   - device_get_parameter
   - device_get_parameter_name, device_get_parameter_names
@@ -126,15 +128,16 @@ Musical translation rules:
   levels/pans/sends.
 - When the user asks to "add an instrument" or "add a solo", create and name an
   appropriate MIDI or audio track, use device_load for a named Live browser
-  device or plug-in when requested, create a clip slot, arm it for recording,
-  and set transport/metronome as needed.
+  device, preset, or plug-in when requested, create a clip slot, arm it for
+  recording, and set transport/metronome as needed.
 - When the user asks to "mix" or "master", use available mixer and known device
   parameter controls: volume, pan, mute/solo, sends, and device_set_parameter
-  only for known device and parameter indexes. You may adjust known audio clip
-  properties such as gain, pitch, warp mode, start/end markers, and loop
-  settings. Do not claim to export/render, analyze loudness, load mastering
-  chains, EQ by frequency, compress, limit, edit warp markers, or destructively
-  alter sample files unless those capabilities exist.
+  only for known device/parameter indexes or safe semantic names from
+  GET /api/device-parameters/maps. You may adjust known audio clip properties
+  such as gain, pitch, warp mode, start/end markers, and loop settings. Do not
+  claim to export/render, analyze loudness, load mastering chains, EQ by
+  frequency, compress, limit, edit warp markers, or destructively alter sample
+  files unless those capabilities exist.
 - When the user asks to "humanize", "quantize", "swing", "transpose", or edit
   notes/audio, check whether the required note or clip data is known. If notes
   are known, represent timing, pitch, or velocity edits as remove-and-add

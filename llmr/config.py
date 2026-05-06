@@ -55,6 +55,9 @@ class Settings(BaseModel):
     device_bridge_enabled: bool
     device_bridge_host: str
     device_bridge_port: int
+    osc_reply_enabled: bool
+    osc_reply_host: str
+    osc_reply_port: int
 
     def save(self) -> None:
         """Persist runtime-editable settings to disk."""
@@ -72,6 +75,9 @@ class Settings(BaseModel):
                     "device_bridge_enabled": self.device_bridge_enabled,
                     "device_bridge_host": self.device_bridge_host,
                     "device_bridge_port": self.device_bridge_port,
+                    "osc_reply_enabled": self.osc_reply_enabled,
+                    "osc_reply_host": self.osc_reply_host,
+                    "osc_reply_port": self.osc_reply_port,
                 },
                 indent=2,
             )
@@ -93,7 +99,7 @@ settings = Settings(
         "planner_extra_prompt_path",
         str(DEFAULT_PLANNER_EXTRA_PROMPT_PATH),
     ),
-    app_host=os.getenv("LLMR_HOST", "0.0.0.0"),
+    app_host=os.getenv("LLMR_HOST", "127.0.0.1"),
     app_port=int(os.getenv("LLMR_PORT", "8787")),
     plan_store_path=os.getenv("LLMR_PLAN_STORE_PATH", ".llmr/plans.json"),
     macro_store_path=os.getenv("LLMR_MACRO_STORE_PATH", ".llmr/macros.json"),
@@ -112,4 +118,7 @@ settings = Settings(
             _resolve("LLMR_EMBED_BACKEND_PORT", "embed_backend_port", 8788),
         )
     ),
+    osc_reply_enabled=_resolve_bool("LLMR_OSC_REPLY_ENABLED", "osc_reply_enabled", True),
+    osc_reply_host=_resolve("LLMR_OSC_REPLY_HOST", "osc_reply_host", "127.0.0.1"),
+    osc_reply_port=int(_resolve("LLMR_OSC_REPLY_PORT", "osc_reply_port", 11001)),
 )

@@ -7,6 +7,8 @@ an Ableton Control Surface slot.
 This repository maps tools to OSC addresses; exact support can vary by AbletonOSC version.
 Use `GET /api/capabilities` in your deployed environment as the current runtime
 contract for executable tools.
+Use `GET /api/device-bridge/status` and `GET /api/osc-replies/status` to check
+the optional runtime support services.
 
 The current MIDI note and audio clip property tools are mapped to AbletonOSC's
 Clip API in the upstream `master` branch. `device_load` is mapped to the

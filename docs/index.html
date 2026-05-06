@@ -71,10 +71,13 @@
 
     /* HERO */
     .hero {
-      max-width: 860px;
+      max-width: 1180px;
       margin: 0 auto;
-      padding: 7rem 2rem 5rem;
-      text-align: center;
+      padding: 5rem 2rem 3rem;
+      display: grid;
+      grid-template-columns: minmax(320px, .78fr) minmax(420px, 1fr);
+      gap: 2rem;
+      align-items: center;
     }
     .badge {
       display: inline-block;
@@ -101,9 +104,17 @@
       font-size: 1.18rem;
       color: var(--muted);
       max-width: 640px;
-      margin: 0 auto 2.5rem;
+      margin: 0 0 2rem;
     }
-    .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .product-shot {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--code-bg);
+    }
+    .product-shot img { display: block; width: 100%; height: auto; }
     .btn-primary {
       background: var(--green);
       color: #021a0a;
@@ -321,10 +332,10 @@
     footer .footer-links { display: flex; gap: 1.5rem; justify-content: center; margin-top: .6rem; flex-wrap: wrap; }
 
     /* RESPONSIVE */
-    @media (max-width: 640px) {
+    @media (max-width: 900px) {
       nav { padding: .65rem 1rem; }
       .nav-links { display: none; }
-      .hero { padding: 4rem 1.2rem 3rem; }
+      .hero { padding: 3rem 1.2rem 2rem; grid-template-columns: 1fr; }
       section { padding: 3.5rem 1.2rem; }
       .arch { padding: 0 1.2rem; margin-bottom: 4rem; }
     }
@@ -346,12 +357,17 @@
 
 <!-- HERO -->
 <div class="hero">
-  <div class="badge">Pre-release · v0.6 · MIT License</div>
-  <h1>AI assistant <span>inside</span><br>Ableton Live</h1>
-  <p>LLM-r is a self-contained VST3 plug-in. Load it in any track, type what you want, and it plans AbletonOSC actions plus optional Device Bridge loads — all from a chat interface built right into the plug-in editor.</p>
-  <div class="hero-actions">
-    <a class="btn-primary" href="https://github.com/krahd/LLM-r">Get started</a>
-    <a class="btn-secondary" href="#quickstart">See how it works</a>
+  <div>
+    <div class="badge">Pre-release · v0.6 · MIT License</div>
+    <h1>AI assistant <span>inside</span><br>Ableton Live</h1>
+    <p>LLM-r is a self-contained VST3 plug-in. Load it in any track, type what you want, and review a safe Ableton operation plan before it touches your Live set.</p>
+    <div class="hero-actions">
+      <a class="btn-primary" href="https://github.com/krahd/LLM-r">Get started</a>
+      <a class="btn-secondary" href="#quickstart">See how it works</a>
+    </div>
+  </div>
+  <div class="product-shot">
+    <img src="screenshots/ui-screenshot.svg" alt="LLM-r Plan Board interface" />
   </div>
 </div>
 
@@ -401,7 +417,7 @@
     <div class="card">
       <div class="card-icon icon-blue">LS</div>
       <h3>Live state introspection</h3>
-      <p>Inspect the optimistic live-state cache, including clips and notes created through LLM-r, to build context-aware LLM prompts.</p>
+      <p>Inspect live-state context, including clips and notes created through LLM-r plus recognized AbletonOSC replies.</p>
     </div>
     <div class="card">
       <div class="card-icon icon-purple">SSE</div>
@@ -541,7 +557,7 @@ curl -s -X POST http://127.0.0.1:<span class="num">8787</span>/api/plan \
         <tr><td>midi_notes_remove / midi_notes_clear</td><td><span class="tag tag-green">midi</span></td><td><span class="tag tag-red">yes</span></td><td>track_index, clip_index, optional range</td></tr>
         <tr><td>clip_set_gain / clip_set_pitch_*</td><td><span class="tag tag-blue">audio</span></td><td></td><td>track_index, clip_index, value</td></tr>
         <tr><td>clip_set_warping / clip_set_warp_mode</td><td><span class="tag tag-blue">audio</span></td><td></td><td>track_index, clip_index, value</td></tr>
-        <tr><td>device_load</td><td><span class="tag tag-blue">devices</span></td><td></td><td>track_index, query, device_type</td></tr>
+        <tr><td>device_load</td><td><span class="tag tag-blue">devices</span></td><td></td><td>track_index, query, device_type, preset/path</td></tr>
         <tr><td>device_get_* / device_set_*</td><td><span class="tag tag-blue">devices</span></td><td></td><td>track_index, device_index, parameter index</td></tr>
         <tr><td>device_delete</td><td><span class="tag tag-blue">devices</span></td><td><span class="tag tag-red">yes</span></td><td>track_index, device_index</td></tr>
         <tr><td>utility_undo / utility_redo</td><td><span class="tag tag-green">utility</span></td><td></td><td>-</td></tr>

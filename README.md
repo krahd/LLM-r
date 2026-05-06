@@ -86,9 +86,10 @@ bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
 ```
 
 Open the `LLM-r` plug-in window in Ableton Live. The plug-in GUI includes LLM
-provider/model selection, Chat and Raw JSON response tabs, explicit Save/Cancel
-settings, Advanced Settings for API keys and Ollama, prompt, dry-run,
-destructive-action approval, plan, and execute controls.
+provider/model selection, readiness chips, a Plan Board, Details output,
+explicit Save/Cancel settings, Advanced Settings for API keys and Ollama,
+prompt, dry-run, Auto-approve, destructive-action approval, plan, and execute
+controls.
 
 #### Option B — Desktop GUI (optional)
 
@@ -171,20 +172,23 @@ Settings are read from environment variables, then from `.llmr/settings.json` (w
 | `LLMR_MODEL` | `gpt-4.1-mini` | Model name for the selected provider |
 | `LLMR_PLANNER_EXTRA_PROMPT_ENABLED` | `true` | Whether to append the optional LLM assistant prompt to the planner prompt |
 | `LLMR_PLANNER_EXTRA_PROMPT_PATH` | `docs/LLM_ASSISTANT_PROMPT.md` | Optional file appended to the LLM-r planner prompt |
-| `LLMR_HOST` | `0.0.0.0` | Interface the API server binds to |
+| `LLMR_HOST` | `127.0.0.1` | Interface the API server binds to |
 | `LLMR_PORT` | `8787` | Port the API server listens on |
 | `LLMR_ABLETON_HOST` | `127.0.0.1` | AbletonOSC host |
 | `LLMR_ABLETON_PORT` | `11000` | AbletonOSC port |
 | `LLMR_DEVICE_BRIDGE_ENABLED` | `true` | Whether `device_load` calls are allowed |
 | `LLMR_DEVICE_BRIDGE_HOST` | `127.0.0.1` | LLMRDeviceBridge host |
 | `LLMR_DEVICE_BRIDGE_PORT` | `8788` | LLMRDeviceBridge port |
+| `LLMR_OSC_REPLY_ENABLED` | `true` | Start the AbletonOSC reply listener for live-state reconciliation |
+| `LLMR_OSC_REPLY_HOST` | `127.0.0.1` | OSC reply listener bind host |
+| `LLMR_OSC_REPLY_PORT` | `11001` | OSC reply listener port |
 | `LLMR_PLAN_STORE_PATH` | `.llmr/plans.json` | Persistent plan storage |
 | `LLMR_MACRO_STORE_PATH` | `.llmr/macros.json` | Persistent macro storage |
 | `LLMR_SESSION_STORE_PATH` | `.llmr/sessions.json` | Persistent session storage |
 | `LLMR_SETTINGS_PATH` | `.llmr/settings.json` | Runtime settings file |
 | `LLMR_API_TOKEN` | *(unset)* | Bearer token to protect write endpoints |
 
-> **Security:** `LLMR_HOST=0.0.0.0` exposes the API on all network interfaces. Set `LLMR_HOST=127.0.0.1` when running locally. See [docs/SECURITY.md](docs/SECURITY.md).
+> **Security:** Keep `LLMR_HOST=127.0.0.1` for local use. Setting `LLMR_HOST=0.0.0.0` exposes the API on all network interfaces. See [docs/SECURITY.md](docs/SECURITY.md).
 
 ---
 
@@ -200,6 +204,13 @@ Settings are read from environment variables, then from `.llmr/settings.json` (w
 | `PATCH` | `/api/settings` | Update runtime settings and persist to disk |
 | `GET` | `/api/models` | Available models from Modelito |
 | `GET` | `/api/model_metadata` | Metadata for the active model |
+| `GET` | `/api/device-bridge/status` | LLMRDeviceBridge reachability |
+| `GET` | `/api/device-bridge/devices` | Browse Device Bridge candidates by `query` and `device_type` |
+| `POST` | `/api/device-bridge/resolve` | Validate the exact `device_load` candidate, preset, or confirmed browser path without mutating Live |
+| `GET` | `/api/device-parameters/maps` | Safe semantic device parameter mappings |
+| `GET` | `/api/osc-replies/status` | OSC reply listener status |
+| `GET` | `/api/osc-replies/recent` | Recent OSC replies applied to live state |
+| `POST` | `/api/live/refresh` | Request AbletonOSC readback; recognized replies update live state |
 
 ### Planning & Execution
 
@@ -321,7 +332,7 @@ require the desktop GUI or FastAPI server for normal use. The plug-in stores its
 own runtime settings in macOS user defaults and can:
 
 - choose provider/model/endpoint and API key
-- switch between Chat and Raw JSON response tabs
+- switch between Plan and Details response tabs
 - copy/select text from the response panel
 - keep provider/model on the basic settings screen while API keys, AbletonOSC,
   and Ollama controls live under Advanced Settings
@@ -331,6 +342,7 @@ own runtime settings in macOS user defaults and can:
 - send the built-in LLM-r tool catalog and optional guidance to the LLM
 - parse the returned JSON plan
 - dry-run or execute the resulting AbletonOSC and Device Bridge actions
+- auto-approve plans after planning while respecting the dry-run default
 - block destructive actions unless explicitly allowed
 
 ## Desktop GUI
@@ -346,10 +358,10 @@ python gui/pyqt_app.py
 
 A **Settings** dialog (accessible from the toolbar) lets you configure everything at runtime:
 
-- Main Settings: LLM provider, model, dry-run default, and destructive-execution default
+- Main Settings: LLM provider, model, dry-run default, Auto-approve, and destructive-execution default
 - Advanced Settings: provider API keys, assistant prompt guidance, Ableton OSC host/port, server URL, and API token
 - Advanced Settings → Ollama: status, start/stop service, installed model picker, served model stop, downloadable-model picker, download, serve, and delete
-- Response tabs: Chat for the processed plan/result, Actions for parsed tool calls, Execution for execution reports, and Raw `.json` for the complete payload plus parsed `llm_raw` when available
+- Response tabs: Plan for action cards, Action Table for parsed tool calls, Run Log for execution reports, and Details for the complete payload plus parsed `llm_raw` when available
 - Open Help opens the GitHub user manual from the toolbar
 
 GUI connection settings are persisted to `~/.llmr/gui.json`. Runtime settings are
@@ -401,6 +413,7 @@ See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
 | Document | Description |
 | --- | --- |
 | [docs/CAPABILITIES.md](docs/CAPABILITIES.md) | Full capability catalog |
+| [docs/ABLETON_SMOKE_TEST.md](docs/ABLETON_SMOKE_TEST.md) | Real AbletonOSC + Device Bridge smoke-test checklist |
 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | Current AbletonOSC runtime contract notes |
 | [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) | Current pre-release audit and roadmap |
 | [docs/USER_MANUAL.md](docs/USER_MANUAL.md) | User-facing guide for the VST3 workflow |

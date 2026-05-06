@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from llmr.device_parameters import resolve_parameter
 from llmr.schemas import Capability, ToolName
 
 try:
@@ -52,6 +53,10 @@ def _float_arg(args: dict[str, Any], key: str, default: float) -> float:
 
 def _bool_int_arg(args: dict[str, Any], key: str, default: bool) -> int:
     return int(bool(args.get(key, default)))
+
+
+def _truthy(value: Any) -> bool:
+    return value is True or str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _string_arg(args: dict[str, Any], key: str) -> str:
@@ -324,20 +329,32 @@ def _build_device_set_parameters(args: dict[str, Any]) -> list[Any]:
     values = args.get("values")
     if not isinstance(values, list) or not values:
         raise ValueError("'values' must be a non-empty list")
-    return [_int_arg(args, "track_index", 0), _int_arg(args, "device_index", 0), *[float(v) for v in values]]
+    normalized_values = [
+        _bounded_float(value, f"values[{index}]", 0.0, 1.0)
+        for index, value in enumerate(values)
+    ]
+    return [_int_arg(args, "track_index", 0), _int_arg(args, "device_index", 0), *normalized_values]
 
 
 def _build_device_set_parameter(args: dict[str, Any]) -> list[Any]:
     track_index = _int_arg(args, "track_index", 0)
     device_index = _int_arg(args, "device_index", 0)
-    parameter_index = _int_arg(args, "parameter_index", 0)
-    value = _float_arg(args, "value", 0.0)
+    if "parameter_name" in args:
+        device_name = _string_arg(args, "device_name")
+        parameter = resolve_parameter(device_name, _string_arg(args, "parameter_name"))
+        parameter_index = int(parameter["index"])
+    else:
+        parameter_index = _int_arg(args, "parameter_index", 0)
+    if device_index < 0 or parameter_index < 0:
+        raise ValueError("'device_index' and 'parameter_index' must be >= 0")
+    value = _bounded_float(args.get("value", 0.0), "value", 0.0, 1.0)
     return [track_index, device_index, parameter_index, value]
 
 
 def _build_device_load(args: dict[str, Any]) -> list[Any]:
     query = str(args.get("query") or args.get("device_name") or "").strip()
-    if not query:
+    browser_path = args.get("browser_path") or args.get("path")
+    if not query and not browser_path:
         raise ValueError("'query' is required")
     device_type = str(args.get("device_type") or "instrument").strip().lower()
     aliases = {
@@ -363,7 +380,21 @@ def _build_device_load(args: dict[str, Any]) -> list[Any]:
             "'device_type' must be one of instrument, audio_effect, midi_effect, "
             "plugin, drum, or all"
         )
-    return [_int_arg(args, "track_index", 0), query, normalized]
+    action_args: list[Any] = [_int_arg(args, "track_index", 0), query, normalized]
+    options: dict[str, Any] = {}
+    preset_query = str(args.get("preset_query") or args.get("preset") or "").strip()
+    if preset_query:
+        options["preset_query"] = preset_query
+    if browser_path:
+        if isinstance(browser_path, list):
+            options["browser_path"] = [str(segment) for segment in browser_path]
+        else:
+            options["browser_path"] = str(browser_path)
+    if _truthy(args.get("allow_ambiguous", False)):
+        options["allow_ambiguous"] = True
+    if options:
+        action_args.append(options)
+    return action_args
 
 
 def _build_device_delete(args: dict[str, Any]) -> list[Any]:
@@ -894,6 +925,9 @@ _TOOL_SPECS: dict[ToolName, ToolSpec] = {
             "track_index": "int",
             "query": "device, preset, or plug-in name",
             "device_type": "instrument|audio_effect|midi_effect|plugin|drum|all optional",
+            "preset_query": "optional preset name scoped under query",
+            "browser_path": "optional exact candidate path returned by Device Bridge",
+            "allow_ambiguous": "optional bool; only true after explicit user confirmation",
         },
         args_builder=_build_device_load,
         domain="devices",
@@ -914,8 +948,10 @@ _TOOL_SPECS: dict[ToolName, ToolSpec] = {
         args_schema={
             "track_index": "int",
             "device_index": "int",
-            "parameter_index": "int",
-            "value": "float",
+            "parameter_index": "int >= 0 or device_name + parameter_name",
+            "device_name": "string optional when using parameter_name",
+            "parameter_name": "safe semantic name optional",
+            "value": "0..1",
         },
         args_builder=_build_device_set_parameter,
         domain="parameters",
@@ -957,6 +993,9 @@ class AbletonOSCClient:
         if action.transport != "osc":
             raise RuntimeError(f"Action '{action.tool.value}' is not an OSC action")
         self._udp.send_message(action.address, action.args)
+
+    def send_raw(self, address: str, args: list[Any] | None = None) -> None:
+        self._udp.send_message(address, args or [])
 
     def to_action(self, tool: ToolName, args: dict[str, Any]) -> AbletonAction:
         spec = _TOOL_SPECS.get(tool)

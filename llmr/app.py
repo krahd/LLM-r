@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,6 +16,13 @@ from pathlib import Path
 from llmr import __version__
 from llmr.ableton_osc import AbletonOSCClient, capabilities
 from llmr.config import settings
+from llmr.device_bridge import (
+    DeviceBridgeError,
+    health as device_bridge_health,
+    list_devices as device_bridge_list_devices,
+    resolve_device as device_bridge_resolve_device,
+)
+from llmr.device_parameters import parameter_maps
 from llmr.executor import execute_actions as _run_actions
 from llmr.macros import (
     delete_runtime_macro,
@@ -40,6 +48,7 @@ from llmr.modelito_adapter import (
 )
 from llmr.planner import IntentPlanner, PlanStore
 from llmr.prompts import planner_extra_prompt
+from llmr.osc_replies import OscReplyListener
 from llmr.schemas import PlannedToolCall, ToolName
 from llmr.sessions import SessionStore
 
@@ -90,6 +99,9 @@ class SettingsPatch(BaseModel):
     device_bridge_enabled: bool | None = None
     device_bridge_host: str | None = None
     device_bridge_port: int | None = None
+    osc_reply_enabled: bool | None = None
+    osc_reply_host: str | None = None
+    osc_reply_port: int | None = None
     api_token: str | None = None
 
 
@@ -97,7 +109,21 @@ class OllamaModelRequest(BaseModel):
     model: str = Field(min_length=1, max_length=256)
 
 
-app = FastAPI(title="LLM-r", version=__version__)
+class LiveRefreshRequest(BaseModel):
+    track_index: int | None = Field(default=None, ge=0)
+    clip_index: int | None = Field(default=None, ge=0)
+    device_index: int | None = Field(default=None, ge=0)
+
+
+class DeviceBridgeResolveRequest(BaseModel):
+    track_index: int = Field(default=0, ge=0)
+    query: str = ""
+    device_type: str = "instrument"
+    preset_query: str | None = None
+    browser_path: list[str] | str | None = None
+    allow_ambiguous: bool = False
+
+
 store = PlanStore(persist_path=settings.plan_store_path)
 init_macro_store(settings.macro_store_path)
 session_store = SessionStore(persist_path=settings.session_store_path)
@@ -116,6 +142,25 @@ _live_state: dict[str, Any] = {
     "tracks": [],
     "scenes": [],
 }
+_osc_reply_events: list[dict[str, Any]] = []
+_osc_reply_listener: OscReplyListener | None = None
+_MAX_OSC_REPLY_EVENTS = 200
+
+
+def _ensure_device(track: dict[str, Any], device_index: int) -> dict[str, Any]:
+    while len(track["devices"]) <= device_index:
+        track["devices"].append(
+            {
+                "device_index": len(track["devices"]),
+                "name": "Device",
+                "parameters": {},
+                "parameter_names": {},
+            }
+        )
+    device = track["devices"][device_index]
+    device.setdefault("parameters", {})
+    device.setdefault("parameter_names", {})
+    return device
 
 
 def _ensure_track(track_index: int) -> dict[str, Any]:
@@ -178,6 +223,115 @@ def _ensure_clip(track_index: int, clip_index: int, length_beats: float = 4.0) -
         idx = len(track["clips"])
         track["clips"].append(_new_clip(idx, length_beats=4.0))
     return track["clips"][clip_index]
+
+
+def _reply_bool(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _record_osc_reply(address: str, args: list[Any]) -> None:
+    event = {
+        "address": address,
+        "args": args,
+        "received_at": datetime.now(timezone.utc).isoformat(),
+        "applied": False,
+    }
+    try:
+        event["applied"] = _apply_osc_reply_to_live_state(address, args)
+    except Exception as exc:
+        event["apply_error"] = str(exc)
+    _osc_reply_events.append(event)
+    if len(_osc_reply_events) > _MAX_OSC_REPLY_EVENTS:
+        del _osc_reply_events[:-_MAX_OSC_REPLY_EVENTS]
+
+
+def _apply_osc_reply_to_live_state(address: str, args: list[Any]) -> bool:
+    if not args:
+        return False
+
+    normalized = address.lower()
+    song = _live_state["song"]
+
+    if "tempo" in normalized:
+        song["tempo"] = float(args[-1])
+        return True
+    if "is_playing" in normalized or normalized.endswith("/playing"):
+        song["is_playing"] = _reply_bool(args[-1])
+        return True
+    if "session_record" in normalized or normalized.endswith("/record"):
+        song["session_record"] = _reply_bool(args[-1])
+        return True
+    if "metronome" in normalized:
+        song["metronome"] = _reply_bool(args[-1])
+        return True
+    if "signature_numerator" in normalized:
+        song["time_signature"]["numerator"] = int(args[-1])
+        return True
+    if "signature_denominator" in normalized:
+        song["time_signature"]["denominator"] = int(args[-1])
+        return True
+    if "clip_trigger_quantization" in normalized or "global_quantization" in normalized:
+        song["global_quantization"] = int(args[-1])
+        return True
+    if "count_in" in normalized:
+        song["count_in"] = int(args[-1])
+        return True
+
+    if "/live/track" in normalized and len(args) >= 2:
+        track = _ensure_track(int(args[0]))
+        value = args[-1]
+        if "name" in normalized:
+            track["name"] = str(value)
+            return True
+        if "volume" in normalized:
+            track["volume"] = float(value)
+            return True
+        if "panning" in normalized or normalized.endswith("/pan"):
+            track["pan"] = float(value)
+            return True
+        if "mute" in normalized:
+            track["mute"] = _reply_bool(value)
+            return True
+        if "solo" in normalized:
+            track["solo"] = _reply_bool(value)
+            return True
+        if "arm" in normalized:
+            track["arm"] = _reply_bool(value)
+            return True
+
+    if "/live/device" in normalized and len(args) >= 4:
+        track = _ensure_track(int(args[0]))
+        device = _ensure_device(track, int(args[1]))
+        parameter_index = int(args[2])
+        if "parameter/name" in normalized:
+            device["parameter_names"][parameter_index] = str(args[3])
+            return True
+        if "parameter/value" in normalized:
+            device["parameters"][parameter_index] = float(args[3])
+            return True
+
+    if "/live/clip/get/notes" in normalized and len(args) >= 2:
+        clip = _ensure_clip(int(args[0]), int(args[1]))
+        notes = []
+        for offset in range(2, len(args), 5):
+            if offset + 4 >= len(args):
+                break
+            pitch, start_time, duration, velocity, mute = args[offset:offset + 5]
+            notes.append(
+                {
+                    "pitch": int(pitch),
+                    "start_time": float(start_time),
+                    "duration": float(duration),
+                    "velocity": float(velocity),
+                    "mute": _reply_bool(mute),
+                }
+            )
+        clip["notes"] = notes
+        return True
+
+    return False
 
 
 def _apply_action_to_live_state(action) -> None:
@@ -368,9 +522,8 @@ def _apply_action_to_live_state(action) -> None:
     elif tool == "device_set_parameter":
         track = _ensure_track(int(args[0]))
         device_index = int(args[1])
-        while len(track["devices"]) <= device_index:
-            track["devices"].append({"device_index": len(track["devices"]), "name": "Device", "parameters": {}})
-        track["devices"][device_index]["parameters"][int(args[2])] = float(args[3])
+        device = _ensure_device(track, device_index)
+        device["parameters"][int(args[2])] = float(args[3])
     elif tool == "device_load":
         track = _ensure_track(int(args[0]))
         device = {
@@ -378,15 +531,15 @@ def _apply_action_to_live_state(action) -> None:
             "name": str(args[1]),
             "type": str(args[2]) if len(args) > 2 else "all",
             "parameters": {},
+            "parameter_names": {},
         }
         track["devices"].append(device)
     elif tool == "device_set_parameters":
         track = _ensure_track(int(args[0]))
         device_index = int(args[1])
-        while len(track["devices"]) <= device_index:
-            track["devices"].append({"device_index": len(track["devices"]), "name": "Device", "parameters": {}})
+        device = _ensure_device(track, device_index)
         for parameter_index, value in enumerate(args[2:]):
-            track["devices"][device_index]["parameters"][parameter_index] = float(value)
+            device["parameters"][parameter_index] = float(value)
     elif tool == "device_delete":
         track = _ensure_track(int(args[0]))
         device_index = int(args[1])
@@ -451,6 +604,36 @@ def _raise_api_error(
         status_code=status_code,
         detail={"code": code, "message": message, "diagnostics": diagnostics or {}},
     )
+
+
+def _start_osc_reply_listener() -> None:
+    global _osc_reply_listener
+    if not settings.osc_reply_enabled:
+        return
+    if _osc_reply_listener is None:
+        _osc_reply_listener = OscReplyListener(
+            settings.osc_reply_host,
+            settings.osc_reply_port,
+            _record_osc_reply,
+        )
+    _osc_reply_listener.start()
+
+
+def _stop_osc_reply_listener() -> None:
+    if _osc_reply_listener is not None:
+        _osc_reply_listener.stop()
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    _start_osc_reply_listener()
+    try:
+        yield
+    finally:
+        _stop_osc_reply_listener()
+
+
+app = FastAPI(title="LLM-r", version=__version__, lifespan=_lifespan)
 
 
 @app.middleware("http")
@@ -550,6 +733,152 @@ def health() -> dict[str, str]:
     return {"status": "ok", "version": __version__}
 
 
+@app.get("/api/device-bridge/status")
+def get_device_bridge_status() -> dict:
+    payload = device_bridge_health(
+        host=settings.device_bridge_host,
+        port=settings.device_bridge_port,
+    )
+    payload["enabled"] = settings.device_bridge_enabled
+    return payload
+
+
+@app.get("/api/device-bridge/devices")
+def get_device_bridge_devices(query: str = "", device_type: str = "all") -> dict:
+    if not settings.device_bridge_enabled:
+        _raise_api_error(
+            status_code=503,
+            code="device_bridge_disabled",
+            message="Device Bridge is disabled",
+        )
+    try:
+        payload = device_bridge_list_devices(
+            host=settings.device_bridge_host,
+            port=settings.device_bridge_port,
+            query=query,
+            device_type=device_type,
+        )
+    except DeviceBridgeError as exc:
+        _raise_api_error(status_code=502, code="device_bridge_unavailable", message=str(exc))
+    return payload
+
+
+@app.post("/api/device-bridge/resolve")
+def resolve_device_bridge_candidate(req: DeviceBridgeResolveRequest) -> dict:
+    if not settings.device_bridge_enabled:
+        _raise_api_error(
+            status_code=503,
+            code="device_bridge_disabled",
+            message="Device Bridge is disabled",
+        )
+    try:
+        return device_bridge_resolve_device(
+            host=settings.device_bridge_host,
+            port=settings.device_bridge_port,
+            track_index=req.track_index,
+            query=req.query,
+            device_type=req.device_type,
+            preset_query=req.preset_query,
+            browser_path=req.browser_path,
+            allow_ambiguous=req.allow_ambiguous,
+        )
+    except DeviceBridgeError as exc:
+        message = str(exc)
+        if "HTTP 409" in message:
+            status_code = 409
+            code = "device_bridge_ambiguous"
+        elif "HTTP 404" in message:
+            status_code = 404
+            code = "device_bridge_no_candidate"
+        else:
+            status_code = 502
+            code = "device_bridge_unavailable"
+        _raise_api_error(status_code=status_code, code=code, message=message)
+
+
+@app.get("/api/device-parameters/maps")
+def get_device_parameter_maps() -> dict:
+    return parameter_maps()
+
+
+@app.get("/api/osc-replies/status")
+def get_osc_reply_status() -> dict:
+    listener_status = (
+        _osc_reply_listener.status()
+        if _osc_reply_listener is not None
+        else {
+            "enabled": settings.osc_reply_enabled,
+            "listening": False,
+            "host": settings.osc_reply_host,
+            "port": settings.osc_reply_port,
+            "started_at": None,
+            "error": None,
+        }
+    )
+    listener_status["recent_count"] = len(_osc_reply_events)
+    return listener_status
+
+
+@app.get("/api/osc-replies/recent")
+def get_recent_osc_replies(limit: int = 50) -> dict:
+    limit = min(max(limit, 1), _MAX_OSC_REPLY_EVENTS)
+    rows = _osc_reply_events[-limit:]
+    return {"replies": rows, "count": len(rows)}
+
+
+@app.post("/api/live/refresh")
+def refresh_live_state(req: LiveRefreshRequest | None = None) -> dict:
+    refresh = req or LiveRefreshRequest()
+    client = AbletonOSCClient(settings.ableton_host, settings.ableton_port)
+    requested: list[dict[str, Any]] = []
+
+    def request(address: str, args: list[Any] | None = None) -> None:
+        payload = args or []
+        client.send_raw(address, payload)
+        requested.append({"address": address, "args": payload})
+
+    for address in (
+        "/live/song/get/tempo",
+        "/live/song/get/is_playing",
+        "/live/song/get/session_record",
+        "/live/song/get/metronome",
+        "/live/song/get/signature_numerator",
+        "/live/song/get/signature_denominator",
+        "/live/song/get/clip_trigger_quantization",
+        "/live/song/get/count_in_duration",
+    ):
+        request(address)
+
+    if refresh.track_index is not None:
+        track_args = [refresh.track_index]
+        for address in (
+            "/live/track/get/name",
+            "/live/track/get/volume",
+            "/live/track/get/panning",
+            "/live/track/get/mute",
+            "/live/track/get/solo",
+            "/live/track/get/arm",
+        ):
+            request(address, track_args)
+
+    if refresh.track_index is not None and refresh.device_index is not None:
+        device_args = [refresh.track_index, refresh.device_index]
+        for address in (
+            "/live/device/get/parameters/name",
+            "/live/device/get/parameters/value",
+        ):
+            request(address, device_args)
+
+    if refresh.track_index is not None and refresh.clip_index is not None:
+        request("/live/clip/get/notes", [refresh.track_index, refresh.clip_index])
+
+    return {
+        "requested": requested,
+        "count": len(requested),
+        "osc_reply_listener": get_osc_reply_status(),
+    }
+
+
 _WEB_ROOT = Path(__file__).parent.parent / "web"
 
 
@@ -619,7 +948,12 @@ def get_live_track_parameters(track_id: int) -> dict:
         _raise_api_error(status_code=404, code="track_not_found", message="Track not found")
     devices = _live_state["tracks"][track_id]["devices"]
     flattened = [
-        {"device_index": device["device_index"], "parameter_index": p_idx, "value": value}
+        {
+            "device_index": device["device_index"],
+            "parameter_index": p_idx,
+            "name": device.get("parameter_names", {}).get(p_idx),
+            "value": value,
+        }
         for device in devices
         for p_idx, value in device.get("parameters", {}).items()
     ]
@@ -638,6 +972,9 @@ def get_settings() -> dict:
         "device_bridge_enabled": settings.device_bridge_enabled,
         "device_bridge_host": settings.device_bridge_host,
         "device_bridge_port": settings.device_bridge_port,
+        "osc_reply_enabled": settings.osc_reply_enabled,
+        "osc_reply_host": settings.osc_reply_host,
+        "osc_reply_port": settings.osc_reply_port,
     }
 
 
@@ -661,6 +998,12 @@ def update_settings(req: SettingsPatch) -> dict:
         settings.device_bridge_host = req.device_bridge_host
     if req.device_bridge_port is not None:
         settings.device_bridge_port = req.device_bridge_port
+    if req.osc_reply_enabled is not None:
+        settings.osc_reply_enabled = req.osc_reply_enabled
+    if req.osc_reply_host is not None:
+        settings.osc_reply_host = req.osc_reply_host
+    if req.osc_reply_port is not None:
+        settings.osc_reply_port = req.osc_reply_port
     if req.api_token is not None:
         settings.api_token = req.api_token
     settings.save()

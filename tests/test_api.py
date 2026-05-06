@@ -45,6 +45,7 @@ def isolated_app_state(tmp_path):
     app_module.store = app_module.PlanStore(persist_path=str(tmp_path / "plans.json"))
     app_module.session_store = SessionStore(persist_path=str(tmp_path / "sessions.json"))
     app_module._plan_session_index.clear()
+    app_module._osc_reply_events.clear()
     app_module._live_state = {
         "song": {
             "tempo": 120.0,
@@ -155,11 +156,16 @@ def test_planner_extra_prompt_can_be_disabled(monkeypatch):
 def test_settings_include_planner_extra_prompt_toggle(monkeypatch):
     monkeypatch.setattr(app_module.settings, "planner_extra_prompt_enabled", True)
     monkeypatch.setattr(app_module.settings, "planner_extra_prompt_path", "docs/prompt.md")
+    monkeypatch.setattr(app_module.settings, "osc_reply_enabled", True)
+    monkeypatch.setattr(app_module.settings, "osc_reply_host", "127.0.0.1")
+    monkeypatch.setattr(app_module.settings, "osc_reply_port", 11001)
 
     payload = app_module.get_settings()
 
     assert payload["planner_extra_prompt_enabled"] is True
     assert payload["planner_extra_prompt_path"] == "docs/prompt.md"
+    assert payload["osc_reply_enabled"] is True
+    assert payload["osc_reply_port"] == 11001
 
 
 def test_update_settings_can_disable_planner_extra_prompt(monkeypatch):
@@ -291,6 +297,95 @@ def test_capabilities_filters_on_single_endpoint():
 def test_capabilities_has_single_route():
     capability_paths = [route.path for route in app_module.app.routes if route.path.endswith("/capabilities")]
     assert capability_paths == ["/api/capabilities"]
+
+
+def test_device_bridge_status_and_devices(monkeypatch):
+    monkeypatch.setattr(
+        app_module,
+        "device_bridge_health",
+        lambda host, port: {"ok": True, "host": host, "port": port},
+    )
+    monkeypatch.setattr(
+        app_module,
+        "device_bridge_list_devices",
+        lambda host, port, query, device_type: {
+            "devices": [{"name": query, "device_type": device_type}],
+            "count": 1,
+        },
+    )
+    monkeypatch.setattr(
+        app_module,
+        "device_bridge_resolve_device",
+        lambda **kwargs: {"status": "resolved", "selected_item": kwargs["query"]},
+    )
+    monkeypatch.setattr(app_module.settings, "device_bridge_enabled", True)
+    monkeypatch.setattr(app_module.settings, "device_bridge_host", "127.0.0.1")
+    monkeypatch.setattr(app_module.settings, "device_bridge_port", 8788)
+
+    status = app_module.get_device_bridge_status()
+    assert status["ok"] is True
+    assert status["enabled"] is True
+
+    devices = app_module.get_device_bridge_devices(query="Drum Rack", device_type="drum")
+    assert devices["devices"][0]["name"] == "Drum Rack"
+
+    resolved = app_module.resolve_device_bridge_candidate(
+        app_module.DeviceBridgeResolveRequest(
+            track_index=0,
+            query="Analog",
+            device_type="instrument",
+            preset_query="Warm Pad",
+            browser_path=["Instruments", "Analog", "Warm Pad"],
+            allow_ambiguous=True,
+        )
+    )
+    assert resolved["status"] == "resolved"
+    assert resolved["selected_item"] == "Analog"
+
+
+def test_device_parameter_maps_endpoint():
+    payload = app_module.get_device_parameter_maps()
+    assert "*" in payload["maps"]
+    assert payload["maps"]["*"]["device_on"]["index"] == 0
+
+
+def test_osc_reply_reconciles_live_state():
+    app_module._record_osc_reply("/live/song/get/tempo", [126.0])
+    app_module._record_osc_reply("/live/track/get/name", [0, "Lead"])
+    app_module._record_osc_reply("/live/device/get/parameter/name", [0, 0, 1, "Frequency"])
+    app_module._record_osc_reply("/live/device/get/parameter/value", [0, 0, 1, 0.42])
+
+    assert app_module.get_live_song_state()["song"]["tempo"] == 126.0
+    track = app_module.get_live_tracks()["tracks"][0]
+    assert track["name"] == "Lead"
+    params = app_module.get_live_track_parameters(0)
+    assert params["parameters"][0]["name"] == "Frequency"
+    assert params["parameters"][0]["value"] == 0.42
+    assert app_module.get_recent_osc_replies()["count"] == 4
+
+
+def test_live_refresh_sends_read_requests(monkeypatch):
+    sent = []
+
+    class DummyAbletonClient:
+        def __init__(self, host, port):
+            sent.append(("connect", host, port))
+
+        def send_raw(self, address, args=None):
+            sent.append((address, args or []))
+
+    monkeypatch.setattr(app_module, "AbletonOSCClient", DummyAbletonClient)
+
+    payload = app_module.refresh_live_state(
+        app_module.LiveRefreshRequest(track_index=0, device_index=1, clip_index=2)
+    )
+
+    addresses = [row[0] for row in sent if row[0] != "connect"]
+    assert "/live/song/get/tempo" in addresses
+    assert "/live/track/get/name" in addresses
+    assert "/live/device/get/parameters/value" in addresses
+    assert "/live/clip/get/notes" in addresses
+    assert payload["count"] == len(addresses)
 
 
 def test_live_state_endpoints_after_execute(monkeypatch):

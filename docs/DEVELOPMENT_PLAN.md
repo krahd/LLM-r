@@ -4,7 +4,7 @@ This is the single planning and audit document for the current pre-release LLM-r
 codebase. Older roadmap, audit, and patch-plan documents have been removed so
 the project has one source of truth.
 
-Current package version: `0.6.7`
+Current package version: `0.6.8`
 
 ## Product Stance
 
@@ -33,11 +33,16 @@ LLM-r currently provides:
 - Static and runtime macros with API CRUD and persistence.
 - Session history and persisted plan/macro/session stores.
 - Optimistic live-state cache exposed through `/api/live/*`, updated after
-  executed actions.
-- Self-contained native VST3 editor with Chat/Raw JSON tabs, provider-specific
-  model pickers, Save/Cancel settings, Advanced Settings for provider keys and
-  Ollama status/model control, prompt entry, plan review, dry-run,
-  destructive-action approval, and direct AbletonOSC plus Device Bridge execution.
+  executed actions and reconciled from recognized AbletonOSC replies when the
+  OSC reply listener is enabled. `/api/live/refresh` can request readback for
+  supported song/track/device/clip data.
+- Device Bridge status, candidate browsing, and exact resolve endpoints for
+  `device_load` preflight.
+- Self-contained native VST3 editor with readiness chips, Plan/Details tabs,
+  provider-specific model pickers, Save/Cancel settings, Advanced Settings for
+  provider keys and Ollama status/model control, prompt entry, plan review,
+  dry-run, Auto-approve, destructive-action approval, and direct AbletonOSC plus
+  Device Bridge execution.
 - PyQt desktop GUI that can connect to a running server or operate in embedded
   mode, with settings for provider, model, prompt guidance, AbletonOSC, server
   URL, and API token.
@@ -60,7 +65,8 @@ Implemented directly through the capability registry:
 - Audio clip properties: gain, transpose/detune, warping toggle, warp mode, RAM
   mode, and marker/loop controls exposed by AbletonOSC.
 - Device and parameter basics: request device/parameter values and names, set
-  one or more parameter values by index, and delete devices by index.
+  one or more normalized parameter values by index, set allow-listed semantic
+  parameters, and delete devices by index.
 - Utility: undo and redo.
 
 Known limits:
@@ -72,12 +78,14 @@ Known limits:
 - No warp marker CRUD, export, render, resampling, destructive sample-file
   editing, or loudness analysis yet.
 - Browser/device loading for one named item is available through
-  LLMRDeviceBridge. Preset browsing UI, plugin-chain construction, rack editing,
-  and return/master-specific controls are not available yet.
-- Live state is an optimistic cache, not a full bidirectional sync with Ableton
-  Live.
-- Device parameter writes still require known indexes. Semantic mapping such as
-  "set compressor threshold" requires richer parameter readback and naming.
+  LLMRDeviceBridge, with candidate listing, exact path resolve, and preset
+  query resolve for ambiguous browser searches. Plug-in chain construction,
+  rack editing, and return/master-specific controls are not available yet.
+- Live state readback is available for recognized AbletonOSC response shapes;
+  identity-preserving full-project sync remains out of scope for this release.
+- Semantic device parameter writes are allow-listed. Rich mappings such as
+  "set compressor threshold" still require broader parameter readback and safe
+  device-specific maps.
 
 ## Source Notes
 
@@ -92,24 +100,24 @@ AbletonOSC as the DAW control surface. Important references:
 ## Prioritized Work
 
 1. **Real Ableton integration harness**
-   - Add a mocked OSC server contract suite.
-   - Add an optional real Live + AbletonOSC test project for smoke tests.
+   - Extend `scripts/smoke_test_live_integration.py` with a mocked OSC server
+     contract suite.
+   - Add an optional real Live + AbletonOSC test project fixture.
    - Verify command side effects instead of only validating action serialization.
 
 2. **State reconciliation**
-   - Replace the optimistic-only live-state model with read-backed snapshots
-     where AbletonOSC exposes reads.
-   - Add refresh and cache invalidation paths.
+   - Expand read-backed snapshots where AbletonOSC exposes reads.
+   - Add cache invalidation paths.
    - Preserve track/scene/clip identity when indexes shift.
 
 3. **Capability expansion for core workflows**
    - Track reorder, color, routing, monitoring, returns, and master controls.
    - Clip follow actions, arrangement clips, and richer clip readback.
-   - Device enable/bypass, list/reorder, racks, and semantic parameter maps.
-   - Rich browser browsing, preset selection, samples, and plug-in chains.
+   - Device enable/bypass, list/reorder, racks, and richer semantic parameter maps.
+   - Richer preset metadata, sample loading, and plug-in chains.
 
 4. **MIDI and audio editing**
-   - Add an OSC reply listener for `midi_notes_get` and device/clip queries.
+   - Expand OSC reply parsing for `midi_notes_get` and device/clip queries.
    - Add note-ID update flows when the bridge exposes IDs.
    - Transformations: quantize, humanize, transpose, velocity shaping, legato,
      chord/rhythm generation.

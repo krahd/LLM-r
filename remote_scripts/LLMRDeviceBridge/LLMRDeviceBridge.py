@@ -16,6 +16,13 @@ PORT = 8788
 MAX_BROWSER_ITEMS = 6000
 
 
+class AmbiguousDeviceError(Exception):
+    def __init__(self, query, candidates):
+        Exception.__init__(self, "Multiple browser items matched '%s'" % query)
+        self.query = query
+        self.candidates = candidates
+
+
 def _json_response(handler, status, payload):
     body = json.dumps(payload).encode("utf-8")
     handler.send_response(status)
@@ -54,7 +61,7 @@ class _BridgeHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path != "/api/devices/load":
+        if parsed.path not in ("/api/devices/load", "/api/devices/resolve"):
             _json_response(self, 404, {"error": "not found"})
             return
         try:
@@ -69,8 +76,15 @@ class _BridgeHandler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "invalid JSON body"})
             return
         try:
-            payload = self.bridge.run_on_live_thread(lambda: self.bridge.load_device(request))
+            if parsed.path == "/api/devices/resolve":
+                payload = self.bridge.run_on_live_thread(
+                    lambda: self.bridge.resolve_device(request)
+                )
+            else:
+                payload = self.bridge.run_on_live_thread(lambda: self.bridge.load_device(request))
             _json_response(self, 200, payload)
+        except AmbiguousDeviceError as exc:
+            _json_response(self, 409, {"error": str(exc), "candidates": exc.candidates})
         except LookupError as exc:
             _json_response(self, 404, {"error": str(exc)})
         except ValueError as exc:
@@ -126,8 +140,9 @@ class LLMRDeviceBridge(ControlSurface):
         def wrapped():
             try:
                 result["value"] = callback()
-            except Exception:
-                result["error"] = traceback.format_exc()
+            except Exception as exc:
+                result["error"] = exc
+                result["traceback"] = traceback.format_exc()
             finally:
                 done.set()
 
@@ -135,41 +150,106 @@ class LLMRDeviceBridge(ControlSurface):
         if not done.wait(timeout):
             raise RuntimeError("Timed out waiting for Live API")
         if "error" in result:
-            raise RuntimeError(result["error"])
+            self.log_message("LLM-r Device Bridge Live callback failed:\n%s" % result.get("traceback", ""))
+            raise result["error"]
         return result.get("value")
 
     def list_devices(self, query="", device_type="all"):
         query = str(query or "").strip()
         matches = []
-        for item in self._search_browser(query, device_type, limit=40):
+        for item, path, score in self._search_browser_matches(query, device_type, limit=40):
             matches.append(
                 {
                     "name": getattr(item, "name", ""),
+                    "path": path,
+                    "device_type": self._normalize_device_type(device_type),
+                    "score": score,
                     "is_loadable": bool(getattr(item, "is_loadable", False)),
                 }
             )
         return {"devices": matches, "count": len(matches)}
 
     def load_device(self, request):
-        track_index = int(request.get("track_index", 0))
-        query = str(request.get("query") or request.get("device_name") or "").strip()
-        device_type = str(request.get("device_type") or "instrument").strip()
-        if not query:
-            raise ValueError("'query' is required")
-
-        track = self._track_at(track_index)
-        item = self._find_browser_item(query, device_type)
-        if item is None:
-            raise LookupError("No loadable browser item matched '%s'" % query)
-
+        resolved = self._resolve_device_item(request)
+        track = resolved["track"]
+        item = resolved["item"]
         self.song().view.selected_track = track
         self.application().browser.load_item(item)
         return {
             "status": "loaded",
+            "track_index": resolved["track_index"],
+            "query": resolved["query"],
+            "preset_query": resolved["preset_query"],
+            "device_type": resolved["device_type"],
+            "loaded_item": getattr(item, "name", resolved["query"]),
+            "path": resolved["path"],
+            "score": resolved["score"],
+            "selection_mode": resolved["selection_mode"],
+        }
+
+    def resolve_device(self, request):
+        resolved = self._resolve_device_item(request)
+        return {
+            "status": "resolved",
+            "track_index": resolved["track_index"],
+            "query": resolved["query"],
+            "preset_query": resolved["preset_query"],
+            "device_type": resolved["device_type"],
+            "selected_item": getattr(resolved["item"], "name", resolved["query"]),
+            "path": resolved["path"],
+            "score": resolved["score"],
+            "selection_mode": resolved["selection_mode"],
+            "is_loadable": bool(getattr(resolved["item"], "is_loadable", False)),
+        }
+
+    def _resolve_device_item(self, request):
+        track_index = int(request.get("track_index", 0))
+        query = str(request.get("query") or request.get("device_name") or "").strip()
+        preset_query = str(request.get("preset_query") or request.get("preset") or "").strip()
+        device_type = self._normalize_device_type(request.get("device_type") or "instrument")
+        browser_path = self._coerce_path(request.get("browser_path") or request.get("path"))
+        if not query and not browser_path:
+            raise ValueError("'query' is required")
+
+        track = self._track_at(track_index)
+        allow_ambiguous = self._allow_ambiguous(request.get("allow_ambiguous", False))
+        selection_mode = "query"
+        if browser_path:
+            match = self._find_browser_item_by_path(browser_path, device_type)
+            if match is None:
+                raise LookupError("No loadable browser item matched path '%s'" % " > ".join(browser_path))
+            item, path = match
+            score = 3
+            selection_mode = "browser_path"
+        elif preset_query:
+            matches = self._preset_matches(query, preset_query, device_type)
+            if not matches:
+                raise LookupError(
+                    "No preset '%s' matched browser item '%s'" % (preset_query, query)
+                )
+            item, path, score = self._select_match(
+                query + " / " + preset_query,
+                matches,
+                allow_ambiguous,
+                device_type,
+            )
+            selection_mode = "preset"
+        else:
+            matches = self._search_browser_matches(query, device_type, limit=8)
+            if not matches:
+                raise LookupError("No loadable browser item matched '%s'" % query)
+            item, path, score = self._select_match(query, matches, allow_ambiguous, device_type)
+
+        return {
+            "track": track,
             "track_index": track_index,
-            "query": query,
-            "device_type": self._normalize_device_type(device_type),
-            "loaded_item": getattr(item, "name", query),
+            "query": query or getattr(item, "name", ""),
+            "preset_query": preset_query or None,
+            "device_type": device_type,
+            "item": item,
+            "path": path,
+            "score": score,
+            "selection_mode": selection_mode,
         }
 
     def _track_at(self, track_index):
@@ -183,28 +263,123 @@ class LLMRDeviceBridge(ControlSurface):
         return matches[0] if matches else None
 
     def _search_browser(self, query, device_type, limit):
+        return [match[0] for match in self._search_browser_matches(query, device_type, limit)]
+
+    def _search_browser_matches(self, query, device_type, limit):
         normalized_query = self._normalize_name(query)
         candidates = []
         for root in self._browser_roots(device_type):
-            stack = deque([root])
+            root_name = getattr(root, "name", "") or self._normalize_device_type(device_type)
+            stack = deque([(root, [root_name])])
             scanned = 0
             while stack and scanned < MAX_BROWSER_ITEMS:
-                item = stack.popleft()
+                item, path = stack.popleft()
                 scanned += 1
                 name = getattr(item, "name", "")
                 if bool(getattr(item, "is_loadable", False)):
                     score = self._match_score(normalized_query, name)
                     if score:
-                        candidates.append((score, name.lower(), item))
+                        item_path = path if path and path[-1] == name else path + [name]
+                        candidates.append((score, name.lower(), item, item_path))
                         if len(candidates) >= limit and score == 3:
-                            return [row[2] for row in sorted(candidates, key=lambda row: (-row[0], row[1]))[:limit]]
+                            rows = sorted(candidates, key=lambda row: (-row[0], row[1]))[:limit]
+                            return [(row[2], row[3], row[0]) for row in rows]
                 try:
                     children = list(getattr(item, "children", []) or [])
                 except Exception:
                     children = []
-                stack.extend(children)
+                for child in children:
+                    child_name = getattr(child, "name", "")
+                    child_path = path + ([child_name] if child_name else [])
+                    stack.append((child, child_path))
         candidates.sort(key=lambda row: (-row[0], row[1]))
-        return [row[2] for row in candidates[:limit]]
+        return [(row[2], row[3], row[0]) for row in candidates[:limit]]
+
+    def _candidate_payload(self, item, path, score, device_type="all"):
+        return {
+            "name": getattr(item, "name", ""),
+            "path": path,
+            "score": score,
+            "device_type": self._normalize_device_type(device_type),
+            "is_loadable": bool(getattr(item, "is_loadable", False)),
+        }
+
+    def _select_match(self, query, matches, allow_ambiguous, device_type):
+        top_score = matches[0][2]
+        tied = [match for match in matches if match[2] == top_score]
+        if len(tied) > 1 and not allow_ambiguous:
+            raise AmbiguousDeviceError(
+                query,
+                [self._candidate_payload(match[0], match[1], match[2], device_type) for match in tied[:8]],
+            )
+        return matches[0]
+
+    def _preset_matches(self, query, preset_query, device_type):
+        normalized_query = self._normalize_name(query)
+        matches = []
+        for item, path, score in self._search_browser_matches(preset_query, device_type, limit=40):
+            if normalized_query and not self._path_contains(path, normalized_query):
+                continue
+            matches.append((item, path, score))
+        return matches
+
+    def _find_browser_item_by_path(self, requested_path, device_type):
+        normalized_path = [self._normalize_path_segment(segment) for segment in requested_path]
+        for root in self._browser_roots(device_type):
+            root_name = getattr(root, "name", "") or self._normalize_device_type(device_type)
+            root_key = self._normalize_path_segment(root_name)
+            remaining = normalized_path
+            if remaining and remaining[0] == root_key:
+                remaining = remaining[1:]
+            match = self._follow_path(root, [root_name], remaining)
+            if match is not None:
+                return match
+        return None
+
+    def _follow_path(self, item, path, remaining):
+        if not remaining:
+            if bool(getattr(item, "is_loadable", False)):
+                item_name = getattr(item, "name", "")
+                item_path = path if path and path[-1] == item_name else path + [item_name]
+                return item, item_path
+            return None
+        try:
+            children = list(getattr(item, "children", []) or [])
+        except Exception:
+            children = []
+        target = remaining[0]
+        for child in children:
+            child_name = getattr(child, "name", "")
+            if self._normalize_path_segment(child_name) == target:
+                child_path = path + ([child_name] if child_name else [])
+                return self._follow_path(child, child_path, remaining[1:])
+        return None
+
+    def _path_contains(self, path, normalized_query):
+        for segment in path:
+            if normalized_query in self._normalize_name(segment):
+                return True
+        return False
+
+    def _coerce_path(self, value):
+        if not value:
+            return []
+        if isinstance(value, list):
+            return [str(segment).strip() for segment in value if str(segment).strip()]
+        if isinstance(value, tuple):
+            return [str(segment).strip() for segment in value if str(segment).strip()]
+        raw = str(value).strip()
+        if not raw:
+            return []
+        if ">" in raw:
+            return [segment.strip() for segment in raw.split(">") if segment.strip()]
+        return [segment.strip() for segment in raw.split("/") if segment.strip()]
+
+    def _allow_ambiguous(self, value):
+        return value is True or str(value).strip().lower() in ("1", "true", "yes", "on")
+
+    def _normalize_path_segment(self, value):
+        return str(value or "").strip().lower()
 
     def _browser_roots(self, device_type):
         browser = self.application().browser

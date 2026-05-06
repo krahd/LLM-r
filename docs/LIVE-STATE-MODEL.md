@@ -21,4 +21,13 @@
 - `scenes[]`
   - `scene_index`, `name`
 
-This is currently an optimistic state cache updated from executed actions.
+This starts as an optimistic state cache updated from executed actions. When the
+OSC reply listener is enabled, recognized AbletonOSC replies reconcile the same
+cache. Current reconciliation covers common song values, track mixer/name
+fields, device parameter values/names, and MIDI note replies.
+
+Runtime inspection endpoints:
+
+- `POST /api/live/refresh`
+- `GET /api/osc-replies/status`
+- `GET /api/osc-replies/recent`

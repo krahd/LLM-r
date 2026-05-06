@@ -76,7 +76,7 @@ tools and `device_bridge` for LLMRDeviceBridge tools.
 | `clip_set_warping` | audio | - | `track_index: int`, `clip_index: int`, `warping: bool` |
 | `clip_set_warp_mode` | audio | - | `track_index: int`, `clip_index: int`, `warp_mode: 0..6` |
 | `clip_set_ram_mode` | audio | - | `track_index: int`, `clip_index: int`, `ram_mode: bool` |
-| `device_load` | devices | - | `track_index: int`, `query: string`, optional `device_type: instrument|audio_effect|midi_effect|plugin|drum|all` |
+| `device_load` | devices | - | `track_index: int`, `query: string`, optional `device_type: instrument|audio_effect|midi_effect|plugin|drum|all`, optional `preset_query`, optional `browser_path`, optional confirmed `allow_ambiguous` |
 | `device_get_parameters` | devices | - | `track_index: int`, `device_index: int` |
 | `device_get_parameter` | devices | - | `track_index: int`, `device_index: int`, `parameter_index: int` |
 | `device_get_parameter_name` | devices | - | `track_index: int`, `device_index: int`, `parameter_index: int` |
@@ -84,8 +84,8 @@ tools and `device_bridge` for LLMRDeviceBridge tools.
 | `device_get_parameter_names` | devices | - | `track_index: int`, `device_index: int` |
 | `device_get_parameter_min_values` | devices | - | `track_index: int`, `device_index: int` |
 | `device_get_parameter_max_values` | devices | - | `track_index: int`, `device_index: int` |
-| `device_set_parameters` | parameters | - | `track_index: int`, `device_index: int`, `values: non-empty float list` |
-| `device_set_parameter` | parameters | - | `track_index: int`, `device_index: int`, `parameter_index: int`, `value: float` |
+| `device_set_parameters` | parameters | - | `track_index: int`, `device_index: int`, `values: non-empty 0..1 float list` |
+| `device_set_parameter` | parameters | - | `track_index: int`, `device_index: int`, `parameter_index: int >= 0` or `device_name + parameter_name`, `value: 0..1` |
 | `device_delete` | devices | **yes** | `track_index: int`, `device_index: int` |
 | `utility_undo` | utility | - | - |
 | `utility_redo` | utility | - | - |
@@ -103,8 +103,13 @@ unless `dry_run` is enabled.
   launch behavior.
 - Browser search/load and plug-in loading are handled by the LLMRDeviceBridge
   Remote Script, not upstream AbletonOSC. It must be installed and enabled in
-  Live for `device_load` to execute. Destructive sample-file editing,
+  Live for `device_load` to execute. Use `GET /api/device-bridge/devices` to
+  browse candidates and `POST /api/device-bridge/resolve` to validate a
+  selected candidate or preset before loading. Destructive sample-file editing,
   arrangement clip insertion, and warp marker CRUD are still not exposed.
+- Semantic parameter automation is intentionally allow-listed. Use
+  `GET /api/device-parameters/maps` for safe names; unmapped parameters should
+  be read from Live and addressed by explicit index.
 
 ## Filtering
 

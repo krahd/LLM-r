@@ -122,6 +122,30 @@ def test_to_action_device_bulk_parameter_values():
     assert action.args == [0, 1, 0.1, 0.2, 0.3]
 
 
+def test_to_action_device_parameter_guardrails():
+    client = AbletonOSCClient("127.0.0.1", 11000)
+    with pytest.raises(ValueError):
+        client.to_action(
+            ToolName.device_set_parameter,
+            {"track_index": 0, "device_index": 0, "parameter_index": 1, "value": 2.0},
+        )
+
+
+def test_to_action_device_parameter_semantic_device_on():
+    client = AbletonOSCClient("127.0.0.1", 11000)
+    action = client.to_action(
+        ToolName.device_set_parameter,
+        {
+            "track_index": 0,
+            "device_index": 2,
+            "device_name": "Utility",
+            "parameter_name": "enabled",
+            "value": 1.0,
+        },
+    )
+    assert action.args == [0, 2, 0, 1.0]
+
+
 def test_to_action_device_load_uses_bridge_transport():
     client = AbletonOSCClient("127.0.0.1", 11000)
     action = client.to_action(
@@ -131,3 +155,28 @@ def test_to_action_device_load_uses_bridge_transport():
     assert action.address == "/api/devices/load"
     assert action.args == [1, "Wavetable", "instrument"]
     assert action.transport == "device_bridge"
+
+
+def test_to_action_device_load_preserves_confirmed_candidate_options():
+    client = AbletonOSCClient("127.0.0.1", 11000)
+    action = client.to_action(
+        ToolName.device_load,
+        {
+            "track_index": 1,
+            "query": "Analog",
+            "device_type": "instrument",
+            "preset_query": "Warm Pad",
+            "browser_path": ["Instruments", "Analog", "Warm Pad"],
+            "allow_ambiguous": True,
+        },
+    )
+    assert action.args == [
+        1,
+        "Analog",
+        "instrument",
+        {
+            "preset_query": "Warm Pad",
+            "browser_path": ["Instruments", "Analog", "Warm Pad"],
+            "allow_ambiguous": True,
+        },
+    ]

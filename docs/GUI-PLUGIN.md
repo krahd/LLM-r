@@ -6,10 +6,10 @@ entirely from within the host — no terminal, no server, no extra windows requi
 
 ## Features
 
-- **Chat interface** — type requests in natural language and get responses in a
-  scrollable chat history, just like a standard LLM chat app.
-- **Response tabs** — use Chat for the interpreted plan and Raw JSON for the
-  exact provider response/debug payload.
+- **Command surface** — type requests in natural language and review the result
+  as a Plan Board instead of raw model output.
+- **Plan / Details tabs** — use Plan for the interpreted action board and
+  Details for the exact provider response/debug payload.
 - **Resizable window** — drag the plug-in editor to the size you want.
 - **Separate Settings panel** — click ⚙ Settings to open a dedicated screen.
   Basic provider/model choices stay on the first settings screen. API keys,
@@ -20,16 +20,18 @@ entirely from within the host — no terminal, no server, no extra windows requi
   saved to macOS `NSUserDefaults` and restored across sessions.
 - **Dry-run by default** — every plan is previewed before execution; toggle
   off when you're confident.
+- **Auto-approve option** — when enabled, the plug-in runs the plan immediately
+  after planning, using the saved dry-run default.
 - **Destructive-action guard** — track/scene/clip deletes and `stop_all_clips`
   require "Allow destructive actions" to be enabled in Settings.
 
-## Chat workflow
+## Command workflow
 
 1. Load **LLM-r** as a VST3 instrument in any Ableton Live track.
 2. Open ⚙ Settings and configure your LLM provider (API key, model, endpoint).
 3. Type a request — e.g. *"Create a 4-bar bass line at 90 BPM on a new MIDI
    track"* — and press **Plan**.
-4. LLM-r calls the configured LLM and returns a plan in the chat.
+4. LLM-r calls the configured LLM and returns a Plan Board.
 5. Review the plan, then click **▶ Execute** (or enable Dry run to preview).
 
 ## Settings panel
@@ -56,6 +58,14 @@ Use Advanced for provider keys, endpoint, AbletonOSC, Device Bridge, and Ollama 
 | Host | Default `127.0.0.1` |
 | Port | Default `11000` |
 | Dry run default | Pre-check to preview plans without sending actions |
+| Auto-approve plans | Run the plan immediately after planning, respecting the dry-run default |
+
+### Device Bridge
+
+Advanced Settings includes a **Check Bridge** control that verifies the local
+LLMRDeviceBridge Remote Script on `127.0.0.1:8788` before executing plans that
+include `device_load`. Non-dry-run execution also asks the bridge to resolve
+each selected device, preset, or browser path before any OSC mutation is sent.
 
 ### Advanced Ollama (local models)
 
@@ -87,9 +97,9 @@ A PyQt6 standalone window with the same plan/review/execute workflow.
 - **HTTP mode** — attaches to a running `llmr serve` server for multi-client
   or remote setups.
 - Start/stop the server from within the GUI.
-- **Processed response tabs** — Chat shows the interpreted plan/result, Actions
-  shows parsed tool calls, Execution shows run reports, and Raw `.json` shows
-  the complete payload including parsed `llm_raw` when available.
+- **Plan Board tabs** — Plan shows action cards, Action Table shows parsed tool
+  calls, Run Log shows execution reports, and Details shows the complete payload
+  including parsed `llm_raw` when available.
 - **Simple Settings** — choose provider/model and execution defaults. When the
   provider is `ollama`, the model field is a pull-down backed by local Ollama
   models and safe fallback choices.
