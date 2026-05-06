@@ -1,6 +1,6 @@
 # LLM-r – Project Status
 
-Last updated: 2026-05-06 09:00
+Last updated: 2026-05-06 14:30
 
 ## Current State
 
@@ -106,6 +106,17 @@ Reviewed:
   cross-agent instruction files for Codex, Claude, and GitHub Copilot.
 - Bumped the release version to `0.6.8` across Python package metadata, VST3
   metadata, release docs, and project status.
+- Fixed LLMRDeviceBridge not appearing in Live's MIDI Settings: installer now
+  probes all candidate Remote Scripts paths (User Library, versioned Preferences
+  folders, and any relocated User Library from the Preferences file) and installs
+  to every applicable location.
+- Added cmd-A (select-all) support in all VST3 text fields via `LlmrTextField`
+  and updated `LlmrPromptField` with the same keyboard handling.
+- Fixed VST3 combo-box dropdowns to open when clicking anywhere in the control,
+  not only on the arrow button.
+- Improved Live 12.4 compatibility in LLMRDeviceBridge: added `ableton.v3`
+  import fallback, `call_later` scheduler fallback, and a safe `_log` shim
+  that works regardless of which ControlSurface base class is loaded.
 
 ## Validation
 
@@ -113,15 +124,13 @@ Passed:
 
 - `python3 -m pytest -q` -> 58 tests passed.
 - `PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py llmr/osc_replies.py llmr/device_parameters.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py scripts/smoke_test_live_integration.py`
-- `./scripts/build_vst3.sh` -> built `build/vst3/LLM-r.vst3`.
+- `./scripts/build_vst3.sh` -> built `build/vst3/LLM-r.vst3` (clean, no warnings).
 - `python3 -m build` -> built `llm_r-0.6.8.tar.gz` and
   `llm_r-0.6.8-py3-none-any.whl`.
 - Inline web UI script syntax check with `node -e`.
 - `git diff --check`
 - `python3 -m pytest -q tests/test_api.py tests/test_executor.py` -> 29 tests
   passed.
-- `./scripts/build_vst3.sh` -> built `build/vst3/LLM-r.vst3` after adding the
-  VST3 candidate picker flow.
 - Real Ableton smoke test harness added at
   `scripts/smoke_test_live_integration.py`; it still requires a manual
   disposable Live set and was not executed in this audit environment.
@@ -161,10 +170,12 @@ Not verified in this run:
 
 ## Next Steps
 
-1. Run and refine the real Ableton smoke-test harness against multiple Ableton
-   Live versions.
-2. Validate the new VST3 candidate picker in real Ableton sessions by forcing
-  ambiguous browser queries and confirming the selected path loads correctly.
-3. Grow safe semantic parameter maps only from verified Live readback data.
-4. Keep release packaging focused on one primary install path: VST3 bundle plus
+1. Verify LLMRDeviceBridge appears in Live's MIDI settings after reinstalling
+   with the updated multi-path installer logic.
+2. Run and refine the real Ableton smoke-test harness against multiple Ableton
+   Live versions (12.1, 12.4).
+3. Validate the new VST3 candidate picker in real Ableton sessions by forcing
+   ambiguous browser queries and confirming the selected path loads correctly.
+4. Grow safe semantic parameter maps only from verified Live readback data.
+5. Keep release packaging focused on one primary install path: VST3 bundle plus
    bundled Remote Script, with server/GUI clearly marked as companion tools.

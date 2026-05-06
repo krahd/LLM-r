@@ -54,6 +54,9 @@ static void llmrEditorHandleAction(void *owner, NSInteger action);
 @interface LlmrPromptField : NSTextField
 @end
 
+@interface LlmrTextField : NSTextField
+@end
+
 @interface FullClickComboBox : NSComboBox
 @end
 #endif
@@ -994,7 +997,7 @@ private:
     NSTextField *fieldIn(NSView *p, NSRect f, NSString *ph, BOOL secure)
     {
         NSTextField *v = secure ? [[NSSecureTextField alloc] initWithFrame:f]
-                                : [[NSTextField alloc] initWithFrame:f];
+                                : [[LlmrTextField alloc] initWithFrame:f];
         [v setPlaceholderString:ph]; [v setFont:[NSFont systemFontOfSize:12.0]];
         [p addSubview:v]; [v release]; return v;
     }
@@ -3481,14 +3484,73 @@ private:
         }
     }
 
-    static NSString *userRemoteScriptsPath()
+    // Return all candidate paths where Live might scan for user Remote Scripts.
+    // Live 10/11/12 all accept ~/Music/Ableton/User Library/Remote Scripts/.
+    // Live 12 also scans the versioned Preferences folder when the User Library
+    // has been relocated.  We return every candidate so install/check can cover
+    // all of them.
+    static NSArray<NSString *> *userRemoteScriptsCandidates()
     {
+        NSMutableArray *paths = [NSMutableArray array];
+
+        // 1. Standard User Library path (Live 10/11/12 default).
         NSString *music = [NSSearchPathForDirectoriesInDomains(NSMusicDirectory, NSUserDomainMask, YES) firstObject];
         if ([music length] == 0) {
             music = [NSHomeDirectory() stringByAppendingPathComponent:@"Music"];
         }
-        return [[music stringByAppendingPathComponent:@"Ableton/User Library"]
+        NSString *userLibPath = [[music stringByAppendingPathComponent:@"Ableton/User Library"]
             stringByAppendingPathComponent:@"Remote Scripts"];
+        [paths addObject:userLibPath];
+
+        // 2. Try to read Live's own preferences to find a relocated User Library.
+        NSString *prefsRoot = [NSHomeDirectory() stringByAppendingPathComponent:
+            @"Library/Preferences/Ableton"];
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSArray *liveVersionDirs = [fm contentsOfDirectoryAtPath:prefsRoot error:nil];
+        // Sort descending so the newest Live version is tried first.
+        liveVersionDirs = [liveVersionDirs sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+            return [b compare:a options:NSNumericSearch];
+        }];
+        for (NSString *versionDir in liveVersionDirs) {
+            if (![versionDir hasPrefix:@"Live "]) continue;
+            NSString *prefFile = [prefsRoot stringByAppendingPathComponent:
+                [versionDir stringByAppendingPathComponent:@"Preferences.cfg"]];
+            NSString *prefContents = [NSString stringWithContentsOfFile:prefFile
+                encoding:NSUTF8StringEncoding error:nil];
+            // Look for a UserLibraryPath entry in the flat preferences file.
+            if (prefContents) {
+                for (NSString *line in [prefContents componentsSeparatedByString:@"\n"]) {
+                    NSString *trimmed = [line stringByTrimmingCharactersInSet:
+                        [NSCharacterSet whitespaceCharacterSet]];
+                    if ([trimmed hasPrefix:@"UserLibraryPath"]) {
+                        NSArray *parts = [trimmed componentsSeparatedByString:@" "];
+                        NSString *libPath = parts.count >= 2 ? parts.lastObject : nil;
+                        if ([libPath length] > 0) {
+                            NSString *candidate = [libPath
+                                stringByAppendingPathComponent:@"Remote Scripts"];
+                            if (![paths containsObject:candidate]) {
+                                [paths addObject:candidate];
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            // Also add the versioned Preferences Remote Scripts folder as fallback.
+            NSString *prefScripts = [prefsRoot stringByAppendingPathComponent:
+                [versionDir stringByAppendingPathComponent:@"Remote Scripts"]];
+            if (![paths containsObject:prefScripts]) {
+                [paths addObject:prefScripts];
+            }
+        }
+
+        return paths;
+    }
+
+    static NSString *userRemoteScriptsPath()
+    {
+        // Primary path – the standard User Library location.
+        return [userRemoteScriptsCandidates() firstObject];
     }
 
     NSString *llmrDeviceBridgeInstallSource()
@@ -3513,9 +3575,15 @@ private:
 
     bool llmrDeviceBridgeInstalled()
     {
-        NSString *dst = [userRemoteScriptsPath() stringByAppendingPathComponent:@"LLMRDeviceBridge"];
+        NSFileManager *fm = [NSFileManager defaultManager];
         BOOL isDir = NO;
-        return [[NSFileManager defaultManager] fileExistsAtPath:dst isDirectory:&isDir] && isDir;
+        for (NSString *scriptsPath in userRemoteScriptsCandidates()) {
+            NSString *dst = [scriptsPath stringByAppendingPathComponent:@"LLMRDeviceBridge"];
+            if ([fm fileExistsAtPath:dst isDirectory:&isDir] && isDir) {
+                return true;
+            }
+        }
+        return false;
     }
 
     bool installLLMRDeviceBridge(NSString **errorText)
@@ -3525,22 +3593,34 @@ private:
             if (errorText) *errorText = @"Bundled LLMRDeviceBridge Remote Script was not found.";
             return false;
         }
-        NSString *scriptsPath = userRemoteScriptsPath();
-        NSString *dst = [scriptsPath stringByAppendingPathComponent:@"LLMRDeviceBridge"];
+        // Install to all candidate paths so the script appears regardless of
+        // which path the installed Live version actually scans.
         NSFileManager *fm = [NSFileManager defaultManager];
-        NSError *err = nil;
-        if (![fm createDirectoryAtPath:scriptsPath withIntermediateDirectories:YES attributes:nil error:&err]) {
-            if (errorText) *errorText = [err localizedDescription];
-            return false;
+        NSArray *candidates = userRemoteScriptsCandidates();
+        NSString *lastError = nil;
+        bool anyOk = false;
+        for (NSString *scriptsPath in candidates) {
+            NSString *dst = [scriptsPath stringByAppendingPathComponent:@"LLMRDeviceBridge"];
+            NSError *err = nil;
+            if ([fm fileExistsAtPath:dst]) {
+                anyOk = true;
+                continue;
+            }
+            if (![fm createDirectoryAtPath:scriptsPath withIntermediateDirectories:YES
+                    attributes:nil error:&err]) {
+                lastError = [err localizedDescription];
+                continue;
+            }
+            if ([fm copyItemAtPath:src toPath:dst error:&err]) {
+                anyOk = true;
+            } else {
+                lastError = [err localizedDescription];
+            }
         }
-        if ([fm fileExistsAtPath:dst]) {
-            return true;
+        if (!anyOk && errorText) {
+            *errorText = lastError ?: @"Could not install LLMRDeviceBridge to any Remote Scripts path.";
         }
-        if (![fm copyItemAtPath:src toPath:dst error:&err]) {
-            if (errorText) *errorText = [err localizedDescription];
-            return false;
-        }
-        return true;
+        return anyOk;
     }
 
     void checkLLMRDeviceBridgeOnFirstUse()
@@ -4038,6 +4118,24 @@ LlmrPluginFactory gFactory;
 @end
 
 @implementation LlmrPromptField
+- (BOOL)performKeyEquivalent:(NSEvent *)event
+{
+    // Cmd-A: select all text in the field – Live may intercept this before it
+    // reaches a standard NSTextField, so we handle it explicitly here.
+    NSEventModifierFlags mods = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+    if (mods == NSEventModifierFlagCommand) {
+        NSString *chars = [event charactersIgnoringModifiers] ?: @"";
+        if ([chars isEqualToString:@"a"]) {
+            [self selectText:self];
+            NSText *editor = [[self window] fieldEditor:YES forObject:self];
+            if (editor) {
+                [editor selectAll:self];
+            }
+            return YES;
+        }
+    }
+    return [super performKeyEquivalent:event];
+}
 - (void)keyDown:(NSEvent *)event
 {
     NSString *chars = [event charactersIgnoringModifiers] ?: @"";
@@ -4054,15 +4152,35 @@ LlmrPluginFactory gFactory;
 }
 @end
 
+@implementation LlmrTextField
+- (BOOL)performKeyEquivalent:(NSEvent *)event
+{
+    NSEventModifierFlags mods = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+    if (mods == NSEventModifierFlagCommand) {
+        NSString *chars = [event charactersIgnoringModifiers] ?: @"";
+        if ([chars isEqualToString:@"a"]) {
+            [self selectText:self];
+            NSText *editor = [[self window] fieldEditor:YES forObject:self];
+            if (editor) {
+                [editor selectAll:self];
+            }
+            return YES;
+        }
+    }
+    return [super performKeyEquivalent:event];
+}
+@end
+
 @implementation FullClickComboBox
 - (void)mouseDown:(NSEvent *)event
 {
+    // Open the popup whenever the user clicks anywhere in the combo box, not
+    // only when they click the small arrow button.  We let super handle the
+    // event first (for focus/selection), then unconditionally open the list.
     [super mouseDown:event];
-    if (![self isEditable]) {
-        SEL openSelector = @selector(openPopUp);
-        if ([self respondsToSelector:openSelector]) {
-            [self performSelector:openSelector];
-        }
+    SEL openSelector = @selector(openPopUp);
+    if ([self respondsToSelector:openSelector]) {
+        [self performSelector:openSelector];
     }
 }
 @end
