@@ -1,181 +1,185 @@
 # LLM-r – Project Status
 
-Last updated: 2026-05-06 14:30
+Last updated: 2026-05-07 00:15
 
-## Current State
+## Project purpose
 
-LLM-r is at package version `0.6.8`. The main product surface is the native
-VST3 plug-in, with the FastAPI server, web UI, and PyQt GUI available as
-companion surfaces.
+LLM-r bridges Ableton Live and LLM planners. Its main product surface is a native VST3 plug-in, with FastAPI, web UI, PyQt GUI, Remote Script, and smoke-test tooling as companion surfaces for the same planning and execution workflow.
 
-The runtime now has two action transports:
+## Current implementation state
 
-- `osc`: the default path through AbletonOSC on `127.0.0.1:11000`.
-- `device_bridge`: the local LLMRDeviceBridge Remote Script HTTP bridge on
-  `127.0.0.1:8788`, used by `device_load`.
+LLM-r is currently at package version `0.6.8`.
 
-The Python planner builds typed action plans from the declarative capability
-registry in `llmr/ableton_osc.py`. The executor routes OSC actions through
-AbletonOSC and routes `device_load` through `llmr/device_bridge.py`. The VST3
-plug-in has its own direct action execution path and prompts users to install
-LLMRDeviceBridge when device loading is needed.
+The runtime has two action transports:
 
-Core coverage today includes song/transport setup, track and scene operations,
-clip creation/editing, MIDI note add/remove/get requests, audio clip properties,
-device parameter access by index, device deletion, undo/redo, and single browser
-device or plug-in loading.
+- `osc`: default AbletonOSC UDP transport, normally `127.0.0.1:11000`.
+- `device_bridge`: local LLMRDeviceBridge Remote Script HTTP transport, normally `127.0.0.1:8788`, used by `device_load`.
 
-Additional integration support includes a real Ableton smoke-test harness,
-Device Bridge health/candidate/resolve APIs, OSC reply listener status/recent-reply
-APIs, and safe semantic parameter maps.
-The API now binds to loopback by default.
+The Python planner builds typed action plans from the declarative capability registry in `llmr/ableton_osc.py`. The executor routes OSC actions through AbletonOSC and routes `device_load` through `llmr/device_bridge.py`. The VST3 plug-in has its own direct action execution path and prompts users to install LLMRDeviceBridge when device loading is needed.
 
-The primary UI surfaces have been modernized around a Plan Board workflow. The
-VST3 editor, PyQt GUI, and companion web UI now expose readiness/status chips,
-clear Plan/Details or Plan/Run/Details panes, and an Auto-approve option for
-running plans immediately after planning while respecting dry-run safeguards.
+Core coverage includes song/transport setup, track and scene operations, clip creation/editing, MIDI note add/remove/get requests, audio clip properties, device parameter access by index, device deletion, undo/redo, and single browser device or plug-in loading.
 
-Project status now lives in this file, `STATUS.md`. Cross-agent repository
-instructions are centralized in `AGENTS.md`, with compatibility entry points for
-Claude (`CLAUDE.md`) and GitHub Copilot
-(`.github/copilot-instructions.md`). Agent instructions require `STATUS.md` to
-stay current whenever behavior, risk, validation, or next steps change.
+Additional integration support includes a real Ableton smoke-test harness, Device Bridge health/candidate/resolve APIs, OSC reply listener status/recent-reply APIs, and safe semantic parameter maps. The API binds to loopback by default.
 
-## Audit Scope
+Primary UI surfaces have been modernised around a Plan Board workflow. The VST3 editor, PyQt GUI, and companion web UI expose readiness/status chips, clear Plan/Details or Plan/Run/Details panes, and Auto-approve controls for running plans immediately after planning while preserving dry-run safeguards.
 
-Reviewed:
+## Active focus
 
-- Capability registry, schemas, planner prompt generation, API capability output,
-  executor routing, and tests.
-- LLMRDeviceBridge Remote Script request handling, Live-thread scheduling,
-  browser traversal, and failure behavior.
-- Native VST3 code paths around Device Bridge action creation/execution and the
-  macOS combo-box popup warning.
-- User-facing docs, release notes, compatibility notes, security notes, website
-  copy, and assistant guidance prompt copies.
+Current focus is release-facing stabilisation of the VST3-first product path, AbletonOSC plus Device Bridge transport correctness, real Ableton smoke validation, candidate resolution for device loading, Live-state reconciliation, and documentation alignment.
 
-## Fixes Made
+## Architecture overview
 
-- Added `transport` to the public `Capability` schema and `/api/capabilities`
-  response so clients can distinguish AbletonOSC tools from Device Bridge tools.
-- Updated the generated planner system prompt to include `transport`, preventing
-  the runtime tool catalog from presenting `device_load` as an ordinary OSC tool.
-- Replaced remaining OSC-only executor error wording with transport-neutral
-  action execution wording.
-- Hardened LLMRDeviceBridge startup and request parsing:
-  - accepts both `_Framework.ControlSurface` and `ableton.v2.control_surface`
-    imports;
-  - handles invalid `Content-Length` with `400`;
-  - logs and skips startup instead of crashing the Remote Script when the bridge
-    port is already bound;
-  - uses queue-based browser traversal and resets the scan budget per browser
-    root;
-  - returns early on exact high-confidence matches.
-- Fixed the native VST3 combo-box popup call to avoid relying on a direct
-  selector that the compiler warns about.
-- Synchronized docs around the current AbletonOSC plus Device Bridge contract,
-  setup steps, security model, unsupported workflows, and GitHub/site copy.
-- Added tests for Device Bridge transport metadata in the capability registry,
-  API output, and planner prompt.
-- Added a smoke-test harness, Device Bridge status/candidate/resolve endpoints,
-  OSC reply listener hooks, recognized reply reconciliation, and allow-listed
-  semantic parameter guardrails.
-- Added pre-execution Device Bridge preflight so mixed OSC/device plans do not
-  partially mutate a Live set before discovering that device loading is
-  unavailable or ambiguous.
-- Added exact Device Bridge resolve preflight for `device_load`, including
-  confirmed browser paths and preset queries.
-- Added a first-class VST3 ambiguous-candidate picker for Device Bridge
-  `device_load` preflight. When resolve returns `409`, the plug-in now prompts
-  for an exact candidate path and retries preflight with that path.
-- Changed the API default bind host from `0.0.0.0` to `127.0.0.1`.
-- Added `/api/live/refresh` to request AbletonOSC readback for supported
-  song/track/device/clip data and reconcile recognized replies into live state.
-- Expanded OSC reply reconciliation coverage for additional song/track/clip and
-  device parameter reply shapes, including parameter value strings exposed by
-  `/api/live/tracks/{track_id}/parameters`.
-- Enhanced the real Ableton smoke-test harness with run labels and JSON report
-  output to support repeatable multi-version validation tracking.
-- Modernized the VST3, PyQt, web UI, docs site hero, and screenshot mockup
-  around a darker DAW-style command surface with readiness chips, action cards,
-  clearer run logs, and Details/debug panes.
-- Added Auto-approve controls to the VST3 editor, PyQt GUI, PyQt settings, and
-  web UI. Auto-approve executes immediately after planning, with dry-run mode
-  still producing previews and existing destructive-action checks still applied.
-- Renamed the project status report from `REPORT.md` to `STATUS.md` and added
-  cross-agent instruction files for Codex, Claude, and GitHub Copilot.
-- Bumped the release version to `0.6.8` across Python package metadata, VST3
-  metadata, release docs, and project status.
-- Fixed LLMRDeviceBridge not appearing in Live's MIDI Settings: installer now
-  probes all candidate Remote Scripts paths (User Library, versioned Preferences
-  folders, and any relocated User Library from the Preferences file) and installs
-  to every applicable location.
-- Added cmd-A (select-all) support in all VST3 text fields via `LlmrTextField`
-  and updated `LlmrPromptField` with the same keyboard handling.
-- Fixed VST3 combo-box dropdowns to open when clicking anywhere in the control,
-  not only on the arrow button.
-- Improved Live 12.4 compatibility in LLMRDeviceBridge: added `ableton.v3`
-  import fallback, `call_later` scheduler fallback, and a safe `_log` shim
-  that works regardless of which ControlSurface base class is loaded.
+LLM-r has a VST3-first architecture with Python companion services. The capability registry and planner produce typed transport-aware plans. The executor and VST3 action path route actions to AbletonOSC or the Device Bridge. The Remote Script runs inside Ableton Live and performs browser/device loading. Companion UIs expose planning, execution, readiness, and debug/status surfaces.
 
-## Validation
+### Architecture diagram
 
-Passed:
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="560" viewBox="0 0 1080 560" role="img" aria-labelledby="llmr-arch-title llmr-arch-desc">
+  <title id="llmr-arch-title">LLM-r architecture</title>
+  <desc id="llmr-arch-desc">LLM-r routes transport-aware LLM action plans through a VST3 plugin, FastAPI server, AbletonOSC, and a Device Bridge Remote Script inside Ableton Live.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" /></marker></defs>
+  <rect x="40" y="75" width="190" height="80" rx="10" fill="none" stroke="black" /><text x="135" y="106" text-anchor="middle" font-size="14">VST3 plug-in</text><text x="135" y="128" text-anchor="middle" font-size="12">primary product UI</text>
+  <rect x="40" y="235" width="190" height="85" rx="10" fill="none" stroke="black" /><text x="135" y="266" text-anchor="middle" font-size="14">Companion UIs</text><text x="135" y="288" text-anchor="middle" font-size="12">web UI and PyQt</text><text x="135" y="306" text-anchor="middle" font-size="12">Plan Board</text>
+  <rect x="305" y="150" width="210" height="100" rx="10" fill="none" stroke="black" /><text x="410" y="184" text-anchor="middle" font-size="14">FastAPI server</text><text x="410" y="206" text-anchor="middle" font-size="12">planner, capabilities,</text><text x="410" y="224" text-anchor="middle" font-size="12">settings, live state</text>
+  <rect x="580" y="50" width="210" height="90" rx="10" fill="none" stroke="black" /><text x="685" y="82" text-anchor="middle" font-size="14">Planner and registry</text><text x="685" y="104" text-anchor="middle" font-size="12">transport-aware typed</text><text x="685" y="122" text-anchor="middle" font-size="12">action plans</text>
+  <rect x="580" y="190" width="210" height="90" rx="10" fill="none" stroke="black" /><text x="685" y="222" text-anchor="middle" font-size="14">Executor</text><text x="685" y="244" text-anchor="middle" font-size="12">OSC routing and</text><text x="685" y="262" text-anchor="middle" font-size="12">Device Bridge preflight</text>
+  <rect x="845" y="85" width="190" height="85" rx="10" fill="none" stroke="black" /><text x="940" y="116" text-anchor="middle" font-size="14">AbletonOSC</text><text x="940" y="138" text-anchor="middle" font-size="12">UDP loopback</text><text x="940" y="156" text-anchor="middle" font-size="12">127.0.0.1:11000</text>
+  <rect x="845" y="235" width="190" height="95" rx="10" fill="none" stroke="black" /><text x="940" y="266" text-anchor="middle" font-size="14">LLMRDeviceBridge</text><text x="940" y="288" text-anchor="middle" font-size="12">Remote Script HTTP</text><text x="940" y="306" text-anchor="middle" font-size="12">inside Ableton Live</text>
+  <rect x="580" y="380" width="210" height="80" rx="10" fill="none" stroke="black" /><text x="685" y="410" text-anchor="middle" font-size="14">Smoke testing</text><text x="685" y="432" text-anchor="middle" font-size="12">real Ableton harness</text>
+  <line x1="230" y1="115" x2="305" y2="175" stroke="black" marker-end="url(#arrow)" /><line x1="230" y1="278" x2="305" y2="220" stroke="black" marker-end="url(#arrow)" /><line x1="515" y1="180" x2="580" y2="95" stroke="black" marker-end="url(#arrow)" /><line x1="515" y1="220" x2="580" y2="235" stroke="black" marker-end="url(#arrow)" /><line x1="790" y1="215" x2="845" y2="128" stroke="black" marker-end="url(#arrow)" /><line x1="790" y1="255" x2="845" y2="282" stroke="black" marker-end="url(#arrow)" /><line x1="685" y1="280" x2="685" y2="380" stroke="black" marker-end="url(#arrow)" />
+</svg>
+
+### Flow chart
+
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="360" viewBox="0 0 1100 360" role="img" aria-labelledby="llmr-flow-title llmr-flow-desc">
+  <title id="llmr-flow-title">LLM-r transport-aware execution flow</title>
+  <desc id="llmr-flow-desc">A prompt becomes a typed plan, the plan is preflighted, actions are routed by transport to AbletonOSC or Device Bridge, and Live state/replies are reconciled.</desc>
+  <defs><marker id="flowarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" /></marker></defs>
+  <rect x="25" y="145" width="120" height="65" rx="10" fill="none" stroke="black" /><text x="85" y="173" text-anchor="middle" font-size="12">User prompt</text><text x="85" y="191" text-anchor="middle" font-size="12">or command</text>
+  <rect x="185" y="145" width="120" height="65" rx="10" fill="none" stroke="black" /><text x="245" y="173" text-anchor="middle" font-size="12">Planner</text><text x="245" y="191" text-anchor="middle" font-size="12">builds plan</text>
+  <rect x="345" y="145" width="130" height="65" rx="10" fill="none" stroke="black" /><text x="410" y="173" text-anchor="middle" font-size="12">Validate and</text><text x="410" y="191" text-anchor="middle" font-size="12">preflight</text>
+  <rect x="515" y="70" width="130" height="65" rx="10" fill="none" stroke="black" /><text x="580" y="98" text-anchor="middle" font-size="12">OSC action</text><text x="580" y="116" text-anchor="middle" font-size="12">transport</text>
+  <rect x="515" y="220" width="130" height="65" rx="10" fill="none" stroke="black" /><text x="580" y="248" text-anchor="middle" font-size="12">Device load</text><text x="580" y="266" text-anchor="middle" font-size="12">transport</text>
+  <rect x="710" y="70" width="130" height="65" rx="10" fill="none" stroke="black" /><text x="775" y="98" text-anchor="middle" font-size="12">AbletonOSC</text><text x="775" y="116" text-anchor="middle" font-size="12">mutates Live</text>
+  <rect x="710" y="220" width="130" height="65" rx="10" fill="none" stroke="black" /><text x="775" y="248" text-anchor="middle" font-size="12">Bridge resolves</text><text x="775" y="266" text-anchor="middle" font-size="12">and loads</text>
+  <rect x="905" y="145" width="150" height="65" rx="10" fill="none" stroke="black" /><text x="980" y="173" text-anchor="middle" font-size="12">Reconcile status</text><text x="980" y="191" text-anchor="middle" font-size="12">and replies</text>
+  <line x1="145" y1="177" x2="185" y2="177" stroke="black" marker-end="url(#flowarrow)" /><line x1="305" y1="177" x2="345" y2="177" stroke="black" marker-end="url(#flowarrow)" />
+  <path d="M 475 160 L 515 102" fill="none" stroke="black" marker-end="url(#flowarrow)" /><path d="M 475 194 L 515 252" fill="none" stroke="black" marker-end="url(#flowarrow)" />
+  <line x1="645" y1="102" x2="710" y2="102" stroke="black" marker-end="url(#flowarrow)" /><line x1="645" y1="252" x2="710" y2="252" stroke="black" marker-end="url(#flowarrow)" />
+  <path d="M 840 102 L 905 160" fill="none" stroke="black" marker-end="url(#flowarrow)" /><path d="M 840 252 L 905 194" fill="none" stroke="black" marker-end="url(#flowarrow)" />
+</svg>
+
+## Setup and run instructions
+
+General validation/release-facing checks:
+
+```bash
+python3 -m pytest -q
+PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py llmr/osc_replies.py llmr/device_parameters.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py scripts/smoke_test_live_integration.py
+./scripts/build_vst3.sh
+python3 -m build
+git diff --check
+```
+
+Real Ableton smoke testing is documented in `docs/ABLETON_SMOKE_TEST.md` and assisted by:
+
+```bash
+python3 scripts/smoke_test_live_integration.py
+```
+
+## Configuration and environment variables
+
+- Default AbletonOSC target: `127.0.0.1:11000`.
+- Default LLMRDeviceBridge target: `127.0.0.1:8788`.
+- FastAPI API binds to `127.0.0.1` by default.
+- Remote binding to `0.0.0.0` is explicit opt-in and should be documented/security-reviewed when changed.
+
+## Important files and directories
+
+- `llmr/`: Python package source.
+- `native/vst3/`: native VST3 implementation.
+- `remote_scripts/LLMRDeviceBridge/`: Ableton Live Remote Script.
+- `gui/`: PyQt GUI.
+- `backend/`: companion backend/device server surface.
+- `docs/`: user, release, compatibility, security, capabilities, scenario, and smoke-test docs.
+- `scripts/`: build and integration helpers.
+- `tests/`: automated Python tests.
+- `CLAUDE.md`: Claude compatibility entry point.
+- `.github/copilot-instructions.md`: GitHub Copilot compatibility entry point.
+
+## Recent changes
+
+- Added `transport` to the public `Capability` schema and `/api/capabilities` response.
+- Updated the generated planner system prompt to include `transport`.
+- Replaced OSC-only executor error wording with transport-neutral action execution wording.
+- Hardened LLMRDeviceBridge startup, request parsing, browser traversal, and duplicate-port handling.
+- Fixed a native VST3 combo-box popup warning path.
+- Added Device Bridge transport metadata tests for capability registry, API output, and planner prompt.
+- Added smoke-test harness, Device Bridge status/candidate/resolve endpoints, OSC reply listener hooks, recognised reply reconciliation, and allow-listed semantic parameter guardrails.
+- Added pre-execution Device Bridge preflight and exact candidate-path resolution for `device_load`.
+- Added VST3 ambiguous-candidate picker for Device Bridge `device_load` preflight.
+- Changed API default bind host to `127.0.0.1`.
+- Added `/api/live/refresh` readback and expanded OSC reply reconciliation.
+- Modernised VST3, PyQt, web UI, docs site hero, and screenshot mockup around a darker Plan Board workflow.
+- Added Auto-approve controls to VST3 editor, PyQt GUI, PyQt settings, and web UI while preserving dry-run and destructive-action checks.
+- Renamed project status from `REPORT.md` to `STATUS.md`.
+- Added cross-agent instruction files for Codex, Claude, and GitHub Copilot.
+- Bumped release version to `0.6.8` across Python package metadata, VST3 metadata, release docs, and project status.
+
+## Tests and verification status
+
+Previously recorded validation:
 
 - `python3 -m pytest -q` -> 58 tests passed.
-- `PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py llmr/osc_replies.py llmr/device_parameters.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py scripts/smoke_test_live_integration.py`
-- `./scripts/build_vst3.sh` -> built `build/vst3/LLM-r.vst3` (clean, no warnings).
-- `python3 -m build` -> built `llm_r-0.6.8.tar.gz` and
-  `llm_r-0.6.8-py3-none-any.whl`.
-- Inline web UI script syntax check with `node -e`.
-- `git diff --check`
-- `python3 -m pytest -q tests/test_api.py tests/test_executor.py` -> 29 tests
-  passed.
-- Real Ableton smoke test harness added at
-  `scripts/smoke_test_live_integration.py`; it still requires a manual
-  disposable Live set and was not executed in this audit environment.
+- `PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py llmr/osc_replies.py llmr/device_parameters.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py scripts/smoke_test_live_integration.py` -> passed.
+- `./scripts/build_vst3.sh` -> built `build/vst3/LLM-r.vst3`.
+- `python3 -m build` -> built `llm_r-0.6.8.tar.gz` and `llm_r-0.6.8-py3-none-any.whl`.
+- Inline web UI script syntax check with `node -e` -> passed.
+- `git diff --check` -> passed.
+- `python3 -m pytest -q tests/test_api.py tests/test_executor.py` -> 29 tests passed.
+- VST3 rebuild after candidate picker flow -> built `build/vst3/LLM-r.vst3`.
 
-Not verified in this run:
+Not verified in the previous recorded run:
 
-- Real Ableton Live execution with AbletonOSC and LLMRDeviceBridge enabled.
-- Actual Live browser search/load behavior across different Ableton Live
-  versions and user library contents.
+- real Ableton Live execution with AbletonOSC and LLMRDeviceBridge enabled
+- actual Live browser search/load behaviour across different Ableton Live versions and user library contents
 
-## Residual Risks Closed
+No tests were run while creating this documentation-only status normalisation.
 
-- `device_load` dependency on LLMRDeviceBridge is now explicit and preflighted.
-  The API and VST3 UI expose bridge reachability, and execution blocks before
-  any OSC mutation when the bridge is unavailable.
-- Browser ambiguity is now discoverable through candidate listing and produces a
-  fail-fast `409`/preflight error instead of silently loading the wrong item.
-  Exact candidate paths and preset queries can be resolved before loading;
-  multi-device chain loading remains outside the current capability contract
-  rather than hidden risky behavior.
-- Live state is no longer optimistic-only for supported reads. `/api/live/refresh`
-  requests AbletonOSC readback and the OSC reply listener reconciles recognized
-  song, track, device-parameter, and MIDI-note replies.
-- Semantic device parameter automation is allow-listed and range-checked.
-  Unsupported semantic names fail validation instead of guessing indexes.
-- The HTTP API now binds to `127.0.0.1` by default. Binding to `0.0.0.0` is an
-  explicit opt-in for deliberate remote access.
+## Known issues, risks, and limitations
 
-## Remaining External Verification
+- Real Ableton Live execution requires manual disposable Live-set validation.
+- Actual browser paths and candidate scoring need verification across varied user libraries and plug-in installations.
+- Multi-device chain loading remains outside the current capability contract.
+- Reply parsing and semantic maps should only expand from verified AbletonOSC/Live readback data.
+- Real Ableton execution is not covered by unit tests.
 
-- Run the real Ableton smoke test in disposable Live sets across supported Live
-  versions.
-- Verify actual browser paths and candidate scoring against varied user
-  libraries and plug-in installations.
-- Expand reply parsing and semantic maps only from verified AbletonOSC/Live
-  readback data.
+## Pending tasks
 
-## Next Steps
+- Run the real Ableton smoke-test harness across supported Live versions.
+- Validate the VST3 candidate picker in real Ableton sessions with ambiguous browser queries.
+- Continue growing safe semantic parameter maps from verified Live readback data only.
 
-1. Verify LLMRDeviceBridge appears in Live's MIDI settings after reinstalling
-   with the updated multi-path installer logic.
-2. Run and refine the real Ableton smoke-test harness against multiple Ableton
-   Live versions (12.1, 12.4).
-3. Validate the new VST3 candidate picker in real Ableton sessions by forcing
-   ambiguous browser queries and confirming the selected path loads correctly.
-4. Grow safe semantic parameter maps only from verified Live readback data.
-5. Keep release packaging focused on one primary install path: VST3 bundle plus
-   bundled Remote Script, with server/GUI clearly marked as companion tools.
+## Next steps
+
+1. Run and refine the real Ableton smoke-test harness against multiple Ableton Live versions.
+2. Validate the VST3 candidate picker in real Ableton sessions by forcing ambiguous browser queries and confirming the selected path loads correctly.
+3. Grow safe semantic parameter maps only from verified Live readback data.
+4. Keep release packaging focused on one primary install path: VST3 bundle plus bundled Remote Script, with server/GUI clearly marked as companion tools.
+
+## Longer-term steps
+
+1. Continue strengthening Live-state reconciliation through verified AbletonOSC replies.
+2. Preserve VST3-first packaging and make companion surfaces clearly secondary.
+3. Expand safe transport-aware capabilities only when AbletonOSC/Device Bridge behaviour is verified.
+
+## Decisions and rationale
+
+- The native VST3 plug-in is the main product surface.
+- FastAPI server, web UI, and PyQt GUI are companion surfaces.
+- `osc` and `device_bridge` are distinct transports and must remain explicit.
+- Device loading belongs inside the Ableton Live Remote Script runtime, not in an external Python process importing Ableton's `Live` API.
+- API loopback binding is the default security posture.
+
+---
+
+Last updated: 2026-05-07 00:15
