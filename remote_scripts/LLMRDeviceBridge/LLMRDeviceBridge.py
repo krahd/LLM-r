@@ -8,7 +8,10 @@ from urllib.parse import parse_qs, urlparse
 try:
     from _Framework.ControlSurface import ControlSurface
 except ImportError:
-    from ableton.v2.control_surface import ControlSurface
+    try:
+        from ableton.v3.control_surface import ControlSurface
+    except ImportError:
+        from ableton.v2.control_surface import ControlSurface
 
 
 HOST = "127.0.0.1"
@@ -108,6 +111,14 @@ class LLMRDeviceBridge(ControlSurface):
         self._server_thread = None
         self._start_server()
 
+    def _log(self, message):
+        # Compatibility shim: ableton.v3 may not expose log_message.
+        if hasattr(self, "log_message"):
+            self.log_message(message)
+        else:
+            import sys
+            print("[LLMRDeviceBridge] " + str(message), file=sys.stderr)
+
     def disconnect(self):
         self._stop_server()
         ControlSurface.disconnect(self)
@@ -118,13 +129,13 @@ class LLMRDeviceBridge(ControlSurface):
         try:
             self._server = _BridgeServer((HOST, PORT), _BridgeHandler, self)
         except OSError as exc:
-            self.log_message("LLM-r Device Bridge could not bind %s:%d: %s" % (HOST, PORT, exc))
+            self._log("LLM-r Device Bridge could not bind %s:%d: %s" % (HOST, PORT, exc))
             self._server = None
             return
         self._server_thread = threading.Thread(target=self._server.serve_forever)
         self._server_thread.daemon = True
         self._server_thread.start()
-        self.log_message("LLM-r Device Bridge listening on %s:%d" % (HOST, PORT))
+        self._log("LLM-r Device Bridge listening on %s:%d" % (HOST, PORT))
 
     def _stop_server(self):
         if self._server:
@@ -132,6 +143,14 @@ class LLMRDeviceBridge(ControlSurface):
             self._server.server_close()
             self._server = None
         self._server_thread = None
+
+    def _schedule_on_live_thread(self, callback):
+        # Live 12 (ableton.v3) exposes `call_later`; older versions use
+        # `schedule_message`.  Fall back gracefully whichever is available.
+        if hasattr(self, "call_later"):
+            self.call_later(0, callback)
+        else:
+            self.schedule_message(0, callback)
 
     def run_on_live_thread(self, callback, timeout=10.0):
         done = threading.Event()
@@ -146,11 +165,11 @@ class LLMRDeviceBridge(ControlSurface):
             finally:
                 done.set()
 
-        self.schedule_message(0, wrapped)
+        self._schedule_on_live_thread(wrapped)
         if not done.wait(timeout):
             raise RuntimeError("Timed out waiting for Live API")
         if "error" in result:
-            self.log_message("LLM-r Device Bridge Live callback failed:\n%s" % result.get("traceback", ""))
+            self._log("LLM-r Device Bridge Live callback failed:\n%s" % result.get("traceback", ""))
             raise result["error"]
         return result.get("value")
 
@@ -217,7 +236,8 @@ class LLMRDeviceBridge(ControlSurface):
         if browser_path:
             match = self._find_browser_item_by_path(browser_path, device_type)
             if match is None:
-                raise LookupError("No loadable browser item matched path '%s'" % " > ".join(browser_path))
+                raise LookupError("No loadable browser item matched path '%s'" %
+                                  " > ".join(browser_path))
             item, path = match
             score = 3
             selection_mode = "browser_path"
@@ -310,7 +330,8 @@ class LLMRDeviceBridge(ControlSurface):
         if len(tied) > 1 and not allow_ambiguous:
             raise AmbiguousDeviceError(
                 query,
-                [self._candidate_payload(match[0], match[1], match[2], device_type) for match in tied[:8]],
+                [self._candidate_payload(match[0], match[1], match[2], device_type)
+                 for match in tied[:8]],
             )
         return matches[0]
 
