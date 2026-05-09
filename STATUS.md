@@ -1,6 +1,6 @@
 # LLM-r – Project Status
 
-Last updated: 2026-05-07 00:15
+Last updated: 2026-05-09 20:05
 
 ## Project purpose
 
@@ -8,7 +8,7 @@ LLM-r bridges Ableton Live and LLM planners. Its main product surface is a nativ
 
 ## Current implementation state
 
-LLM-r is currently at package version `0.6.8`.
+LLM-r is currently at package version `0.6.8`. The repository audit on 2026-05-09 found 60 tracked project files outside ignored caches/build outputs: 26 Python files, 22 Markdown files, 7 shell scripts, 2 HTML files, 2 workflow YAML files, 1 C++ VST3 source file, 1 SVG screenshot, package metadata, install helpers, and the tracked `gui_run.log`.
 
 The runtime has two action transports:
 
@@ -17,15 +17,15 @@ The runtime has two action transports:
 
 The Python planner builds typed action plans from the declarative capability registry in `llmr/ableton_osc.py`. The executor routes OSC actions through AbletonOSC and routes `device_load` through `llmr/device_bridge.py`. The VST3 plug-in has its own direct action execution path and prompts users to install LLMRDeviceBridge when device loading is needed.
 
-Core coverage includes song/transport setup, track and scene operations, clip creation/editing, MIDI note add/remove/get requests, audio clip properties, device parameter access by index, device deletion, undo/redo, and single browser device or plug-in loading.
+Core coverage includes 66 declared tools and matching schema enum entries. The audited capability registry currently exposes 65 `osc` capabilities and 1 `device_bridge` capability, with 59 safe capabilities, 7 confirm/destructive capabilities, and domains for clips, tracks, song, devices, session, audio, MIDI, parameters, and utility actions. Coverage includes song/transport setup, track and scene operations, clip creation/editing, MIDI note add/remove/get requests, audio clip properties, device parameter access by index or verified semantic aliases, device deletion, undo/redo, and single browser device or plug-in loading.
 
-Additional integration support includes a real Ableton smoke-test harness, Device Bridge health/candidate/resolve APIs, OSC reply listener status/recent-reply APIs, and safe semantic parameter maps. The API binds to loopback by default.
+Additional integration support includes a real Ableton smoke-test harness, Device Bridge health/candidate/resolve APIs, OSC reply listener status/recent-reply APIs, runtime macro/session stores, Modelito/Ollama management endpoints, and safe semantic parameter maps. The API binds to loopback by default.
 
 Primary UI surfaces have been modernised around a Plan Board workflow. The VST3 editor, PyQt GUI, and companion web UI expose readiness/status chips, clear Plan/Details or Plan/Run/Details panes, and Auto-approve controls for running plans immediately after planning while preserving dry-run safeguards.
 
 ## Active focus
 
-Current focus is release-facing stabilisation of the VST3-first product path, AbletonOSC plus Device Bridge transport correctness, real Ableton smoke validation, candidate resolution for device loading, Live-state reconciliation, and documentation alignment.
+Current focus is release-facing stabilisation of the VST3-first product path, AbletonOSC plus Device Bridge transport correctness, real Ableton smoke validation, candidate resolution for device loading, Live-state reconciliation, packaging hygiene, and documentation alignment. The latest audit did not change runtime behaviour; it refreshed this status snapshot and recorded current verification gaps.
 
 ## Architecture overview
 
@@ -93,21 +93,27 @@ python3 scripts/smoke_test_live_integration.py
 - FastAPI API binds to `127.0.0.1` by default.
 - Remote binding to `0.0.0.0` is explicit opt-in and should be documented/security-reviewed when changed.
 
+## Audited API route surface
+
+The FastAPI surface currently includes health, Device Bridge status/devices/resolve, semantic device-parameter maps, OSC reply status/recent replies, Live refresh and read-model endpoints, capabilities with filtering, settings, model metadata, Modelito/Ollama management, streaming, macro CRUD, planning, macro planning, plan lookup, execution, batch execution, session listing/detail, and history endpoints.
+
 ## Important files and directories
 
-- `llmr/`: Python package source.
-- `native/vst3/`: native VST3 implementation.
-- `remote_scripts/LLMRDeviceBridge/`: Ableton Live Remote Script.
-- `gui/`: PyQt GUI.
-- `backend/`: companion backend/device server surface.
-- `docs/`: user, release, compatibility, security, capabilities, scenario, and smoke-test docs.
-- `scripts/`: build and integration helpers.
-- `tests/`: automated Python tests.
-- `CLAUDE.md`: Claude compatibility entry point.
-- `.github/copilot-instructions.md`: GitHub Copilot compatibility entry point.
+- `llmr/`: Python package source, including schemas, capability registry, planner, executor, FastAPI app, config, Modelito adapter, macro/session persistence, OSC reply reconciliation, Device Bridge client, and semantic device-parameter maps.
+- `native/vst3/`: self-contained native VST3 implementation, including model/provider settings, Plan Board UI, direct planning/execution path, OSC sending, Device Bridge checks, candidate picker, and Remote Script install helper.
+- `remote_scripts/LLMRDeviceBridge/`: Ableton Live Remote Script that hosts the loopback HTTP bridge and performs browser/device loading inside Live.
+- `gui/`: PyQt companion GUI with embedded or HTTP backend modes, settings, model management, planning, execution, and Auto-approve controls.
+- `backend/`: companion server entry points and backend/device-server surface.
+- `web/`: FastAPI-served web UI.
+- `docs/`: user, release, compatibility, security, capabilities, scenario, smoke-test, development-plan, and static documentation-site assets.
+- `scripts/`: VST3 build/install helpers, release helper, OSC probe, and real Ableton smoke-test harness.
+- `tests/`: automated Python tests for capability mapping, planner behaviour, API routes, executor transport routing/preflight, and Modelito adapter behaviour.
+- `.github/workflows/`: release artifact and GitHub Pages workflows.
+- `CLAUDE.md` and `.github/copilot-instructions.md`: compatibility entry points that defer to `AGENTS.md`.
 
 ## Recent changes
 
+- Audited the repository on 2026-05-09 and refreshed this status snapshot with current file inventory, capability counts, route surface, verification results, and validation gaps.
 - Added `transport` to the public `Capability` schema and `/api/capabilities` response.
 - Updated the generated planner system prompt to include `transport`.
 - Replaced OSC-only executor error wording with transport-neutral action execution wording.
@@ -127,44 +133,53 @@ python3 scripts/smoke_test_live_integration.py
 
 ## Tests and verification status
 
-Previously recorded validation:
+Validation run during the 2026-05-09 audit:
 
-- `python3 -m pytest -q` -> 58 tests passed.
+- `python3 -m pytest -q` -> 58 tests passed; pytest emitted one warning that `asyncio_default_fixture_loop_scope` is an unknown config option in this environment.
 - `PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py llmr/osc_replies.py llmr/device_parameters.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py scripts/smoke_test_live_integration.py` -> passed.
-- `./scripts/build_vst3.sh` -> built `build/vst3/LLM-r.vst3`.
-- `python3 -m build` -> built `llm_r-0.6.8.tar.gz` and `llm_r-0.6.8-py3-none-any.whl`.
-- Inline web UI script syntax check with `node -e` -> passed.
-- `git diff --check` -> passed.
-- `python3 -m pytest -q tests/test_api.py tests/test_executor.py` -> 29 tests passed.
-- VST3 rebuild after candidate picker flow -> built `build/vst3/LLM-r.vst3`.
+- `PYTHONPYCACHEPREFIX=/tmp/llmr-pyc-all python3 -m py_compile $(rg --files -g '*.py')` -> passed for all Python files in the repository.
+- `node -e "const fs=require('fs'); for (const f of ['web/index.html','docs/index.html']) { const s=fs.readFileSync(f,'utf8'); let n=0; const re=/<script[^>]*>([\s\S]*?)<\/script>/gi; let m; while ((m=re.exec(s))) { n++; new Function(m[1]); } console.log(f+': '+n+' inline scripts parsed'); }"` -> passed; `web/index.html` contains one parsed inline script and `docs/index.html` contains none.
+- `./scripts/build_vst3.sh` -> not run to completion because this Linux environment reports that VST3 bundle builds are currently macOS-only.
+- `python3 -m build` -> not run to completion because the `build` module is not installed in this environment.
 
-Not verified in the previous recorded run:
+Current automated test coverage checks Python registry/action validation, API serialisation and routes, planner prompt generation and persistence, executor routing/preflight, macro/session behaviour through API tests, Modelito adapter behaviour, Live-state simulation/reconciliation, and dry-run/destructive handling.
+
+Not verified in this audit:
 
 - real Ableton Live execution with AbletonOSC and LLMRDeviceBridge enabled
+- native macOS VST3 compilation/loading in Ableton Live
 - actual Live browser search/load behaviour across different Ableton Live versions and user library contents
-
-No tests were run while creating this documentation-only status normalisation.
+- release wheel/sdist build in this container without installing additional tooling
 
 ## Known issues, risks, and limitations
 
 - Real Ableton Live execution requires manual disposable Live-set validation.
+- Native VST3 build/install/load validation requires macOS and Ableton Live; the Linux audit container cannot complete `scripts/build_vst3.sh`.
 - Actual browser paths and candidate scoring need verification across varied user libraries and plug-in installations.
 - Multi-device chain loading remains outside the current capability contract.
 - Reply parsing and semantic maps should only expand from verified AbletonOSC/Live readback data.
 - Real Ableton execution is not covered by unit tests.
+- The pytest configuration contains `asyncio_default_fixture_loop_scope`, which is warned as unknown by the installed pytest stack.
+- The repository tracks `gui_run.log`; avoid treating local runtime log growth as a meaningful source change unless intentionally updating it.
 
 ## Pending tasks
 
 - Run the real Ableton smoke-test harness across supported Live versions.
 - Validate the VST3 candidate picker in real Ableton sessions with ambiguous browser queries.
+- Re-run native VST3 compilation, install, and Ableton plug-in loading on macOS.
+- Install packaging tooling or use CI to re-run `python3 -m build` for the 0.6.8 sdist/wheel.
+- Decide whether to remove or intentionally maintain the tracked `gui_run.log`.
+- Investigate or remove the pytest `asyncio_default_fixture_loop_scope` option if it remains unsupported by the active pytest plugin set.
 - Continue growing safe semantic parameter maps from verified Live readback data only.
 
 ## Next steps
 
 1. Run and refine the real Ableton smoke-test harness against multiple Ableton Live versions.
-2. Validate the VST3 candidate picker in real Ableton sessions by forcing ambiguous browser queries and confirming the selected path loads correctly.
-3. Grow safe semantic parameter maps only from verified Live readback data.
-4. Keep release packaging focused on one primary install path: VST3 bundle plus bundled Remote Script, with server/GUI clearly marked as companion tools.
+2. On macOS, rebuild `LLM-r.vst3`, install it into the user VST3 folder, rescan in Ableton Live, and verify the self-contained Plan Board workflow.
+3. Validate the VST3 candidate picker in real Ableton sessions by forcing ambiguous browser queries and confirming the selected path loads correctly.
+4. Re-run release packaging through CI or an environment with `build` installed.
+5. Grow safe semantic parameter maps only from verified Live readback data.
+6. Keep release packaging focused on one primary install path: VST3 bundle plus bundled Remote Script, with server/GUI clearly marked as companion tools.
 
 ## Longer-term steps
 
@@ -174,6 +189,7 @@ No tests were run while creating this documentation-only status normalisation.
 
 ## Decisions and rationale
 
+- The 2026-05-09 audit was documentation-only; no runtime files were changed.
 - The native VST3 plug-in is the main product surface.
 - FastAPI server, web UI, and PyQt GUI are companion surfaces.
 - `osc` and `device_bridge` are distinct transports and must remain explicit.
@@ -182,4 +198,4 @@ No tests were run while creating this documentation-only status normalisation.
 
 ---
 
-Last updated: 2026-05-07 00:15
+Last updated: 2026-05-09 20:05
