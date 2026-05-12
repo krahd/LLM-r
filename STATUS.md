@@ -1,6 +1,6 @@
 # LLM-r – Project Status
 
-Last updated: 2026-05-09 20:05
+Last updated: 2026-05-12 02:40
 
 ## Project purpose
 
@@ -113,6 +113,7 @@ The FastAPI surface currently includes health, Device Bridge status/devices/reso
 
 ## Recent changes
 
+- Migrated the Modelito dependency pin to the latest upstream release tag commit (`v1.4.0`, `1573ad52ec9b688cbf12260ee4acd17663aeaf1b`) and synced tracked package metadata.
 - Audited the repository on 2026-05-09 and refreshed this status snapshot with current file inventory, capability counts, route surface, verification results, and validation gaps.
 - Added `transport` to the public `Capability` schema and `/api/capabilities` response.
 - Updated the generated planner system prompt to include `transport`.
@@ -198,4 +199,4 @@ Not verified in this audit:
 
 ---
 
-Last updated: 2026-05-09 20:05
+Last updated: 2026-05-12 02:40
