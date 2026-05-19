@@ -62,7 +62,7 @@ _MODEL_FALLBACKS = {
     "anthropic": ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"],
     "google": ["gemini-1.5-pro", "gemini-1.5-flash"],
     "ollama": ["llama3:latest", "mistral:latest", "codellama:latest"],
-    "omlx": [],
+    "omlx": ["llama3:latest", "mistral:latest"],
     "cohere": ["command-r", "command-r-plus"],
     "mistral": ["mistral-large-latest", "mistral-small-latest"],
     "mock": ["mock-model"],
@@ -1354,8 +1354,6 @@ class AdvancedSettingsDialog(QDialog):
         _set_combo_items(self.model_combo, _MODEL_FALLBACKS.get(provider, []), preferred)
         if provider == "ollama":
             QTimer.singleShot(0, self._load_local_models)
-        elif provider == "omlx":
-            QTimer.singleShot(0, self._load_local_omlx_models)
         self._mark_dirty()
 
     def _populate_model_list(self) -> None:
@@ -1884,9 +1882,6 @@ class SettingsDialog(QDialog):
         if provider == "ollama":
             self._load_ollama_models(current)
             return
-        if provider == "omlx":
-            self._load_omlx_models(current)
-            return
         self.model_status.setText("Loading models...")
 
         def on_done(payload: dict) -> None:
@@ -1931,31 +1926,6 @@ class SettingsDialog(QDialog):
 
         self._run_async(
             lambda: self._backend.ollama("local_models"),
-            on_done,
-            on_error=on_error,
-            lock=(self.refresh_models_btn,),
-        )
-
-    def _load_omlx_models(self, current: str = "") -> None:
-        self.model_status.setText("Loading local oMLX models...")
-
-        def on_done(payload: dict) -> None:
-            models = [str(m) for m in payload.get("models", []) if str(m).strip()]
-            values = models + _MODEL_FALLBACKS.get("omlx", []) + ([current] if current else [])
-            _set_combo_items(self.model_combo, values, current)
-            count = len(models)
-            suffix = " Use Advanced Settings to start oMLX or download models." if count == 0 else ""
-            self.model_status.setText(f"{count} local oMLX model(s) found.{suffix}")
-
-        def on_error(msg: str) -> None:
-            values = _MODEL_FALLBACKS.get("omlx", []) + ([current] if current else [])
-            _set_combo_items(self.model_combo, values, current)
-            self.model_status.setText(
-                f"Could not read local oMLX models: {msg}. Use Advanced Settings for oMLX controls."
-            )
-
-        self._run_async(
-            lambda: self._backend.omlx("local_models"),
             on_done,
             on_error=on_error,
             lock=(self.refresh_models_btn,),

@@ -34,17 +34,6 @@ from llmr.macros import (
 from llmr.modelito_adapter import (
     ModelitoClient,
     modelito_models,
-    omlx_delete,
-    omlx_download,
-    omlx_install,
-    omlx_local_models,
-    omlx_remote_models,
-    omlx_running_models,
-    omlx_serve,
-    omlx_start,
-    omlx_status,
-    omlx_stop,
-    omlx_stop_serving,
     ollama_delete,
     ollama_download,
     ollama_install,
@@ -56,6 +45,17 @@ from llmr.modelito_adapter import (
     ollama_status,
     ollama_stop,
     ollama_stop_serving,
+    omlx_delete,
+    omlx_download,
+    omlx_install,
+    omlx_local_models,
+    omlx_remote_models,
+    omlx_running_models,
+    omlx_serve,
+    omlx_start,
+    omlx_status,
+    omlx_stop,
+    omlx_stop_serving,
 )
 from llmr.planner import IntentPlanner, PlanStore
 from llmr.prompts import planner_extra_prompt
@@ -116,7 +116,7 @@ class SettingsPatch(BaseModel):
     api_token: str | None = None
 
 
-class LocalModelRequest(BaseModel):
+class OllamaModelRequest(BaseModel):
     model: str = Field(min_length=1, max_length=256)
 
 
@@ -1169,22 +1169,22 @@ def post_ollama_install() -> dict:
 
 
 @app.post("/api/ollama/download", dependencies=[Depends(_require_auth)])
-def post_ollama_download(req: LocalModelRequest) -> dict:
+def post_ollama_download(req: OllamaModelRequest) -> dict:
     return ollama_download(req.model)
 
 
 @app.post("/api/ollama/delete", dependencies=[Depends(_require_auth)])
-def post_ollama_delete(req: LocalModelRequest) -> dict:
+def post_ollama_delete(req: OllamaModelRequest) -> dict:
     return ollama_delete(req.model)
 
 
 @app.post("/api/ollama/serve", dependencies=[Depends(_require_auth)])
-def post_ollama_serve(req: LocalModelRequest) -> dict:
+def post_ollama_serve(req: OllamaModelRequest) -> dict:
     return ollama_serve(req.model)
 
 
 @app.post("/api/ollama/stop_serving", dependencies=[Depends(_require_auth)])
-def post_ollama_stop_serving(req: LocalModelRequest) -> dict:
+def post_ollama_stop_serving(req: OllamaModelRequest) -> dict:
     return ollama_stop_serving(req.model)
 
 
@@ -1224,22 +1224,22 @@ def post_omlx_install() -> dict:
 
 
 @app.post("/api/omlx/download", dependencies=[Depends(_require_auth)])
-def post_omlx_download(req: LocalModelRequest) -> dict:
+def post_omlx_download(req: OllamaModelRequest) -> dict:
     return omlx_download(req.model)
 
 
 @app.post("/api/omlx/delete", dependencies=[Depends(_require_auth)])
-def post_omlx_delete(req: LocalModelRequest) -> dict:
+def post_omlx_delete(req: OllamaModelRequest) -> dict:
     return omlx_delete(req.model)
 
 
 @app.post("/api/omlx/serve", dependencies=[Depends(_require_auth)])
-def post_omlx_serve(req: LocalModelRequest) -> dict:
+def post_omlx_serve(req: OllamaModelRequest) -> dict:
     return omlx_serve(req.model)
 
 
 @app.post("/api/omlx/stop_serving", dependencies=[Depends(_require_auth)])
-def post_omlx_stop_serving(req: LocalModelRequest) -> dict:
+def post_omlx_stop_serving(req: OllamaModelRequest) -> dict:
     return omlx_stop_serving(req.model)
 
 
