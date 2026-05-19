@@ -1,6 +1,6 @@
 # LLM-r – Project Status
 
-Last updated: 2026-05-19 16:20
+Last updated: 2026-05-19 17:12
 
 ## Project purpose
 
@@ -113,9 +113,15 @@ The FastAPI surface currently includes health, Device Bridge status/devices/reso
 
 ## Recent changes
 
-- Added complete oMLX runtime management support: status, model listing, model download/delete/serve operations, and service start/stop via FastAPI endpoints and adapter functions.
-- Added oMLX provider option to PyQt GUI with default models and provider list.
-- Updated documentation (MODELITO.md) with oMLX setup examples and configuration.
+- Completed oMLX local runtime integration pass across API, adapter, and GUI surfaces.
+- Renamed API request model `OllamaModelRequest` to `LocalModelRequest`, now shared by Ollama and oMLX model-operation endpoints (`download`, `delete`, `serve`, `stop_serving`).
+- oMLX runtime management is exposed through FastAPI, Modelito adapter helpers, and the PyQt local-runtime controls.
+- Added PyQt Advanced Settings oMLX controls for status, install/start/stop, local/running/remote model lists, download/delete/serve/stop-serving, and set-active-model flow.
+- Updated provider-change/model-loading logic so `ollama` uses local Ollama models, `omlx` uses local oMLX models, and other providers continue using generic Modelito model discovery.
+- Made oMLX GUI fallback model hints conservative to avoid implying Ollama model-ID compatibility.
+- Added API tests for `/api/omlx/*` GET/POST routes via FastAPI `TestClient`, including model argument forwarding checks.
+- Added API test coverage for `/api/settings` persistence of `modelito_provider=omlx` and `modelito_model`.
+- Expanded `docs/MODELITO.md` with oMLX environment examples, management API usage, and model-compatibility caveats.
 - Added oMLX to supported providers: users can now select `omlx` via `LLMR_PROVIDER` env var or GUI settings.
 - Added oMLX as a supported LLM provider option alongside Ollama and cloud providers in the PyQt GUI and configuration.
 - Updated Modelito dependency to PyPI version `1.4.5` from pinned git commit.
@@ -141,10 +147,15 @@ The FastAPI surface currently includes health, Device Bridge status/devices/reso
 
 ## Tests and verification status
 
-Validation run during the 2026-05-09 audit:
+Validation run for the oMLX completion pass:
 
-- `python3 -m pytest -q` -> 58 tests passed; pytest emitted one warning that `asyncio_default_fixture_loop_scope` is an unknown config option in this environment.
-- `PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py llmr/osc_replies.py llmr/device_parameters.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py scripts/smoke_test_live_integration.py` -> passed.
+- `python -m pytest -q` -> 60 tests passed.
+- `python -m py_compile gui/pyqt_app.py llmr/app.py llmr/modelito_adapter.py` -> passed.
+- `ruff check .` -> passed.
+- `git diff --check` -> passed.
+
+Prior audit checks (including broader py_compile/node script parsing) are retained below for context:
+
 - `PYTHONPYCACHEPREFIX=/tmp/llmr-pyc-all python3 -m py_compile $(rg --files -g '*.py')` -> passed for all Python files in the repository.
 - `node -e "const fs=require('fs'); for (const f of ['web/index.html','docs/index.html']) { const s=fs.readFileSync(f,'utf8'); let n=0; const re=/<script[^>]*>([\s\S]*?)<\/script>/gi; let m; while ((m=re.exec(s))) { n++; new Function(m[1]); } console.log(f+': '+n+' inline scripts parsed'); }"` -> passed; `web/index.html` contains one parsed inline script and `docs/index.html` contains none.
 - `./scripts/build_vst3.sh` -> not run to completion because this Linux environment reports that VST3 bundle builds are currently macOS-only.
@@ -167,6 +178,7 @@ Not verified in this audit:
 - Multi-device chain loading remains outside the current capability contract.
 - Reply parsing and semantic maps should only expand from verified AbletonOSC/Live readback data.
 - Real Ableton execution is not covered by unit tests.
+- Real oMLX install/runtime validation remains manual; automated tests use mocked API adapters and do not start a live oMLX runtime.
 - The pytest configuration contains `asyncio_default_fixture_loop_scope`, which is warned as unknown by the installed pytest stack.
 - The repository tracks `gui_run.log`; avoid treating local runtime log growth as a meaningful source change unless intentionally updating it.
 
@@ -206,4 +218,4 @@ Not verified in this audit:
 
 ---
 
-Last updated: 2026-05-19 16:20
+Last updated: 2026-05-19 17:12

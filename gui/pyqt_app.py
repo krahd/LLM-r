@@ -62,7 +62,8 @@ _MODEL_FALLBACKS = {
     "anthropic": ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"],
     "google": ["gemini-1.5-pro", "gemini-1.5-flash"],
     "ollama": ["llama3:latest", "mistral:latest", "codellama:latest"],
-    "omlx": ["llama3:latest", "mistral:latest"],
+    # Keep oMLX fallback empty; prefer runtime-discovered local/remote model IDs.
+    "omlx": [],
     "cohere": ["command-r", "command-r-plus"],
     "mistral": ["mistral-large-latest", "mistral-small-latest"],
     "mock": ["mock-model"],
@@ -80,11 +81,8 @@ _COMMON_OLLAMA_MODELS = [
 ]
 
 _COMMON_OMLX_MODELS = [
-    "llama3:latest",
-    "llama3.1:latest",
-    "mistral:latest",
-    "codellama:latest",
-    "phi3:latest",
+    # oMLX model IDs should normally come from /api/omlx/local_models or
+    # /api/omlx/remote_models, not hard-coded Ollama-style assumptions.
 ]
 
 if str(_PROJECT_ROOT) not in sys.path:
@@ -841,6 +839,7 @@ class AdvancedSettingsDialog(QDialog):
         self._build_model_tab()
         self._build_api_keys_tab()
         self._build_ollama_tab()
+        self._build_omlx_tab()
         self._build_runtime_tab()
         self._build_connection_tab()
 
@@ -883,6 +882,7 @@ class AdvancedSettingsDialog(QDialog):
         QTimer.singleShot(0, self._check_connection)
         QTimer.singleShot(50, self._populate_model_list)
         QTimer.singleShot(100, self._refresh_ollama)
+        QTimer.singleShot(150, self._refresh_omlx)
 
     # ── UI builders ───────────────────────────────────────────────────────────
 
@@ -1140,6 +1140,152 @@ class AdvancedSettingsDialog(QDialog):
         self.stop_serving_btn.clicked.connect(self._stop_serving_selected)
         self.set_ollama_model_btn.clicked.connect(self._set_active_ollama_model)
 
+    def _build_omlx_tab(self) -> None:
+        w = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(14)
+
+        svc_grp = QGroupBox("oMLX Service")
+        svc_layout = QVBoxLayout()
+        svc_layout.setSpacing(8)
+        self.omlx_status_lbl = QLabel("Status not checked.")
+        self.omlx_status_lbl.setWordWrap(True)
+        self.omlx_status_lbl.setStyleSheet("font-size: 12px; color: #aeb7c6;")
+
+        svc_btns = QHBoxLayout()
+        self.omlx_install_btn = QPushButton("Install")
+        self.omlx_start_btn = QPushButton("Start Service")
+        self.omlx_stop_btn = QPushButton("Stop Service")
+        self.omlx_stop_btn.setProperty("role", "danger")
+        self.omlx_stop_btn.setStyle(self.omlx_stop_btn.style())
+        self.omlx_check_btn = QPushButton("Refresh")
+        for btn in (
+            self.omlx_install_btn,
+            self.omlx_start_btn,
+            self.omlx_stop_btn,
+            self.omlx_check_btn,
+        ):
+            svc_btns.addWidget(btn)
+        svc_btns.addStretch()
+        svc_layout.addWidget(self.omlx_status_lbl)
+        svc_layout.addLayout(svc_btns)
+        svc_grp.setLayout(svc_layout)
+
+        local_grp = QGroupBox("Local and Served Models")
+        local_grp.setMinimumHeight(185)
+        local_layout = QVBoxLayout()
+        local_layout.setSpacing(7)
+        self.omlx_local_models_combo = self._new_combo(
+            editable=False,
+            placeholder="Local oMLX models appear here",
+        )
+        self.omlx_running_models_combo = self._new_combo(
+            editable=False,
+            placeholder="Served oMLX models appear here",
+        )
+
+        self.set_omlx_model_btn = QPushButton("Set Active")
+        self.set_omlx_model_btn.setToolTip(
+            "Use the selected local oMLX model for planning after Save.")
+        self.omlx_serve_model_btn = QPushButton("Serve")
+        self.omlx_serve_model_btn.setToolTip("Load the selected local model in oMLX.")
+        self.omlx_serve_model_btn.setProperty("role", "primary")
+        self.omlx_serve_model_btn.setStyle(self.omlx_serve_model_btn.style())
+        self.omlx_delete_model_btn = QPushButton("Delete")
+        self.omlx_delete_model_btn.setToolTip("Delete the selected local oMLX model.")
+        self.omlx_delete_model_btn.setProperty("role", "danger")
+        self.omlx_delete_model_btn.setStyle(self.omlx_delete_model_btn.style())
+        self.omlx_refresh_local_btn = QPushButton("Refresh")
+        self.omlx_refresh_local_btn.setToolTip("Reload local oMLX models.")
+
+        self.omlx_stop_serving_btn = QPushButton("Stop")
+        self.omlx_stop_serving_btn.setToolTip("Stop serving the selected loaded oMLX model.")
+        self.omlx_stop_serving_btn.setProperty("role", "danger")
+        self.omlx_stop_serving_btn.setStyle(self.omlx_stop_serving_btn.style())
+        self.omlx_refresh_running_btn = QPushButton("Refresh")
+        self.omlx_refresh_running_btn.setToolTip("Reload served oMLX models.")
+
+        local_model_lbl = QLabel("Local model")
+        local_model_lbl.setStyleSheet("font-weight: 600; color: #d9e0ea;")
+        local_model_lbl.setMinimumWidth(90)
+        served_model_lbl = QLabel("Served model")
+        served_model_lbl.setStyleSheet("font-weight: 600; color: #d9e0ea;")
+        served_model_lbl.setMinimumWidth(90)
+
+        local_row = QHBoxLayout()
+        local_row.setSpacing(8)
+        local_row.addWidget(local_model_lbl)
+        local_row.addWidget(self.omlx_local_models_combo, stretch=1)
+        local_row.addWidget(self.set_omlx_model_btn)
+        local_row.addWidget(self.omlx_serve_model_btn)
+        local_row.addWidget(self.omlx_delete_model_btn)
+        local_row.addWidget(self.omlx_refresh_local_btn)
+
+        served_row = QHBoxLayout()
+        served_row.setSpacing(8)
+        served_row.addWidget(served_model_lbl)
+        served_row.addWidget(self.omlx_running_models_combo, stretch=1)
+        served_row.addWidget(self.omlx_stop_serving_btn)
+        served_row.addWidget(self.omlx_refresh_running_btn)
+
+        local_layout.addLayout(local_row)
+        local_layout.addLayout(served_row)
+        local_grp.setLayout(local_layout)
+
+        remote_grp = QGroupBox("Downloadable oMLX Models")
+        remote_layout = QVBoxLayout()
+        remote_layout.setSpacing(8)
+        self.omlx_remote_models_combo = self._new_combo(
+            editable=False,
+            placeholder="Choose a downloadable model",
+        )
+        _set_combo_items(self.omlx_remote_models_combo, _COMMON_OMLX_MODELS)
+        remote_btns = QHBoxLayout()
+        self.omlx_list_remote_btn = QPushButton("Load Online List")
+        self.omlx_download_model_btn = QPushButton("Download Selected")
+        self.omlx_download_model_btn.setProperty("role", "primary")
+        self.omlx_download_model_btn.setStyle(self.omlx_download_model_btn.style())
+        remote_btns.addWidget(self.omlx_list_remote_btn)
+        remote_btns.addWidget(self.omlx_download_model_btn)
+        remote_btns.addStretch()
+        remote_layout.addWidget(self.omlx_remote_models_combo)
+        remote_layout.addLayout(remote_btns)
+        remote_grp.setLayout(remote_layout)
+
+        log_grp = QGroupBox("oMLX Activity")
+        log_layout = QVBoxLayout()
+        self.omlx_log = QTextEdit()
+        self.omlx_log.setReadOnly(True)
+        self.omlx_log.setMaximumHeight(110)
+        self.omlx_log.setPlaceholderText("oMLX operation output appears here.")
+        self.omlx_log.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
+        log_layout.addWidget(self.omlx_log)
+        log_grp.setLayout(log_layout)
+
+        layout.addWidget(svc_grp)
+        layout.addWidget(local_grp)
+        layout.addSpacing(8)
+        layout.addWidget(remote_grp)
+        layout.addSpacing(8)
+        layout.addWidget(log_grp)
+        layout.addStretch()
+        w.setLayout(layout)
+        self._tabs.addTab(w, "oMLX")
+
+        self.omlx_check_btn.clicked.connect(self._refresh_omlx)
+        self.omlx_start_btn.clicked.connect(lambda: self._run_omlx("start"))
+        self.omlx_stop_btn.clicked.connect(lambda: self._run_omlx("stop"))
+        self.omlx_install_btn.clicked.connect(lambda: self._run_omlx("install"))
+        self.omlx_refresh_local_btn.clicked.connect(self._load_local_omlx_models)
+        self.omlx_refresh_running_btn.clicked.connect(self._load_running_omlx_models)
+        self.omlx_list_remote_btn.clicked.connect(self._load_remote_omlx_models)
+        self.omlx_download_model_btn.clicked.connect(self._download_omlx_selected)
+        self.omlx_delete_model_btn.clicked.connect(self._delete_omlx_selected)
+        self.omlx_serve_model_btn.clicked.connect(self._serve_omlx_selected)
+        self.omlx_stop_serving_btn.clicked.connect(self._stop_serving_omlx_selected)
+        self.set_omlx_model_btn.clicked.connect(self._set_active_omlx_model)
+
     def _build_runtime_tab(self) -> None:
         w = QWidget()
         layout = QVBoxLayout()
@@ -1354,11 +1500,19 @@ class AdvancedSettingsDialog(QDialog):
         _set_combo_items(self.model_combo, _MODEL_FALLBACKS.get(provider, []), preferred)
         if provider == "ollama":
             QTimer.singleShot(0, self._load_local_models)
+        elif provider == "omlx":
+            QTimer.singleShot(0, self._load_local_omlx_models)
         self._mark_dirty()
 
     def _populate_model_list(self) -> None:
         provider = _combo_text(self.provider_combo)
         current = _combo_text(self.model_combo)
+        if provider == "ollama":
+            self._load_local_models()
+            return
+        if provider == "omlx":
+            self._load_local_omlx_models()
+            return
         self.model_status.setText("Loading models...")
 
         def on_done(payload: dict) -> None:
@@ -1554,6 +1708,186 @@ class AdvancedSettingsDialog(QDialog):
         text = json.dumps(payload, indent=2, ensure_ascii=False) if isinstance(
             payload, dict) else str(payload)
         self.ollama_log.append(text)
+
+    # ── oMLX ─────────────────────────────────────────────────────────────────
+
+    def _all_omlx_btns(self) -> tuple:
+        return (
+            self.omlx_install_btn,
+            self.omlx_start_btn,
+            self.omlx_stop_btn,
+            self.omlx_check_btn,
+            self.omlx_refresh_local_btn,
+            self.omlx_refresh_running_btn,
+            self.omlx_list_remote_btn,
+            self.omlx_download_model_btn,
+            self.omlx_delete_model_btn,
+            self.omlx_serve_model_btn,
+            self.omlx_stop_serving_btn,
+            self.set_omlx_model_btn,
+        )
+
+    def _refresh_omlx(self) -> None:
+        def on_done(payload: dict) -> None:
+            self._set_omlx_status(payload)
+            self._log_omlx(payload)
+            QTimer.singleShot(0, self._load_local_omlx_models)
+            QTimer.singleShot(0, self._load_running_omlx_models)
+
+        self._run_async(
+            lambda: self._backend.omlx("status"),
+            on_done,
+            on_error=lambda msg: self._set_omlx_error(msg),
+            lock=self._all_omlx_btns(),
+        )
+
+    def _load_local_omlx_models(self) -> None:
+        self.model_status.setText("Loading local oMLX models...")
+
+        def on_done(payload: dict) -> None:
+            models = [str(m) for m in payload.get("models", []) if str(m).strip()]
+            _set_combo_items(self.omlx_local_models_combo, models, _combo_text(self.omlx_local_models_combo))
+            if _combo_text(self.provider_combo) == "omlx":
+                _set_combo_items(
+                    self.model_combo,
+                    models + _MODEL_FALLBACKS.get("omlx", []),
+                    _combo_text(self.model_combo),
+                )
+                count = len(models)
+                suffix = " Use oMLX controls to start oMLX or download models." if count == 0 else ""
+                self.model_status.setText(f"{count} local oMLX model(s) found.{suffix}")
+            self._set_omlx_status(payload)
+
+        self._run_async(
+            lambda: self._backend.omlx("local_models"),
+            on_done,
+            on_error=lambda msg: self._set_omlx_error(msg),
+            lock=(self.omlx_refresh_local_btn,),
+        )
+
+    def _load_running_omlx_models(self) -> None:
+        def on_done(payload: dict) -> None:
+            models = [str(m) for m in payload.get("models", []) if str(m).strip()]
+            _set_combo_items(self.omlx_running_models_combo, models, _combo_text(self.omlx_running_models_combo))
+
+        self._run_async(
+            lambda: self._backend.omlx("running_models"),
+            on_done,
+            on_error=lambda msg: self._set_omlx_error(msg),
+            lock=(self.omlx_refresh_running_btn,),
+        )
+
+    def _load_remote_omlx_models(self) -> None:
+        self.omlx_status_lbl.setText("Loading downloadable models...")
+
+        def on_done(payload: dict) -> None:
+            models = [str(m) for m in payload.get("models", []) if str(m).strip()]
+            _set_combo_items(
+                self.omlx_remote_models_combo,
+                models + _COMMON_OMLX_MODELS,
+                _combo_text(self.omlx_remote_models_combo),
+            )
+            self._set_omlx_status(payload)
+
+        self._run_async(
+            lambda: self._backend.omlx("remote_models"),
+            on_done,
+            on_error=lambda msg: self._set_omlx_error(msg),
+            lock=(self.omlx_list_remote_btn,),
+        )
+
+    def _run_omlx(self, action: str, model: str = "", after_success=None) -> None:
+        labels = {
+            "start": "Starting oMLX service...",
+            "stop": "Stopping oMLX service...",
+            "install": "Installing oMLX...",
+            "download": f"Downloading {model}...",
+            "delete": f"Deleting {model}...",
+            "serve": f"Serving {model}...",
+            "stop_serving": f"Stopping {model}...",
+        }
+        self.omlx_status_lbl.setText(labels.get(action, f"Running {action}..."))
+
+        def on_done(payload: dict) -> None:
+            self._set_omlx_status(payload)
+            self._log_omlx(payload)
+            if payload.get("ok", True) and callable(after_success):
+                after_success(payload)
+            if action in {"start", "stop", "install", "download", "delete", "serve", "stop_serving"}:
+                QTimer.singleShot(0, self._load_local_omlx_models)
+                QTimer.singleShot(0, self._load_running_omlx_models)
+
+        self._run_async(
+            lambda: self._backend.omlx(action, model),
+            on_done,
+            on_error=lambda msg: self._set_omlx_error(msg),
+            lock=self._all_omlx_btns(),
+        )
+
+    def _download_omlx_selected(self) -> None:
+        model = _combo_text(self.omlx_remote_models_combo)
+        if not model:
+            self.omlx_status_lbl.setText("Choose a downloadable model first.")
+            return
+        self._run_omlx("download", model)
+
+    def _delete_omlx_selected(self) -> None:
+        model = _combo_text(self.omlx_local_models_combo)
+        if not model:
+            self.omlx_status_lbl.setText("Choose a local model first.")
+            return
+        if QMessageBox.question(
+            self,
+            "Delete Local Model",
+            f"Delete local oMLX model '{model}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        ) == QMessageBox.StandardButton.Yes:
+            self._run_omlx("delete", model)
+
+    def _serve_omlx_selected(self) -> None:
+        model = _combo_text(self.omlx_local_models_combo)
+        if not model:
+            self.omlx_status_lbl.setText("Choose a local model to serve.")
+            return
+        self.provider_combo.setCurrentText("omlx")
+        self.model_combo.setCurrentText(model)
+        self._mark_dirty()
+        self.omlx_status_lbl.setText(f"Selected {model}. Click Save to apply planner settings.")
+        self._run_omlx("serve", model)
+
+    def _stop_serving_omlx_selected(self) -> None:
+        model = _combo_text(self.omlx_running_models_combo)
+        if not model:
+            self.omlx_status_lbl.setText("Choose a served model to stop.")
+            return
+        self._run_omlx("stop_serving", model)
+
+    def _set_active_omlx_model(self) -> None:
+        model = _combo_text(self.omlx_local_models_combo)
+        if not model:
+            self.omlx_status_lbl.setText("Choose a local model first.")
+            return
+        self.provider_combo.setCurrentText("omlx")
+        self.model_combo.setCurrentText(model)
+        self._mark_dirty()
+        self.omlx_status_lbl.setText(f"{model} selected. Click Save to use it for planning.")
+
+    def _set_omlx_status(self, payload: dict) -> None:
+        ok = payload.get("ok", True)
+        self.omlx_status_lbl.setText(payload.get("message", "oMLX status updated."))
+        self.omlx_status_lbl.setStyleSheet(
+            f"font-size: 12px; color: {'#7de2a0' if ok else '#ff6b7a'};"
+        )
+
+    def _set_omlx_error(self, msg: str) -> None:
+        self.omlx_status_lbl.setText(f"oMLX action failed: {msg}")
+        self.omlx_status_lbl.setStyleSheet("font-size: 12px; color: #ff6b7a;")
+        self._log_omlx({"error": msg})
+
+    def _log_omlx(self, payload) -> None:
+        text = json.dumps(payload, indent=2, ensure_ascii=False) if isinstance(payload, dict) else str(payload)
+        self.omlx_log.append(text)
 
     # ── File browser and async runner ─────────────────────────────────────────
 
@@ -1882,6 +2216,9 @@ class SettingsDialog(QDialog):
         if provider == "ollama":
             self._load_ollama_models(current)
             return
+        if provider == "omlx":
+            self._load_omlx_models(current)
+            return
         self.model_status.setText("Loading models...")
 
         def on_done(payload: dict) -> None:
@@ -1926,6 +2263,31 @@ class SettingsDialog(QDialog):
 
         self._run_async(
             lambda: self._backend.ollama("local_models"),
+            on_done,
+            on_error=on_error,
+            lock=(self.refresh_models_btn,),
+        )
+
+    def _load_omlx_models(self, current: str = "") -> None:
+        self.model_status.setText("Loading local oMLX models...")
+
+        def on_done(payload: dict) -> None:
+            models = [str(m) for m in payload.get("models", []) if str(m).strip()]
+            values = models + _MODEL_FALLBACKS.get("omlx", []) + ([current] if current else [])
+            _set_combo_items(self.model_combo, values, current)
+            count = len(models)
+            suffix = " Use Advanced Settings to start oMLX or download models." if count == 0 else ""
+            self.model_status.setText(f"{count} local oMLX model(s) found.{suffix}")
+
+        def on_error(msg: str) -> None:
+            values = _MODEL_FALLBACKS.get("omlx", []) + ([current] if current else [])
+            _set_combo_items(self.model_combo, values, current)
+            self.model_status.setText(
+                f"Could not read local oMLX models: {msg}. Use Advanced Settings for oMLX controls."
+            )
+
+        self._run_async(
+            lambda: self._backend.omlx("local_models"),
             on_done,
             on_error=on_error,
             lock=(self.refresh_models_btn,),

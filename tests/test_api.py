@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 import pytest
+from fastapi.testclient import TestClient
 
 from llmr.ableton_osc import AbletonAction
 from llmr import app as app_module
@@ -131,11 +132,106 @@ def test_ollama_management_endpoints_delegate(monkeypatch):
     assert app_module.post_ollama_start()["message"] == "started"
     assert app_module.post_ollama_stop()["message"] == "stopped"
     assert app_module.post_ollama_install()["message"] == "installed"
-    req = app_module.OllamaModelRequest(model="llama3")
+    req = app_module.LocalModelRequest(model="llama3")
     assert app_module.post_ollama_download(req)["model"] == "llama3"
     assert app_module.post_ollama_delete(req)["model"] == "llama3"
     assert app_module.post_ollama_serve(req)["model"] == "llama3"
     assert app_module.post_ollama_stop_serving(req)["model"] == "llama3"
+
+
+def test_omlx_management_routes_via_testclient(monkeypatch):
+    client = TestClient(app_module.app)
+    monkeypatch.setattr(app_module.settings, "api_token", "")
+
+    calls: dict[str, list[str]] = {
+        "download": [],
+        "delete": [],
+        "serve": [],
+        "stop_serving": [],
+    }
+
+    monkeypatch.setattr(app_module, "omlx_status", lambda: {"ok": True, "message": "ok"})
+    monkeypatch.setattr(app_module, "omlx_local_models", lambda: {"ok": True, "models": ["local-a"]})
+    monkeypatch.setattr(app_module, "omlx_remote_models", lambda: {"ok": True, "models": ["remote-a"]})
+    monkeypatch.setattr(app_module, "omlx_running_models", lambda: {"ok": True, "models": ["running-a"]})
+    monkeypatch.setattr(app_module, "omlx_start", lambda: {"ok": True, "message": "started"})
+    monkeypatch.setattr(app_module, "omlx_stop", lambda: {"ok": True, "message": "stopped"})
+    monkeypatch.setattr(app_module, "omlx_install", lambda: {"ok": True, "message": "installed"})
+
+    def _download(model: str):
+        calls["download"].append(model)
+        return {"ok": True, "model": model, "action": "download"}
+
+    def _delete(model: str):
+        calls["delete"].append(model)
+        return {"ok": True, "model": model, "action": "delete"}
+
+    def _serve(model: str):
+        calls["serve"].append(model)
+        return {"ok": True, "model": model, "action": "serve"}
+
+    def _stop_serving(model: str):
+        calls["stop_serving"].append(model)
+        return {"ok": True, "model": model, "action": "stop_serving"}
+
+    monkeypatch.setattr(app_module, "omlx_download", _download)
+    monkeypatch.setattr(app_module, "omlx_delete", _delete)
+    monkeypatch.setattr(app_module, "omlx_serve", _serve)
+    monkeypatch.setattr(app_module, "omlx_stop_serving", _stop_serving)
+
+    assert client.get("/api/omlx/status").json() == {"ok": True, "message": "ok"}
+    assert client.get("/api/omlx/local_models").json() == {"ok": True, "models": ["local-a"]}
+    assert client.get("/api/omlx/remote_models").json() == {"ok": True, "models": ["remote-a"]}
+    assert client.get("/api/omlx/running_models").json() == {"ok": True, "models": ["running-a"]}
+
+    assert client.post("/api/omlx/start").json() == {"ok": True, "message": "started"}
+    assert client.post("/api/omlx/stop").json() == {"ok": True, "message": "stopped"}
+    assert client.post("/api/omlx/install").json() == {"ok": True, "message": "installed"}
+
+    payload = {"model": "test-model"}
+    assert client.post("/api/omlx/download", json=payload).json() == {
+        "ok": True,
+        "model": "test-model",
+        "action": "download",
+    }
+    assert client.post("/api/omlx/delete", json=payload).json() == {
+        "ok": True,
+        "model": "test-model",
+        "action": "delete",
+    }
+    assert client.post("/api/omlx/serve", json=payload).json() == {
+        "ok": True,
+        "model": "test-model",
+        "action": "serve",
+    }
+    assert client.post("/api/omlx/stop_serving", json=payload).json() == {
+        "ok": True,
+        "model": "test-model",
+        "action": "stop_serving",
+    }
+
+    assert calls == {
+        "download": ["test-model"],
+        "delete": ["test-model"],
+        "serve": ["test-model"],
+        "stop_serving": ["test-model"],
+    }
+
+
+def test_settings_patch_persists_omlx_provider_and_model(monkeypatch):
+    client = TestClient(app_module.app)
+    monkeypatch.setattr(app_module.settings, "api_token", "")
+    monkeypatch.setattr(type(app_module.settings), "save", lambda self: None)
+
+    response = client.patch(
+        "/api/settings",
+        json={"modelito_provider": "omlx", "modelito_model": "some-model"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["modelito_provider"] == "omlx"
+    assert payload["modelito_model"] == "some-model"
 
 
 def test_load_prompt_text(tmp_path):
