@@ -4,7 +4,7 @@ This is the single planning and audit document for the current pre-release LLM-r
 codebase. Older roadmap, audit, and patch-plan documents have been removed so
 the project has one source of truth.
 
-Current package version: `0.6.8`
+Current package version: `0.6.9`
 
 ## Product Stance
 
@@ -45,7 +45,10 @@ LLM-r currently provides:
   Device Bridge execution.
 - PyQt desktop GUI that can connect to a running server or operate in embedded
   mode, with settings for provider, model, prompt guidance, AbletonOSC, server
-  URL, and API token.
+  URL, and API token; Advanced Settings includes local runtime controls for both
+  Ollama and oMLX (service management, model download, serve, delete).
+- oMLX local runtime integration through Modelito: `/api/omlx/*` routes,
+  PyQt oMLX management tab, and dedicated automated route tests.
 
 ## Current Ableton Coverage
 
@@ -99,7 +102,13 @@ AbletonOSC as the DAW control surface. Important references:
 
 ## Prioritized Work
 
-1. **Real Ableton integration harness**
+1. **Release hygiene and truthfulness (immediate)**
+   - Ensure README, docs, and STATUS.md describe exactly the shipped behaviour.
+   - Dedicated oMLX API route tests covering all `/api/omlx/*` endpoints.
+   - Remove tracked log artefacts; harden release workflow with lint/test guards.
+   - Bump to `0.6.9` after validation.
+
+2. **Real Ableton integration harness**
    - Extend `scripts/smoke_test_live_integration.py` with a mocked OSC server
      contract suite.
    - Add an optional real Live + AbletonOSC test project fixture.

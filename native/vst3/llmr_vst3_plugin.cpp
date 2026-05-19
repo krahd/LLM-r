@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define LLMR_VERSION "0.6.8"
+#define LLMR_VERSION "0.6.9"
 
 #if defined(__APPLE__)
 #import <Cocoa/Cocoa.h>

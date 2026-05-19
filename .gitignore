@@ -38,6 +38,10 @@ htmlcov/
 *.sublime-workspace
 *.sublime-project
 
+# Logs
+*.log
+gui_run.log
+
 # macOS
 .DS_Store
 *.dSYM

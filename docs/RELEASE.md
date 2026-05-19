@@ -2,17 +2,73 @@
 
 This repository includes a GitHub Actions workflow that builds and publishes release artifacts (source distributions, wheels, and standalone binaries) when you push a tag matching `v*`.
 
-How to create a release via GitHub (recommended):
+## Release artefact roles
 
-1. Create a tag locally after confirming `pyproject.toml` and `llmr/__init__.py`
-   contain the intended version:
+- **Primary**: the VST3 plug-in (`LLM-r.vst3`) and the bundled `LLMRDeviceBridge` Remote Script are the main deliverables for end users.
+- **Companion surfaces**: the Python FastAPI server, PyQt GUI, and web UI are companion tools for headless and development workflows. Wheels and sdist are development/integration artefacts.
+
+## Pre-tag checklist
+
+Run all of these before tagging a release:
 
 ```bash
-git tag v0.6.8
-git push origin v0.6.8
+# Tests
+python3 -m pytest -q
+
+# Lint
+ruff check .
+
+# Compile-check Python surfaces
+PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile \
+  gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py \
+  llmr/osc_replies.py llmr/device_parameters.py \
+  remote_scripts/LLMRDeviceBridge/__init__.py \
+  remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py \
+  scripts/smoke_test_live_integration.py
+
+# Build package
+python3 -m build
+
+# Whitespace check
+git diff --check
 ```
 
-2. The workflow `.github/workflows/release.yml` will run on tag push, build artifacts for multiple platforms, and create a GitHub Release attaching the built files.
+## macOS validation steps
+
+These are required before tagging but are not automated in CI:
+
+```bash
+./scripts/build_vst3.sh
+bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
+python3 scripts/smoke_test_live_integration.py
+```
+
+## Version consistency checklist
+
+Before tagging `vX.Y.Z`, verify the version number is consistent in all of these places:
+
+- `pyproject.toml` — `version = "X.Y.Z"`
+- `llmr/__init__.py` — `__version__ = "X.Y.Z"`
+- `native/vst3/llmr_vst3_plugin.cpp` — `#define LLMR_VERSION "X.Y.Z"`
+- `scripts/build_vst3.sh` — version strings in the plist
+- `docs/RELEASE.md` — tag examples
+- `docs/DEVELOPMENT_PLAN.md` — current package version
+- `STATUS.md` — version field
+
+## Creating a release
+
+How to create a release via GitHub (recommended):
+
+1. Confirm all pre-tag checklist steps pass.
+2. Verify version consistency across all sources above.
+3. Create a tag locally:
+
+```bash
+git tag v0.6.9
+git push origin v0.6.9
+```
+
+4. The workflow `.github/workflows/release.yml` will run on tag push, build artifacts for multiple platforms, and create a GitHub Release attaching the built files.
 
 Local build (for testing):
 

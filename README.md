@@ -30,7 +30,7 @@ Natural language prompt in the VST3
 - **Session history** — plans, executions, and sessions are persisted to disk and survive restarts
 - **SSE streaming** — `POST /api/stream` for streaming LLM completions
 - **Desktop GUI** — optional PyQt6 companion app with embedded mode, server attach/start controls, and runtime settings
-- **Multi-provider LLM support** — use cloud or local models from the plug-in, GUI, or API
+- **Multi-provider LLM support** — use cloud or local models from the plug-in, GUI, or API; local runtimes (Ollama and oMLX) are mediated by [Modelito](docs/MODELITO.md)
 
 ---
 
@@ -87,9 +87,9 @@ bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
 
 Open the `LLM-r` plug-in window in Ableton Live. The plug-in GUI includes LLM
 provider/model selection, readiness chips, a Plan Board, Details output,
-explicit Save/Cancel settings, Advanced Settings for API keys and Ollama,
-prompt, dry-run, Auto-approve, destructive-action approval, plan, and execute
-controls.
+explicit Save/Cancel settings, Advanced Settings for API keys and local
+runtime controls (Ollama and oMLX), prompt, dry-run, Auto-approve,
+destructive-action approval, plan, and execute controls.
 
 #### Option B — Desktop GUI (optional)
 
@@ -100,9 +100,11 @@ python gui/pyqt_app.py
 The GUI can run in embedded mode, attach to a running server, or start a local
 server from the toolbar. Its main Settings dialog keeps the normal workflow
 short: choose the provider, choose the model, set execution defaults, and save.
-Advanced Settings contains provider API keys, Ollama service/model controls,
-planner guidance, Ableton connection, server URL, and API token. Use Open Help
-in the toolbar to open the GitHub manual.
+Advanced Settings contains provider API keys, local runtime controls for
+both Ollama and oMLX (service management, model download, serve, delete),
+planner guidance, Ableton connection, server URL, and API token. See
+[docs/MODELITO.md](docs/MODELITO.md) for provider setup details. Use Open
+Help in the toolbar to open the GitHub manual.
 
 #### Option C — Server only (headless / API)
 
@@ -336,8 +338,9 @@ own runtime settings in macOS user defaults and can:
 - copy/select text from the response panel
 - keep provider/model on the basic settings screen while API keys, AbletonOSC,
   and Ollama controls live under Advanced Settings
-- show Ollama status, installed models, and currently served models
+- show Ollama and oMLX status, installed models, and currently served models
 - load the downloadable-model pull-down from the Ollama online model library
+- manage oMLX local models (download, serve, delete) from Advanced Settings
 - save or cancel settings changes explicitly
 - send the built-in LLM-r tool catalog and optional guidance to the LLM
 - parse the returned JSON plan
@@ -361,6 +364,7 @@ A **Settings** dialog (accessible from the toolbar) lets you configure everythin
 - Main Settings: LLM provider, model, dry-run default, Auto-approve, and destructive-execution default
 - Advanced Settings: provider API keys, assistant prompt guidance, Ableton OSC host/port, server URL, and API token
 - Advanced Settings → Ollama: status, start/stop service, installed model picker, served model stop, downloadable-model picker, download, serve, and delete
+- Advanced Settings → oMLX: status, start/stop service, local model picker, download, serve, stop serving, and delete; see [docs/MODELITO.md](docs/MODELITO.md)
 - Response tabs: Plan for action cards, Action Table for parsed tool calls, Run Log for execution reports, and Details for the complete payload plus parsed `llm_raw` when available
 - Open Help opens the GitHub user manual from the toolbar
 
@@ -376,10 +380,10 @@ If a server is already running when the GUI opens, it attaches to it instead of 
 
 ```bash
 # Run tests
-pytest -q
+python -m pytest -q
 
 # Lint
-ruff .
+ruff check .
 
 # Run server with auto-reload
 uvicorn llmr.app:app --host 127.0.0.1 --port 8787 --reload
@@ -424,6 +428,16 @@ See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
 | [docs/RELEASE.md](docs/RELEASE.md) | Release and build instructions |
 | [docs/SCENARIOS.md](docs/SCENARIOS.md) | Current executable workflow recipes |
 | [docs/SECURITY.md](docs/SECURITY.md) | Security model and deployment advice |
+
+---
+
+## Current Limitations
+
+- Real Ableton Live validation (transport, OSC, device loading) is required for release confidence and is not automated.
+- Native VST3 build, install, and load should be verified on macOS before each release.
+- Real oMLX runtime validation is manual; automated tests cover the FastAPI routes with monkeypatched adapters only.
+- Some advanced workflows (device loading, ambiguous browser resolution) require both AbletonOSC and the LLMRDeviceBridge Remote Script.
+- Local model access via Ollama and oMLX is mediated by Modelito. Models pulled through Ollama are not automatically available to oMLX unless both runtimes expose the same model identifier.
 
 ---
 
