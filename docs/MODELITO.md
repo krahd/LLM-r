@@ -1,15 +1,33 @@
 # Modelito Integration Guide
 
-LLM-r uses [Modelito](https://github.com/krahd/modelito) to connect to LLMs. You can use local or cloud models (OpenAI, Anthropic, Google, Ollama, etc.) by setting the following environment variables:
+LLM-r uses [Modelito](https://github.com/krahd/modelito) to connect to LLMs. You can use local or cloud models (OpenAI, Anthropic, Google, Ollama, oMLX, etc.) by setting the following environment variables:
 
-- `LLMR_PROVIDER` (e.g., `openai`, `anthropic`, `google`, `ollama`)
+- `LLMR_PROVIDER` (e.g., `openai`, `anthropic`, `google`, `ollama`, `omlx`)
 - `LLMR_MODEL` (e.g., `gpt-4.1-mini`, `claude-3-sonnet`, `gemini-pro`, `llama3`)
 
-## Example
+## Examples
+
+### Ollama
 
 ```bash
 export LLMR_PROVIDER=ollama
 export LLMR_MODEL=llama3
+python backend/main.py
+```
+
+### oMLX
+
+```bash
+export LLMR_PROVIDER=omlx
+export LLMR_MODEL=llama3:latest
+python backend/main.py
+```
+
+### OpenAI
+
+```bash
+export LLMR_PROVIDER=openai
+export LLMR_MODEL=gpt-4.1-mini
 python backend/main.py
 ```
 
