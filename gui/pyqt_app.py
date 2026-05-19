@@ -48,7 +48,8 @@ except Exception as exc:
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _GUI_SETTINGS_PATH = Path.home() / ".llmr" / "gui.json"
 _HELP_URL = "https://github.com/krahd/LLM-r/blob/main/docs/GUI-PLUGIN.md"
-_PROVIDERS = ["openai", "anthropic", "google", "ollama", "cohere", "mistral", "mock", "other"]
+_PROVIDERS = ["openai", "anthropic", "google", "ollama",
+              "omlx", "cohere", "mistral", "mock", "other"]
 _PROVIDER_KEY_ENVS = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
@@ -61,6 +62,7 @@ _MODEL_FALLBACKS = {
     "anthropic": ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"],
     "google": ["gemini-1.5-pro", "gemini-1.5-flash"],
     "ollama": ["llama3:latest", "mistral:latest", "codellama:latest"],
+    "omlx": ["llama3:latest", "mistral:latest"],
     "cohere": ["command-r", "command-r-plus"],
     "mistral": ["mistral-large-latest", "mistral-small-latest"],
     "mock": ["mock-model"],
@@ -75,6 +77,14 @@ _COMMON_OLLAMA_MODELS = [
     "gemma2:latest",
     "phi3:latest",
     "nomic-embed-text:latest",
+]
+
+_COMMON_OMLX_MODELS = [
+    "llama3:latest",
+    "llama3.1:latest",
+    "mistral:latest",
+    "codellama:latest",
+    "phi3:latest",
 ]
 
 if str(_PROJECT_ROOT) not in sys.path:
@@ -308,21 +318,21 @@ def _apply_theme(app: QApplication) -> None:
     app.setStyle("Fusion")
     pal = QPalette()
     W = QColor
-    pal.setColor(QPalette.ColorRole.Window,           W("#111318"))
-    pal.setColor(QPalette.ColorRole.WindowText,       W("#eef2f7"))
-    pal.setColor(QPalette.ColorRole.Base,             W("#0d1016"))
-    pal.setColor(QPalette.ColorRole.AlternateBase,    W("#111720"))
-    pal.setColor(QPalette.ColorRole.Text,             W("#eef2f7"))
-    pal.setColor(QPalette.ColorRole.BrightText,       W("#ffffff"))
-    pal.setColor(QPalette.ColorRole.Button,           W("#1b2029"))
-    pal.setColor(QPalette.ColorRole.ButtonText,       W("#eef2f7"))
-    pal.setColor(QPalette.ColorRole.Highlight,        W("#2f7cf6"))
-    pal.setColor(QPalette.ColorRole.HighlightedText,  W("#ffffff"))
-    pal.setColor(QPalette.ColorRole.Link,             W("#65a0ff"))
-    pal.setColor(QPalette.ColorRole.PlaceholderText,  W("#697386"))
-    pal.setColor(QPalette.ColorRole.ToolTipBase,      W("#171c25"))
-    pal.setColor(QPalette.ColorRole.ToolTipText,      W("#eef2f7"))
-    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text,       W("#697386"))
+    pal.setColor(QPalette.ColorRole.Window, W("#111318"))
+    pal.setColor(QPalette.ColorRole.WindowText, W("#eef2f7"))
+    pal.setColor(QPalette.ColorRole.Base, W("#0d1016"))
+    pal.setColor(QPalette.ColorRole.AlternateBase, W("#111720"))
+    pal.setColor(QPalette.ColorRole.Text, W("#eef2f7"))
+    pal.setColor(QPalette.ColorRole.BrightText, W("#ffffff"))
+    pal.setColor(QPalette.ColorRole.Button, W("#1b2029"))
+    pal.setColor(QPalette.ColorRole.ButtonText, W("#eef2f7"))
+    pal.setColor(QPalette.ColorRole.Highlight, W("#2f7cf6"))
+    pal.setColor(QPalette.ColorRole.HighlightedText, W("#ffffff"))
+    pal.setColor(QPalette.ColorRole.Link, W("#65a0ff"))
+    pal.setColor(QPalette.ColorRole.PlaceholderText, W("#697386"))
+    pal.setColor(QPalette.ColorRole.ToolTipBase, W("#171c25"))
+    pal.setColor(QPalette.ColorRole.ToolTipText, W("#eef2f7"))
+    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, W("#697386"))
     pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, W("#697386"))
     pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, W("#697386"))
     app.setPalette(pal)
@@ -480,11 +490,14 @@ def _new_chip(text: str, tone: str = "neutral") -> QLabel:
 
 class Backend:
     def plan(self, prompt: str) -> dict: raise NotImplementedError
-    def execute(self, plan_id: str, dry_run: bool, approved: bool = False) -> dict: raise NotImplementedError
+    def execute(self, plan_id: str, dry_run: bool,
+                approved: bool = False) -> dict: raise NotImplementedError
     def get_settings(self) -> dict: raise NotImplementedError
     def patch_settings(self, data: dict) -> dict: raise NotImplementedError
-    def get_modelito_models(self, provider: str = "", model: str = "") -> dict: raise NotImplementedError
+    def get_modelito_models(self, provider: str = "",
+                            model: str = "") -> dict: raise NotImplementedError
     def ollama(self, action: str, model: str = "") -> dict: raise NotImplementedError
+    def omlx(self, action: str, model: str = "") -> dict: raise NotImplementedError
 
 
 class HttpBackend(Backend):
@@ -520,14 +533,15 @@ class HttpBackend(Backend):
         return self._request("PATCH", "/api/settings", data)
 
     def get_modelito_models(self, provider: str = "", model: str = "") -> dict:
-        query = parse.urlencode({k: v for k, v in {"provider": provider, "model": model}.items() if v})
+        query = parse.urlencode(
+            {k: v for k, v in {"provider": provider, "model": model}.items() if v})
         path = f"/api/modelito/models?{query}" if query else "/api/modelito/models"
         return self._request("GET", path)
 
     def ollama(self, action: str, model: str = "") -> dict:
         read_paths = {
-            "status":        "/api/ollama/status",
-            "local_models":  "/api/ollama/local_models",
+            "status": "/api/ollama/status",
+            "local_models": "/api/ollama/local_models",
             "remote_models": "/api/ollama/remote_models",
             "running_models": "/api/ollama/running_models",
         }
@@ -538,6 +552,21 @@ class HttpBackend(Backend):
         if action in {"download", "delete", "serve", "stop_serving"}:
             return self._request("POST", f"/api/ollama/{action}", {"model": model})
         raise ValueError(f"Unknown Ollama action: {action}")
+
+    def omlx(self, action: str, model: str = "") -> dict:
+        read_paths = {
+            "status": "/api/omlx/status",
+            "local_models": "/api/omlx/local_models",
+            "remote_models": "/api/omlx/remote_models",
+            "running_models": "/api/omlx/running_models",
+        }
+        if action in read_paths:
+            return self._request("GET", read_paths[action])
+        if action in {"start", "stop", "install"}:
+            return self._request("POST", f"/api/omlx/{action}", {})
+        if action in {"download", "delete", "serve", "stop_serving"}:
+            return self._request("POST", f"/api/omlx/{action}", {"model": model})
+        raise ValueError(f"Unknown oMLX action: {action}")
 
 
 class EmbeddedBackend(Backend):
@@ -650,31 +679,51 @@ class EmbeddedBackend(Backend):
         from llmr.modelito_adapter import modelito_models
 
         current_provider = provider or self._settings.modelito_provider
-        current_model    = model    or self._settings.modelito_model
+        current_model = model or self._settings.modelito_model
         return {
-            "provider":      current_provider,
+            "provider": current_provider,
             "default_model": current_model,
-            "models":        modelito_models(current_provider, current_model),
+            "models": modelito_models(current_provider, current_model),
         }
 
     def ollama(self, action: str, model: str = "") -> dict:
         from llmr import modelito_adapter
 
         actions = {
-            "status":       lambda: modelito_adapter.ollama_status(),
+            "status": lambda: modelito_adapter.ollama_status(),
             "local_models": lambda: modelito_adapter.ollama_local_models(),
-            "remote_models":lambda: modelito_adapter.ollama_remote_models(),
+            "remote_models": lambda: modelito_adapter.ollama_remote_models(),
             "running_models": lambda: modelito_adapter.ollama_running_models(),
-            "start":        lambda: modelito_adapter.ollama_start(),
-            "stop":         lambda: modelito_adapter.ollama_stop(),
-            "install":      lambda: modelito_adapter.ollama_install(),
-            "download":     lambda: modelito_adapter.ollama_download(model),
-            "delete":       lambda: modelito_adapter.ollama_delete(model),
-            "serve":        lambda: modelito_adapter.ollama_serve(model),
-            "stop_serving":  lambda: modelito_adapter.ollama_stop_serving(model),
+            "start": lambda: modelito_adapter.ollama_start(),
+            "stop": lambda: modelito_adapter.ollama_stop(),
+            "install": lambda: modelito_adapter.ollama_install(),
+            "download": lambda: modelito_adapter.ollama_download(model),
+            "delete": lambda: modelito_adapter.ollama_delete(model),
+            "serve": lambda: modelito_adapter.ollama_serve(model),
+            "stop_serving": lambda: modelito_adapter.ollama_stop_serving(model),
         }
         if action not in actions:
             raise ValueError(f"Unknown Ollama action: {action}")
+        return actions[action]()
+
+    def omlx(self, action: str, model: str = "") -> dict:
+        from llmr import modelito_adapter
+
+        actions = {
+            "status": lambda: modelito_adapter.omlx_status(),
+            "local_models": lambda: modelito_adapter.omlx_local_models(),
+            "remote_models": lambda: modelito_adapter.omlx_remote_models(),
+            "running_models": lambda: modelito_adapter.omlx_running_models(),
+            "start": lambda: modelito_adapter.omlx_start(),
+            "stop": lambda: modelito_adapter.omlx_stop(),
+            "install": lambda: modelito_adapter.omlx_install(),
+            "download": lambda: modelito_adapter.omlx_download(model),
+            "delete": lambda: modelito_adapter.omlx_delete(model),
+            "serve": lambda: modelito_adapter.omlx_serve(model),
+            "stop_serving": lambda: modelito_adapter.omlx_stop_serving(model),
+        }
+        if action not in actions:
+            raise ValueError(f"Unknown oMLX action: {action}")
         return actions[action]()
 
 
@@ -688,12 +737,12 @@ def _choose_backend(base_url: str, token: str) -> tuple[Backend, str]:
 
 class _PlanWorker(QThread):
     finished: pyqtSignal = pyqtSignal(dict)
-    error:    pyqtSignal = pyqtSignal(str)
+    error: pyqtSignal = pyqtSignal(str)
 
     def __init__(self, backend: Backend, prompt: str) -> None:
         super().__init__()
         self._backend = backend
-        self._prompt  = prompt
+        self._prompt = prompt
 
     def run(self) -> None:
         try:
@@ -704,13 +753,13 @@ class _PlanWorker(QThread):
 
 class _ExecuteWorker(QThread):
     finished: pyqtSignal = pyqtSignal(dict)
-    error:    pyqtSignal = pyqtSignal(str)
+    error: pyqtSignal = pyqtSignal(str)
 
     def __init__(self, backend: Backend, plan_id: str, dry_run: bool, approved: bool) -> None:
         super().__init__()
-        self._backend  = backend
-        self._plan_id  = plan_id
-        self._dry_run  = dry_run
+        self._backend = backend
+        self._plan_id = plan_id
+        self._dry_run = dry_run
         self._approved = approved
 
     def run(self) -> None:
@@ -722,7 +771,7 @@ class _ExecuteWorker(QThread):
 
 class _ActionWorker(QThread):
     finished: pyqtSignal = pyqtSignal(dict)
-    error:    pyqtSignal = pyqtSignal(str)
+    error: pyqtSignal = pyqtSignal(str)
 
     def __init__(self, fn) -> None:
         super().__init__()
@@ -736,12 +785,12 @@ class _ActionWorker(QThread):
 
 
 class _ServerStartWatcher(QThread):
-    ready:  pyqtSignal = pyqtSignal()
+    ready: pyqtSignal = pyqtSignal()
     failed: pyqtSignal = pyqtSignal(str)
 
     def __init__(self, url: str, timeout: int = 20) -> None:
         super().__init__()
-        self._url     = url
+        self._url = url
         self._timeout = timeout
 
     def run(self) -> None:
@@ -991,7 +1040,8 @@ class AdvancedSettingsDialog(QDialog):
         )
 
         self.set_ollama_model_btn = QPushButton("Set Active")
-        self.set_ollama_model_btn.setToolTip("Use the selected local Ollama model for planning after Save.")
+        self.set_ollama_model_btn.setToolTip(
+            "Use the selected local Ollama model for planning after Save.")
         self.serve_model_btn = QPushButton("Serve")
         self.serve_model_btn.setToolTip("Load the selected local model in Ollama.")
         self.serve_model_btn.setProperty("role", "primary")
@@ -1211,7 +1261,8 @@ class AdvancedSettingsDialog(QDialog):
         self._loading = False
         self._update_summary()
         if live_error:
-            self._set_status(f"Loaded saved settings; live settings unavailable: {live_error}", "warn")
+            self._set_status(
+                f"Loaded saved settings; live settings unavailable: {live_error}", "warn")
 
     def _wire_dirty_signals(self) -> None:
         for edit in (
@@ -1253,7 +1304,8 @@ class AdvancedSettingsDialog(QDialog):
             "error": "#ff6b7a",
         }
         self._status_lbl.setText(text)
-        self._status_lbl.setStyleSheet(f"color: {colors.get(kind, colors['neutral'])}; font-size: 12px;")
+        self._status_lbl.setStyleSheet(
+            f"color: {colors.get(kind, colors['neutral'])}; font-size: 12px;")
 
     def _update_summary(self) -> None:
         provider = _combo_text(self.provider_combo) or "provider"
@@ -1381,7 +1433,8 @@ class AdvancedSettingsDialog(QDialog):
     def _load_running_models(self) -> None:
         def on_done(payload: dict) -> None:
             models = [str(m) for m in payload.get("models", []) if str(m).strip()]
-            _set_combo_items(self.running_models_combo, models, _combo_text(self.running_models_combo))
+            _set_combo_items(self.running_models_combo, models,
+                             _combo_text(self.running_models_combo))
 
         self._run_async(
             lambda: self._backend.ollama("running_models"),
@@ -1498,7 +1551,8 @@ class AdvancedSettingsDialog(QDialog):
         self._log_ollama({"error": msg})
 
     def _log_ollama(self, payload) -> None:
-        text = json.dumps(payload, indent=2, ensure_ascii=False) if isinstance(payload, dict) else str(payload)
+        text = json.dumps(payload, indent=2, ensure_ascii=False) if isinstance(
+            payload, dict) else str(payload)
         self.ollama_log.append(text)
 
     # ── File browser and async runner ─────────────────────────────────────────
@@ -1619,7 +1673,8 @@ class AdvancedSettingsDialog(QDialog):
         try:
             backend.patch_settings(self._runtime_patch(vals))
         except Exception as exc:
-            self._set_status(f"Settings were not saved because runtime settings failed: {exc}", "error")
+            self._set_status(
+                f"Settings were not saved because runtime settings failed: {exc}", "error")
             return
 
         _apply_provider_api_keys(vals)
@@ -1784,7 +1839,8 @@ class SettingsDialog(QDialog):
         self.allow_destructive.setChecked(bool(cached.get("allow_destructive", False)))
         self._loading = False
         if live_error:
-            self._set_status(f"Loaded saved settings; live settings unavailable: {live_error}", "warn")
+            self._set_status(
+                f"Loaded saved settings; live settings unavailable: {live_error}", "warn")
         else:
             self._update_summary()
 
@@ -1906,7 +1962,8 @@ class SettingsDialog(QDialog):
             "error": "#ff6b7a",
         }
         self._status_lbl.setText(text)
-        self._status_lbl.setStyleSheet(f"color: {colors.get(kind, colors['neutral'])}; font-size: 12px;")
+        self._status_lbl.setStyleSheet(
+            f"color: {colors.get(kind, colors['neutral'])}; font-size: 12px;")
 
     def _update_summary(self) -> None:
         provider = _combo_text(self.provider_combo) or "provider"
@@ -2015,7 +2072,8 @@ class SettingsDialog(QDialog):
         try:
             backend.patch_settings(self._runtime_patch(vals))
         except Exception as exc:
-            self._set_status(f"Settings were not saved because runtime settings failed: {exc}", "error")
+            self._set_status(
+                f"Settings were not saved because runtime settings failed: {exc}", "error")
             return
 
         _apply_provider_api_keys(vals)
@@ -2036,19 +2094,20 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("LLM-r")
         self.setMinimumSize(720, 560)
 
-        self._gui_cfg             = _load_gui_settings()
+        self._gui_cfg = _load_gui_settings()
         _apply_provider_api_keys(self._gui_cfg)
-        self.last_plan_id         = ""
+        self.last_plan_id = ""
         self.last_requires_approval = False
         self._plan_action_count = 0
         self._plan_executed = False
-        self._allow_destructive   = bool(self._gui_cfg.get("allow_destructive", False))
+        self._allow_destructive = bool(self._gui_cfg.get("allow_destructive", False))
         self._worker: QThread | None = None
         self._server_proc: subprocess.Popen | None = None
         self._server_watcher: _ServerStartWatcher | None = None
 
-        base_url = self._gui_cfg.get("base_url", os.getenv("LLMR_GUI_API_URL", "http://127.0.0.1:8787"))
-        token    = self._gui_cfg.get("token", os.getenv("LLMR_GUI_API_TOKEN", ""))
+        base_url = self._gui_cfg.get("base_url", os.getenv(
+            "LLMR_GUI_API_URL", "http://127.0.0.1:8787"))
+        token = self._gui_cfg.get("token", os.getenv("LLMR_GUI_API_TOKEN", ""))
         self._server_url = base_url
         self._backend, mode = _choose_backend(base_url, token)
 
@@ -2057,7 +2116,7 @@ class MainWindow(QMainWindow):
         self._update_server_ui()
 
     def _build_ui(self) -> None:
-        root   = QWidget()
+        root = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(12, 12, 12, 8)
         layout.setSpacing(10)
@@ -2074,7 +2133,7 @@ class MainWindow(QMainWindow):
         self._server_status_lbl = _new_chip("Embedded mode", "neutral")
 
         self._start_server_btn = QPushButton("Start Server")
-        self._stop_server_btn  = QPushButton("Stop Server")
+        self._stop_server_btn = QPushButton("Stop Server")
         self._stop_server_btn.setProperty("role", "danger")
         self._stop_server_btn.setStyle(self._stop_server_btn.style())
 
@@ -2101,7 +2160,7 @@ class MainWindow(QMainWindow):
 
         # Prompt panel
         prompt_panel = QWidget()
-        pp_layout    = QVBoxLayout()
+        pp_layout = QVBoxLayout()
         pp_layout.setContentsMargins(0, 0, 0, 0)
         pp_layout.setSpacing(6)
 
@@ -2119,7 +2178,7 @@ class MainWindow(QMainWindow):
         action_row = QHBoxLayout()
         action_row.setSpacing(8)
 
-        self.plan_btn    = QPushButton("Plan")
+        self.plan_btn = QPushButton("Plan")
         self.plan_btn.setProperty("role", "primary")
         self.plan_btn.setStyle(self.plan_btn.style())
         self.plan_btn.setMinimumWidth(90)
@@ -2185,7 +2244,8 @@ class MainWindow(QMainWindow):
         self._response_raw = QTextEdit()
         self._response_raw.setReadOnly(True)
         self._response_raw.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
-        self._response_raw.setPlaceholderText("Detailed JSON appears here after a plan or execution.")
+        self._response_raw.setPlaceholderText(
+            "Detailed JSON appears here after a plan or execution.")
         self._last_payload: dict = {}
         self._last_plan_payload: dict = {}
 
@@ -2332,7 +2392,8 @@ class MainWindow(QMainWindow):
                 if key not in data and key in parsed:
                     data[key] = parsed[key]
             if not data.get("planned_actions"):
-                calls = parsed.get("calls") or parsed.get("planned_actions") or parsed.get("actions")
+                calls = parsed.get("calls") or parsed.get(
+                    "planned_actions") or parsed.get("actions")
                 if isinstance(calls, list):
                     data["planned_actions"] = [self._call_to_action(call) for call in calls]
         return data, parsed
@@ -2393,7 +2454,8 @@ class MainWindow(QMainWindow):
             if isinstance(item, dict):
                 status = escape(str(item.get("status", "ok")))
                 tool = escape(str(item.get("tool", "")))
-                message = escape(str(item.get("error") or item.get("message") or item.get("result") or ""))
+                message = escape(str(item.get("error") or item.get(
+                    "message") or item.get("result") or ""))
                 args = escape(_json_text(item.get("args", [])))
                 tone = "ok" if status.lower() in {"ok", "dry_run", "sent"} else "warn"
                 items.append(
@@ -2433,7 +2495,8 @@ class MainWindow(QMainWindow):
 
     def _show_output(self, payload: dict, is_error: bool = False) -> None:
         self._last_payload = payload
-        self._response_raw.setPlainText(json.dumps(_raw_payload(payload), indent=2, ensure_ascii=False))
+        self._response_raw.setPlainText(json.dumps(
+            _raw_payload(payload), indent=2, ensure_ascii=False))
 
         if is_error:
             self._show_error_payload(payload)
@@ -2541,7 +2604,8 @@ class MainWindow(QMainWindow):
                 pass
         label = f"{provider} / {model}" if provider and model else ""
         self._current_model_lbl.setText(label)
-        _set_chip(self._model_chip, f"Model {label}" if label else "Model not set", "ok" if label else "warn")
+        _set_chip(self._model_chip,
+                  f"Model {label}" if label else "Model not set", "ok" if label else "warn")
         ableton_host = self._gui_cfg.get("ableton_host", "127.0.0.1")
         ableton_port = self._gui_cfg.get("ableton_port", 11000)
         _set_chip(self._osc_chip, f"OSC {ableton_host}:{ableton_port}", "neutral")
@@ -2648,10 +2712,11 @@ class MainWindow(QMainWindow):
         self._worker.start()
 
     def _on_plan_done(self, payload: dict) -> None:
-        self.last_plan_id           = payload.get("plan_id", "")
+        self.last_plan_id = payload.get("plan_id", "")
         self.last_requires_approval = bool(payload.get("requires_approval", False))
         self._plan_action_count = len(payload.get("planned_actions", []) or [])
-        self._plan_id_lbl.setText(f"Plan: {_short_id(self.last_plan_id)}" if self.last_plan_id else "")
+        self._plan_id_lbl.setText(
+            f"Plan: {_short_id(self.last_plan_id)}" if self.last_plan_id else "")
         self._show_output(payload)
         self._set_busy(False)
         self._status_bar.showMessage(
@@ -2783,7 +2848,7 @@ class MainWindow(QMainWindow):
         _apply_provider_api_keys(self._gui_cfg)
 
         self._server_url = self._gui_cfg.get("base_url", self._server_url)
-        token            = self._gui_cfg.get("token", "")
+        token = self._gui_cfg.get("token", "")
         self._backend, mode = _choose_backend(self._server_url, token)
         self._status_bar.showMessage(mode)
         self._update_server_ui()

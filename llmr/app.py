@@ -45,6 +45,17 @@ from llmr.modelito_adapter import (
     ollama_status,
     ollama_stop,
     ollama_stop_serving,
+    omlx_delete,
+    omlx_download,
+    omlx_install,
+    omlx_local_models,
+    omlx_remote_models,
+    omlx_running_models,
+    omlx_serve,
+    omlx_start,
+    omlx_status,
+    omlx_stop,
+    omlx_stop_serving,
 )
 from llmr.planner import IntentPlanner, PlanStore
 from llmr.prompts import planner_extra_prompt
@@ -1175,6 +1186,61 @@ def post_ollama_serve(req: OllamaModelRequest) -> dict:
 @app.post("/api/ollama/stop_serving", dependencies=[Depends(_require_auth)])
 def post_ollama_stop_serving(req: OllamaModelRequest) -> dict:
     return ollama_stop_serving(req.model)
+
+
+@app.get("/api/omlx/status")
+def get_omlx_status() -> dict:
+    return omlx_status()
+
+
+@app.get("/api/omlx/local_models")
+def get_omlx_local_models() -> dict:
+    return omlx_local_models()
+
+
+@app.get("/api/omlx/remote_models")
+def get_omlx_remote_models() -> dict:
+    return omlx_remote_models()
+
+
+@app.get("/api/omlx/running_models")
+def get_omlx_running_models() -> dict:
+    return omlx_running_models()
+
+
+@app.post("/api/omlx/start", dependencies=[Depends(_require_auth)])
+def post_omlx_start() -> dict:
+    return omlx_start()
+
+
+@app.post("/api/omlx/stop", dependencies=[Depends(_require_auth)])
+def post_omlx_stop() -> dict:
+    return omlx_stop()
+
+
+@app.post("/api/omlx/install", dependencies=[Depends(_require_auth)])
+def post_omlx_install() -> dict:
+    return omlx_install()
+
+
+@app.post("/api/omlx/download", dependencies=[Depends(_require_auth)])
+def post_omlx_download(req: OllamaModelRequest) -> dict:
+    return omlx_download(req.model)
+
+
+@app.post("/api/omlx/delete", dependencies=[Depends(_require_auth)])
+def post_omlx_delete(req: OllamaModelRequest) -> dict:
+    return omlx_delete(req.model)
+
+
+@app.post("/api/omlx/serve", dependencies=[Depends(_require_auth)])
+def post_omlx_serve(req: OllamaModelRequest) -> dict:
+    return omlx_serve(req.model)
+
+
+@app.post("/api/omlx/stop_serving", dependencies=[Depends(_require_auth)])
+def post_omlx_stop_serving(req: OllamaModelRequest) -> dict:
+    return omlx_stop_serving(req.model)
 
 
 @app.get("/api/model_metadata")

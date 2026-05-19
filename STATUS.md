@@ -1,6 +1,6 @@
 # LLM-r – Project Status
 
-Last updated: 2026-05-12 03:25
+Last updated: 2026-05-19 16:20
 
 ## Project purpose
 
@@ -113,6 +113,12 @@ The FastAPI surface currently includes health, Device Bridge status/devices/reso
 
 ## Recent changes
 
+- Added complete oMLX runtime management support: status, model listing, model download/delete/serve operations, and service start/stop via FastAPI endpoints and adapter functions.
+- Added oMLX provider option to PyQt GUI with default models and provider list.
+- Updated documentation (MODELITO.md) with oMLX setup examples and configuration.
+- Added oMLX to supported providers: users can now select `omlx` via `LLMR_PROVIDER` env var or GUI settings.
+- Added oMLX as a supported LLM provider option alongside Ollama and cloud providers in the PyQt GUI and configuration.
+- Updated Modelito dependency to PyPI version `1.4.5` from pinned git commit.
 - Migrated the Modelito dependency pin to the latest upstream release tag commit (`v1.4.3`, `3e86b4a8727b9ae021841e4ce24bd684fd332296`) and regenerated packaging metadata.
 - Migrated the Modelito dependency pin to the latest upstream release tag commit (`v1.4.0`, `1573ad52ec9b688cbf12260ee4acd17663aeaf1b`) and synced tracked package metadata.
 - Audited the repository on 2026-05-09 and refreshed this status snapshot with current file inventory, capability counts, route surface, verification results, and validation gaps.
@@ -200,4 +206,4 @@ Not verified in this audit:
 
 ---
 
-Last updated: 2026-05-12 03:25
+Last updated: 2026-05-19 16:20

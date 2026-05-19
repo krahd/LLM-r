@@ -420,3 +420,165 @@ def ollama_stop_serving(model: str) -> dict[str, Any]:
         message = (proc.stderr or proc.stdout or f"Could not stop serving {name}.").strip()
         return _ollama_payload(False, message, model=name)
     return _ollama_payload(True, f"Stopped serving {name}.", model=name)
+
+
+def _omlx_payload(ok: bool, message: str, **extra: Any) -> dict[str, Any]:
+    """Standard response payload for oMLX operations."""
+    return {"ok": ok, "message": message, **extra}
+
+
+def omlx_status() -> dict[str, Any]:
+    """Inspect oMLX service state and availability."""
+    modelito = _modelito_module()
+    service = getattr(modelito, "omlx_service", None)
+    try:
+        state = service.inspect_service_state() if service else {}
+    except Exception as exc:
+        return _omlx_payload(False, f"Unable to inspect oMLX: {exc}")
+
+    installed = bool(state.get("installed"))
+    running = bool(state.get("running"))
+    message = "oMLX is running." if running else (
+        "oMLX is installed but not running." if installed else "oMLX is not installed."
+    )
+    return _omlx_payload(True, message, **state)
+
+
+def omlx_local_models() -> dict[str, Any]:
+    """List models available locally in oMLX."""
+    modelito = _modelito_module()
+    try:
+        models = _clean_model_names(list(getattr(modelito, "list_local_omlx_models")()))
+    except Exception as exc:
+        return _omlx_payload(False, f"Unable to list local oMLX models: {exc}", models=[])
+    return _omlx_payload(True, f"Loaded {len(models)} local oMLX model(s).", models=models)
+
+
+def omlx_running_models() -> dict[str, Any]:
+    """Return models currently loaded by oMLX."""
+    models: list[str] = []
+    try:
+        modelito = _modelito_module()
+    except RuntimeError:
+        modelito = None
+
+    for method_name in ("list_running_omlx_models", "list_loaded_omlx_models", "running_omlx_models"):
+        method = getattr(modelito, method_name, None) if modelito else None
+        if callable(method):
+            try:
+                models = _clean_model_names(list(method()))
+                return _omlx_payload(
+                    True,
+                    f"{len(models)} oMLX model(s) currently served.",
+                    models=models,
+                )
+            except Exception:
+                break
+
+    return _omlx_payload(False, "Unable to determine running oMLX models.", models=[])
+
+
+def omlx_remote_models() -> dict[str, Any]:
+    """List available models from oMLX registry or library."""
+    modelito = _modelito_module()
+    try:
+        models = _clean_model_names(list(getattr(modelito, "list_remote_omlx_models")()))
+    except Exception as exc:
+        return _omlx_payload(False, f"Unable to list available oMLX models: {exc}", models=[])
+    return _omlx_payload(True, f"Loaded {len(models)} available oMLX model(s).", models=models)
+
+
+def omlx_start() -> dict[str, Any]:
+    """Start the oMLX service."""
+    modelito = _modelito_module()
+    try:
+        ok = bool(getattr(modelito, "start_omlx")())
+    except Exception as exc:
+        return _omlx_payload(False, f"Unable to start oMLX: {exc}")
+    return _omlx_payload(ok, "oMLX started." if ok else "oMLX did not start.")
+
+
+def omlx_stop() -> dict[str, Any]:
+    """Stop the oMLX service."""
+    modelito = _modelito_module()
+    try:
+        ok = bool(getattr(modelito, "stop_omlx")(force=True))
+    except Exception as exc:
+        return _omlx_payload(False, f"Unable to stop oMLX: {exc}")
+    return _omlx_payload(ok, "oMLX stopped." if ok else "oMLX did not stop.")
+
+
+def omlx_install() -> dict[str, Any]:
+    """Install oMLX runtime."""
+    modelito = _modelito_module()
+    try:
+        ok = bool(getattr(modelito, "install_omlx")(allow_install=True))
+    except Exception as exc:
+        return _omlx_payload(False, f"Unable to install oMLX: {exc}")
+    return _omlx_payload(ok, "oMLX is installed." if ok else "oMLX install did not complete.")
+
+
+def omlx_download(model: str) -> dict[str, Any]:
+    """Download an oMLX model."""
+    modelito = _modelito_module()
+    name = model.strip()
+    if not name:
+        return _omlx_payload(False, "Choose a model to download.")
+    try:
+        ok = bool(getattr(modelito, "download_omlx_model")(name))
+    except Exception as exc:
+        return _omlx_payload(False, f"Unable to download {name}: {exc}", model=name)
+    return _omlx_payload(ok, f"Downloaded {name}." if ok else f"Download failed for {name}.", model=name)
+
+
+def omlx_delete(model: str) -> dict[str, Any]:
+    """Delete a local oMLX model."""
+    modelito = _modelito_module()
+    name = model.strip()
+    if not name:
+        return _omlx_payload(False, "Choose a local model to delete.")
+    try:
+        ok = bool(getattr(modelito, "delete_omlx_model")(name))
+    except Exception as exc:
+        return _omlx_payload(False, f"Unable to delete {name}: {exc}", model=name)
+    return _omlx_payload(ok, f"Deleted {name}." if ok else f"Delete failed for {name}.", model=name)
+
+
+def omlx_serve(model: str) -> dict[str, Any]:
+    """Serve (load) an oMLX model."""
+    modelito = _modelito_module()
+    name = model.strip()
+    if not name:
+        return _omlx_payload(False, "Choose a local model to serve.")
+    try:
+        ok = bool(getattr(modelito, "serve_omlx_model")(name))
+    except Exception as exc:
+        return _omlx_payload(False, f"Unable to serve {name}: {exc}", model=name)
+    return _omlx_payload(ok, f"Serving {name}." if ok else f"Could not serve {name}.", model=name)
+
+
+def omlx_stop_serving(model: str) -> dict[str, Any]:
+    """Stop serving (unload) an oMLX model."""
+    name = model.strip()
+    if not name:
+        return _omlx_payload(False, "Choose a served model to stop.", model=name)
+
+    try:
+        modelito = _modelito_module()
+    except RuntimeError:
+        modelito = None
+
+    for method_name in ("stop_omlx_model", "stop_serving_omlx_model", "unserve_omlx_model"):
+        method = getattr(modelito, method_name, None) if modelito else None
+        if callable(method):
+            try:
+                ok = bool(method(name))
+                return _omlx_payload(
+                    ok,
+                    f"Stopped serving {name}." if ok else f"Could not stop serving {name}.",
+                    model=name,
+                )
+            except Exception:
+                break
+
+    return _omlx_payload(False, f"Could not stop serving {name}.", model=name)
