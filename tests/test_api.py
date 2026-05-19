@@ -151,9 +151,12 @@ def test_omlx_management_routes_via_testclient(monkeypatch):
     }
 
     monkeypatch.setattr(app_module, "omlx_status", lambda: {"ok": True, "message": "ok"})
-    monkeypatch.setattr(app_module, "omlx_local_models", lambda: {"ok": True, "models": ["local-a"]})
-    monkeypatch.setattr(app_module, "omlx_remote_models", lambda: {"ok": True, "models": ["remote-a"]})
-    monkeypatch.setattr(app_module, "omlx_running_models", lambda: {"ok": True, "models": ["running-a"]})
+    monkeypatch.setattr(app_module, "omlx_local_models", lambda: {
+                        "ok": True, "models": ["local-a"]})
+    monkeypatch.setattr(app_module, "omlx_remote_models", lambda: {
+                        "ok": True, "models": ["remote-a"]})
+    monkeypatch.setattr(app_module, "omlx_running_models", lambda: {
+                        "ok": True, "models": ["running-a"]})
     monkeypatch.setattr(app_module, "omlx_start", lambda: {"ok": True, "message": "started"})
     monkeypatch.setattr(app_module, "omlx_stop", lambda: {"ok": True, "message": "stopped"})
     monkeypatch.setattr(app_module, "omlx_install", lambda: {"ok": True, "message": "installed"})
