@@ -1746,7 +1746,8 @@ class AdvancedSettingsDialog(QDialog):
 
         def on_done(payload: dict) -> None:
             models = [str(m) for m in payload.get("models", []) if str(m).strip()]
-            _set_combo_items(self.omlx_local_models_combo, models, _combo_text(self.omlx_local_models_combo))
+            _set_combo_items(self.omlx_local_models_combo, models,
+                             _combo_text(self.omlx_local_models_combo))
             if _combo_text(self.provider_combo) == "omlx":
                 _set_combo_items(
                     self.model_combo,
@@ -1768,7 +1769,8 @@ class AdvancedSettingsDialog(QDialog):
     def _load_running_omlx_models(self) -> None:
         def on_done(payload: dict) -> None:
             models = [str(m) for m in payload.get("models", []) if str(m).strip()]
-            _set_combo_items(self.omlx_running_models_combo, models, _combo_text(self.omlx_running_models_combo))
+            _set_combo_items(self.omlx_running_models_combo, models,
+                             _combo_text(self.omlx_running_models_combo))
 
         self._run_async(
             lambda: self._backend.omlx("running_models"),
@@ -1886,7 +1888,8 @@ class AdvancedSettingsDialog(QDialog):
         self._log_omlx({"error": msg})
 
     def _log_omlx(self, payload) -> None:
-        text = json.dumps(payload, indent=2, ensure_ascii=False) if isinstance(payload, dict) else str(payload)
+        text = json.dumps(payload, indent=2, ensure_ascii=False) if isinstance(
+            payload, dict) else str(payload)
         self.omlx_log.append(text)
 
     # ── File browser and async runner ─────────────────────────────────────────
