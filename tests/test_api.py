@@ -131,44 +131,11 @@ def test_ollama_management_endpoints_delegate(monkeypatch):
     assert app_module.post_ollama_start()["message"] == "started"
     assert app_module.post_ollama_stop()["message"] == "stopped"
     assert app_module.post_ollama_install()["message"] == "installed"
-    req = app_module.LocalModelRequest(model="llama3")
+    req = app_module.OllamaModelRequest(model="llama3")
     assert app_module.post_ollama_download(req)["model"] == "llama3"
     assert app_module.post_ollama_delete(req)["model"] == "llama3"
     assert app_module.post_ollama_serve(req)["model"] == "llama3"
     assert app_module.post_ollama_stop_serving(req)["model"] == "llama3"
-
-
-def test_omlx_management_endpoints_delegate(monkeypatch):
-    """Test that oMLX endpoints delegate to adapter functions correctly."""
-    monkeypatch.setattr(app_module, "omlx_status", lambda: {"ok": True, "running": False})
-    monkeypatch.setattr(app_module, "omlx_local_models",
-                        lambda: {"ok": True, "models": ["llama3:latest"]})
-    monkeypatch.setattr(app_module, "omlx_remote_models",
-                        lambda: {"ok": True, "models": ["mistral:latest"]})
-    monkeypatch.setattr(app_module, "omlx_running_models",
-                        lambda: {"ok": True, "models": ["llama3:latest"]})
-    monkeypatch.setattr(app_module, "omlx_start", lambda: {"ok": True, "message": "started"})
-    monkeypatch.setattr(app_module, "omlx_stop", lambda: {"ok": True, "message": "stopped"})
-    monkeypatch.setattr(app_module, "omlx_install", lambda: {"ok": True, "message": "installed"})
-    monkeypatch.setattr(app_module, "omlx_download", lambda model: {"ok": True, "model": model})
-    monkeypatch.setattr(app_module, "omlx_delete", lambda model: {"ok": True, "model": model})
-    monkeypatch.setattr(app_module, "omlx_serve", lambda model: {"ok": True, "model": model})
-    monkeypatch.setattr(app_module, "omlx_stop_serving",
-                        lambda model: {"ok": True, "model": model})
-
-    assert app_module.get_omlx_status()["ok"] is True
-    assert app_module.get_omlx_local_models()["models"] == ["llama3:latest"]
-    assert app_module.get_omlx_remote_models()["models"] == ["mistral:latest"]
-    assert app_module.get_omlx_running_models()["models"] == ["llama3:latest"]
-    assert app_module.post_omlx_start()["message"] == "started"
-    assert app_module.post_omlx_stop()["message"] == "stopped"
-    assert app_module.post_omlx_install()["message"] == "installed"
-    req = app_module.LocalModelRequest(model="llama3:latest")
-    assert app_module.post_omlx_download(req)["model"] == "llama3:latest"
-    assert app_module.post_omlx_delete(req)["model"] == "llama3:latest"
-    assert app_module.post_omlx_serve(req)["model"] == "llama3:latest"
-    assert app_module.post_omlx_stop_serving(req)["model"] == "llama3:latest"
-
 
 
 def test_load_prompt_text(tmp_path):
