@@ -48,7 +48,7 @@ except Exception as exc:
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _GUI_SETTINGS_PATH = Path.home() / ".llmr" / "gui.json"
 _HELP_URL = "https://github.com/krahd/LLM-r/blob/main/docs/GUI-PLUGIN.md"
-_PROVIDERS = ["openai", "anthropic", "google", "ollama", "cohere", "mistral", "mock", "other"]
+_PROVIDERS = ["openai", "anthropic", "google", "ollama", "omlx", "cohere", "mistral", "mock", "other"]
 _PROVIDER_KEY_ENVS = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
@@ -61,6 +61,7 @@ _MODEL_FALLBACKS = {
     "anthropic": ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"],
     "google": ["gemini-1.5-pro", "gemini-1.5-flash"],
     "ollama": ["llama3:latest", "mistral:latest", "codellama:latest"],
+    "omlx": [],
     "cohere": ["command-r", "command-r-plus"],
     "mistral": ["mistral-large-latest", "mistral-small-latest"],
     "mock": ["mock-model"],
@@ -75,6 +76,14 @@ _COMMON_OLLAMA_MODELS = [
     "gemma2:latest",
     "phi3:latest",
     "nomic-embed-text:latest",
+]
+
+_COMMON_OMLX_MODELS = [
+    "llama3:latest",
+    "llama3.1:latest",
+    "mistral:latest",
+    "codellama:latest",
+    "phi3:latest",
 ]
 
 if str(_PROJECT_ROOT) not in sys.path:
@@ -485,6 +494,7 @@ class Backend:
     def patch_settings(self, data: dict) -> dict: raise NotImplementedError
     def get_modelito_models(self, provider: str = "", model: str = "") -> dict: raise NotImplementedError
     def ollama(self, action: str, model: str = "") -> dict: raise NotImplementedError
+    def omlx(self, action: str, model: str = "") -> dict: raise NotImplementedError
 
 
 class HttpBackend(Backend):
@@ -538,6 +548,21 @@ class HttpBackend(Backend):
         if action in {"download", "delete", "serve", "stop_serving"}:
             return self._request("POST", f"/api/ollama/{action}", {"model": model})
         raise ValueError(f"Unknown Ollama action: {action}")
+
+    def omlx(self, action: str, model: str = "") -> dict:
+        read_paths = {
+            "status":        "/api/omlx/status",
+            "local_models":  "/api/omlx/local_models",
+            "remote_models": "/api/omlx/remote_models",
+            "running_models": "/api/omlx/running_models",
+        }
+        if action in read_paths:
+            return self._request("GET", read_paths[action])
+        if action in {"start", "stop", "install"}:
+            return self._request("POST", f"/api/omlx/{action}", {})
+        if action in {"download", "delete", "serve", "stop_serving"}:
+            return self._request("POST", f"/api/omlx/{action}", {"model": model})
+        raise ValueError(f"Unknown oMLX action: {action}")
 
 
 class EmbeddedBackend(Backend):
@@ -675,6 +700,26 @@ class EmbeddedBackend(Backend):
         }
         if action not in actions:
             raise ValueError(f"Unknown Ollama action: {action}")
+        return actions[action]()
+
+    def omlx(self, action: str, model: str = "") -> dict:
+        from llmr import modelito_adapter
+
+        actions = {
+            "status":       lambda: modelito_adapter.omlx_status(),
+            "local_models": lambda: modelito_adapter.omlx_local_models(),
+            "remote_models":lambda: modelito_adapter.omlx_remote_models(),
+            "running_models": lambda: modelito_adapter.omlx_running_models(),
+            "start":        lambda: modelito_adapter.omlx_start(),
+            "stop":         lambda: modelito_adapter.omlx_stop(),
+            "install":      lambda: modelito_adapter.omlx_install(),
+            "download":     lambda: modelito_adapter.omlx_download(model),
+            "delete":       lambda: modelito_adapter.omlx_delete(model),
+            "serve":        lambda: modelito_adapter.omlx_serve(model),
+            "stop_serving":  lambda: modelito_adapter.omlx_stop_serving(model),
+        }
+        if action not in actions:
+            raise ValueError(f"Unknown oMLX action: {action}")
         return actions[action]()
 
 
@@ -1302,6 +1347,8 @@ class AdvancedSettingsDialog(QDialog):
         _set_combo_items(self.model_combo, _MODEL_FALLBACKS.get(provider, []), preferred)
         if provider == "ollama":
             QTimer.singleShot(0, self._load_local_models)
+        elif provider == "omlx":
+            QTimer.singleShot(0, self._load_local_omlx_models)
         self._mark_dirty()
 
     def _populate_model_list(self) -> None:
@@ -1826,6 +1873,9 @@ class SettingsDialog(QDialog):
         if provider == "ollama":
             self._load_ollama_models(current)
             return
+        if provider == "omlx":
+            self._load_omlx_models(current)
+            return
         self.model_status.setText("Loading models...")
 
         def on_done(payload: dict) -> None:
@@ -1870,6 +1920,31 @@ class SettingsDialog(QDialog):
 
         self._run_async(
             lambda: self._backend.ollama("local_models"),
+            on_done,
+            on_error=on_error,
+            lock=(self.refresh_models_btn,),
+        )
+
+    def _load_omlx_models(self, current: str = "") -> None:
+        self.model_status.setText("Loading local oMLX models...")
+
+        def on_done(payload: dict) -> None:
+            models = [str(m) for m in payload.get("models", []) if str(m).strip()]
+            values = models + _MODEL_FALLBACKS.get("omlx", []) + ([current] if current else [])
+            _set_combo_items(self.model_combo, values, current)
+            count = len(models)
+            suffix = " Use Advanced Settings to start oMLX or download models." if count == 0 else ""
+            self.model_status.setText(f"{count} local oMLX model(s) found.{suffix}")
+
+        def on_error(msg: str) -> None:
+            values = _MODEL_FALLBACKS.get("omlx", []) + ([current] if current else [])
+            _set_combo_items(self.model_combo, values, current)
+            self.model_status.setText(
+                f"Could not read local oMLX models: {msg}. Use Advanced Settings for oMLX controls."
+            )
+
+        self._run_async(
+            lambda: self._backend.omlx("local_models"),
             on_done,
             on_error=on_error,
             lock=(self.refresh_models_btn,),

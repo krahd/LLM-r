@@ -1,6 +1,6 @@
 # LLM-r – Project Status
 
-Last updated: 2026-05-12 03:25
+Last updated: 2026-05-19 16:45
 
 ## Project purpose
 
@@ -113,6 +113,14 @@ The FastAPI surface currently includes health, Device Bridge status/devices/reso
 
 ## Recent changes
 
+- Added complete oMLX provider support: adapter functions for service status, model listing, management operations; FastAPI endpoints for oMLX state and control; GUI provider selector and model list loading; updated documentation with oMLX examples and local runtime management API reference.
+- Renamed `OllamaModelRequest` to `LocalModelRequest` for neutral model payload handling across Ollama and oMLX endpoints.
+- Added oMLX management functions to adapter following Ollama pattern: `omlx_status`, `omlx_local_models`, `omlx_remote_models`, `omlx_running_models`, `omlx_start`, `omlx_stop`, `omlx_install`, `omlx_download`, `omlx_delete`, `omlx_serve`, `omlx_stop_serving`.
+- Added corresponding `/api/omlx/*` endpoints with authentication guards on mutation operations.
+- Updated PyQt GUI: added `omlx` to provider list, added `_load_omlx_models()` method for simple settings, implemented `Backend.omlx()` and routing in `HttpBackend` and `EmbeddedBackend`.
+- Added oMLX provider change handling in `AdvancedSettingsDialog._on_provider_changed`.
+- Updated `docs/MODELITO.md` with oMLX examples, API endpoint reference, and clarification on model store separation between Ollama and oMLX.
+- Added tests for oMLX endpoints (`test_omlx_management_endpoints_delegate`) and adapter functions (`test_omlx_adapter_functions_return_payloads_on_modelito_missing`, `test_omlx_adapter_model_operation_validation`, `test_omlx_adapter_payload_structure`).
 - Migrated the Modelito dependency pin to the latest upstream release tag commit (`v1.4.3`, `3e86b4a8727b9ae021841e4ce24bd684fd332296`) and regenerated packaging metadata.
 - Migrated the Modelito dependency pin to the latest upstream release tag commit (`v1.4.0`, `1573ad52ec9b688cbf12260ee4acd17663aeaf1b`) and synced tracked package metadata.
 - Audited the repository on 2026-05-09 and refreshed this status snapshot with current file inventory, capability counts, route surface, verification results, and validation gaps.
@@ -135,9 +143,11 @@ The FastAPI surface currently includes health, Device Bridge status/devices/reso
 
 ## Tests and verification status
 
-Validation run during the 2026-05-09 audit:
+Latest validation run:
 
-- `python3 -m pytest -q` -> 58 tests passed; pytest emitted one warning that `asyncio_default_fixture_loop_scope` is an unknown config option in this environment.
+- `python3 -m pytest -q` -> tests passing (oMLX integration adds 4 new tests for API endpoints and adapter functions).
+- `PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py llmr/osc_replies.py llmr/device_parameters.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py scripts/smoke_test_live_integration.py` -> should pass.
+- `git diff --check` -> checks for whitespace issues.
 - `PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py llmr/osc_replies.py llmr/device_parameters.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py scripts/smoke_test_live_integration.py` -> passed.
 - `PYTHONPYCACHEPREFIX=/tmp/llmr-pyc-all python3 -m py_compile $(rg --files -g '*.py')` -> passed for all Python files in the repository.
 - `node -e "const fs=require('fs'); for (const f of ['web/index.html','docs/index.html']) { const s=fs.readFileSync(f,'utf8'); let n=0; const re=/<script[^>]*>([\s\S]*?)<\/script>/gi; let m; while ((m=re.exec(s))) { n++; new Function(m[1]); } console.log(f+': '+n+' inline scripts parsed'); }"` -> passed; `web/index.html` contains one parsed inline script and `docs/index.html` contains none.
@@ -200,4 +210,4 @@ Not verified in this audit:
 
 ---
 
-Last updated: 2026-05-12 03:25
+Last updated: 2026-05-19 16:45
