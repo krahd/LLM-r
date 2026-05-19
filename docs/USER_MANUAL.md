@@ -10,7 +10,16 @@ LLM-r is a VST3 assistant for Ableton Live. You type a production request, LLM-r
 - The LLM-r VST3 plug-in installed in your VST3 folder
 - One model provider:
   - OpenAI, Anthropic, or Google with an API key
-  - Ollama running locally with at least one downloaded model
+  - Ollama or oMLX running locally with at least one downloaded model
+  - See [MODELITO.md](MODELITO.md) for provider setup
+
+LLM-r uses Modelito as a provider abstraction layer:
+
+```
+LLM-r → Modelito → provider/runtime
+```
+
+You configure the provider and model in LLM-r; Modelito handles the connection to the underlying runtime.
 
 ## First Run
 
@@ -75,7 +84,7 @@ off, Auto-approve sends the actions to Ableton after the same preflight checks.
 
 The basic Settings screen is intentionally short:
 
-- **Provider**: `openai`, `anthropic`, `google`, `ollama`, or `custom`
+- **Provider**: `openai`, `anthropic`, `google`, `ollama`, `omlx`, or `custom`
 - **Model**: a provider-specific pull-down
 - **Dry run default**: whether the main screen starts in dry-run mode
 - **Auto-approve plans**: whether plans run immediately after planning
@@ -92,6 +101,7 @@ Advanced Settings contains fields that are not needed for every request:
 - LLM-r guidance prompt toggle
 - AbletonOSC host and port
 - Ollama service and model controls
+- oMLX service and model controls
 
 ### Provider API Keys
 
@@ -139,6 +149,40 @@ local Ollama plans.
 The **Downloadable model** pull-down is populated from the Ollama online model library. Click **Refresh Online** to reload the catalog.
 
 Click **Download** to pull the selected model through Ollama. Large models can take a long time and require enough disk space and memory.
+
+## oMLX
+
+oMLX controls live in **Advanced Settings → oMLX**.
+
+The flow from LLM-r through to oMLX is: LLM-r → Modelito → oMLX runtime.
+
+### Status
+
+The oMLX status line shows whether the local oMLX runtime is available and which models are installed or running.
+
+Click **Refresh Status** to update this display.
+
+### Start and Stop
+
+**Start oMLX** starts the local oMLX service if the runtime is installed.
+
+**Stop oMLX** stops the oMLX process.
+
+### Local Models
+
+The **Local model** pull-down is populated from the local oMLX runtime. Use **Serve** to load the selected model. Use **Stop Serving** to unload it.
+
+Use **Delete** to remove a downloaded model from local storage.
+
+### Downloadable Models
+
+The **Downloadable model** pull-down lists models available for download. Click **Download** to pull the selected model. Large models require significant disk space and download time.
+
+### Note on Ollama and oMLX model compatibility
+
+Ollama-pulled models are not automatically available to oMLX. The two runtimes maintain separate model stores. If you want a model accessible through oMLX, download it through the oMLX controls. The provider abstraction is handled by Modelito; see [MODELITO.md](MODELITO.md) for details.
+
+When `omlx` is selected as the provider in Settings, LLM-r routes planning requests through the oMLX runtime. Switch the provider back to `ollama` or a cloud provider to use a different runtime.
 
 ## Choosing Models
 
