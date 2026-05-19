@@ -52,3 +52,5 @@ gui_run.log
 
 # Type check / cache
 .mypy_cache/
+llm-r-0.6.9-release-candidate-prompt.md
+STATUSold.md
