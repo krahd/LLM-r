@@ -1,120 +1,112 @@
 # LLM-r – Project Status
 
-Last updated: 2026-05-19 21:00
+Last updated: 2026-05-20 12:44
 
 ## Project purpose
 
-LLM-r bridges Ableton Live and LLM planners. Its primary product surface is the native VST3 plug-in. FastAPI, the web UI, the PyQt GUI, the Device Bridge Remote Script, and smoke-test tooling are companion surfaces for the same planning and execution workflow.
+LLM-r bridges Ableton Live and LLM planners. The native VST3 plug-in is the
+primary product surface. PyQt, the web UI, and FastAPI are companion surfaces
+for setup, control, debugging, and automation around the same planning and
+execution workflow.
 
-The professional product goal is a self-contained Ableton Live plug-in that is safe, reliable, and understandable for musicians; clear local/cloud model selection through Modelito; dry-runnable and reviewable plans before mutating a Live set; accurate documentation that describes only shipped behaviour; and repeatable release builds and validation steps.
+The current product goal is a VST3-first Ableton tool that is safe to preview,
+reviewable before mutation, explicit about transport and destructive actions,
+clear about cloud vs local model choices through Modelito, and documented
+truthfully.
 
 ## Current implementation state
 
 Current package version: `0.6.9`.
 
-Version metadata currently appears in `pyproject.toml`, `llmr/__init__.py`, `native/vst3/llmr_vst3_plugin.cpp`, `scripts/build_vst3.sh`, `docs/RELEASE.md`, `docs/DEVELOPMENT_PLAN.md`, and `STATUS.md`.
-All sources are consistent at `0.6.9`.
+Version metadata is currently aligned in `pyproject.toml`, `llmr/__init__.py`,
+`native/vst3/llmr_vst3_plugin.cpp`, `scripts/build_vst3.sh`,
+`docs/RELEASE.md`, `docs/DEVELOPMENT_PLAN.md`, and `STATUS.md`.
 
 LLM-r currently provides:
 
-- native macOS VST3 plug-in with provider/model settings, Plan/Details response tabs, readiness checks, dry-run, Auto-approve, destructive-action approval, and direct AbletonOSC plus Device Bridge execution
-- FastAPI server with health, settings, model metadata, capabilities, planning, execution, macro, live-state, history, streaming, Modelito, Ollama, and oMLX endpoints
-- PyQt companion GUI with embedded and HTTP backends, plan/review/execute workflow, settings, provider/model selection, and local runtime controls for Ollama and oMLX
-- web UI companion surface
-- Modelito-backed planner using configured cloud or local providers
-- runtime capability registry generated from `llmr/ableton_osc.py`
-- typed action plans and transport-aware execution reports
-- AbletonOSC transport for normal Live actions
-- LLMRDeviceBridge Remote Script transport for Live browser/device loading
-- Device Bridge status, candidate browsing, and exact resolve endpoints
-- OSC reply listener and partial Live-state reconciliation
+- native macOS VST3 plug-in with prompt entry, Plan and Details tabs, dry-run,
+    Auto-approve, destructive-action approval, provider/model settings, Device
+    Bridge checks, and Ollama runtime controls
+- FastAPI server with health, settings, model metadata, capabilities,
+    planning, execution, macros, live state, history, streaming, Device Bridge,
+    Ollama, and oMLX endpoints
+- readiness model in `llmr/readiness.py` with `GET /api/readiness`
+- upgraded plan presentation in PyQt and web UI with plan summaries, target
+    labels, transport/safety breakdown, and clearer destructive/live warnings
+- improved local runtime management in PyQt for Ollama and oMLX with clearer
+    step-by-step workflow, bounded logs, and better empty states
+- PyQt first-run onboarding wizard
+- PyQt companion GUI with embedded and attached-server modes
+- web UI companion surface with readiness chips, Plan Board, Run Log, and
+    Details view
+- Modelito-backed planner using cloud or local providers
+- transport-aware execution through AbletonOSC and LLMRDeviceBridge
+- Device Bridge status, candidate listing, and exact resolve endpoints
+- OSC reply listener and partial live-state reconciliation
 - static and runtime macros with persistence
-- session history and persisted plan/macro/session stores
 - smoke-test tooling for real Ableton validation
-- release workflow for source distributions, wheels, and PyInstaller binaries
+- release workflow for sdist, wheel, and standalone companion binaries
+
+Important UI boundary in the shipped build:
+
+- VST3 is primary.
+- PyQt is the richest setup/control/debug companion.
+- Web UI is a lightweight browser companion.
+- The shipped VST3 does not yet expose the PyQt/web readiness strip and does
+    not yet ship an oMLX management UI.
 
 ## Product stance
 
-LLM-r is still pre-1.0. Compatibility with unreleased internal versions is less important than a coherent, polished, reliable product.
+LLM-r remains pre-1.0. The release bar is documentation truthfulness,
+repeatable builds, safe plan review, and real manual validation of the Ableton
+surfaces rather than compatibility with old internal builds.
 
-Recommended next bump after the current audit: `0.6.9`, not `1.0.0`.
-
-Do not bump to `1.0.0` until real macOS VST3 build/install/load has been verified, real AbletonOSC execution has been smoke-tested, Device Bridge install/load workflow has been tested in Ableton Live, README/user manual/release docs/development plan/status agree, packaging and release workflow have been validated, and known documentation overclaims have been removed.
+Do not bump to `1.0.0` until native macOS VST3 build/install/load, real
+AbletonOSC execution, Device Bridge browser/device loading, and real local
+runtime behaviour have all been validated manually.
 
 ## Active focus
 
-Current focus should move from feature implementation to release-quality hardening:
+Recently completed:
 
-1. Make documentation match the shipped product exactly.
-2. Close the automated test gap around oMLX API routes.
-3. Verify native VST3 build/install/load on macOS.
-4. Verify real AbletonOSC and Device Bridge smoke workflows.
-5. Clean packaging/release metadata and remove tracked local artefacts.
-6. Prepare a clean `0.6.9` release candidate.
+1. Plan Board and action presentation improvements in PyQt and web UI.
+2. Better local runtime UX in PyQt for Ollama and oMLX.
+3. PyQt onboarding and readiness surfacing.
+4. Documentation audit to remove UI overclaims and clarify the product-surface split.
+
+Current focus:
+
+1. Finish release-quality manual validation.
+2. Keep docs aligned with shipped behaviour.
+3. Decide whether VST3 should gain readiness/oMLX parity or whether those stay companion-surface features for this release.
 
 ## Architecture overview
 
-LLM-r has a VST3-first architecture with Python companion services. The capability registry and planner produce typed, transport-aware plans. The executor and VST3 action path route actions to AbletonOSC or the Device Bridge. The Remote Script runs inside Ableton Live and performs browser/device loading. Companion UIs expose planning, execution, readiness, settings, model management, and debug/status surfaces.
-
-### Architecture diagram
+LLM-r has a VST3-first architecture with Python companion services. The
+planner emits typed, transport-aware plans. The executor routes actions to
+AbletonOSC or the Device Bridge. The Remote Script runs inside Ableton Live for
+browser/device loading. PyQt, web UI, and FastAPI sit beside the plug-in as
+companion surfaces.
 
 ```text
 VST3 plug-in
-    -> provider/model/settings
-    -> plan/review/execute
-    -> AbletonOSC actions
-    -> Device Bridge actions
+        -> prompt / plan / review / execute
+        -> direct AbletonOSC actions
+        -> Device Bridge-backed device_load actions
 
 PyQt GUI / Web UI / API clients
-    -> FastAPI server
-        -> settings, capabilities, model metadata
-        -> planner
-        -> executor
-        -> history, macros, sessions
-        -> Ollama and oMLX management endpoints
+        -> FastAPI server
+                -> settings / readiness / capabilities
+                -> planner / executor
+                -> history / macros / sessions
+                -> Ollama and oMLX endpoints
 
 Planner
-    -> ModelitoClient
-        -> OpenAI / Anthropic / Google / custom
-        -> Ollama
-        -> oMLX
-
-Executor
-    -> osc transport
-        -> AbletonOSC
-        -> Ableton Live
-    -> device_bridge transport
-        -> LLMRDeviceBridge Remote Script
-        -> Ableton Live browser/device loading
+        -> Modelito
+                -> OpenAI / Anthropic / Google / custom
+                -> Ollama
+                -> oMLX
 ```
-
-### Execution flow
-
-```text
-User prompt
-    -> planner builds strict JSON action plan
-    -> validate tool names, arguments, safety, transport
-    -> preflight Device Bridge actions
-    -> dry-run or execute
-        -> OSC actions go to AbletonOSC
-        -> device_load goes to LLMRDeviceBridge
-    -> collect report
-    -> update plan/session/history state
-    -> reconcile recognised AbletonOSC replies where available
-```
-
-### LLM provider flow
-
-```text
-User selects provider/model
-    -> settings/env vars
-    -> ModelitoClient(provider, model)
-    -> provider-specific Modelito adapter
-    -> planner receives model response
-    -> LLM-r parses/repairs/validates action JSON
-```
-
-Ollama and oMLX are local runtime options mediated by Modelito. LLM-r should not bypass Modelito for planner calls.
 
 ## Setup and run instructions
 
@@ -128,19 +120,13 @@ pip install -e .[gui]
 pip install -e .[dev]
 ```
 
-Run tests:
-
-```bash
-python3 -m pytest -q
-```
-
 Run server:
 
 ```bash
 python3 backend/main.py
 ```
 
-Run GUI:
+Run PyQt GUI:
 
 ```bash
 python3 gui/pyqt_app.py
@@ -152,14 +138,7 @@ Build local VST3 on macOS:
 ./scripts/build_vst3.sh
 ```
 
-Local release build:
-
-```bash
-python3 -m build
-./scripts/build_release.sh
-```
-
-Recommended release-candidate validation:
+Release-candidate automated validation:
 
 ```bash
 python3 -m pytest -q
@@ -169,7 +148,7 @@ python3 -m build
 git diff --check
 ```
 
-macOS-only validation:
+macOS-only VST3 validation:
 
 ```bash
 ./scripts/build_vst3.sh
@@ -178,7 +157,7 @@ bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
 
 Real Ableton smoke testing is documented in `docs/ABLETON_SMOKE_TEST.md`.
 
-## Configuration and environment variables
+## Configuration and defaults
 
 Important defaults:
 
@@ -186,10 +165,8 @@ Important defaults:
 - FastAPI port: `8787`
 - AbletonOSC target: `127.0.0.1:11000`
 - LLMRDeviceBridge target: `127.0.0.1:8788`
-- Modelito provider: `openai`
-- Modelito model: `gpt-4.1-mini`
-- planner guidance prompt: enabled by default
-- API token: unset by default
+- default provider: `openai`
+- default model: `gpt-4.1-mini`
 
 Important environment variables:
 
@@ -211,231 +188,124 @@ Important environment variables:
 - `LLMR_SETTINGS_PATH`
 - `LLMR_API_TOKEN`
 
-Keep `LLMR_HOST=127.0.0.1` for normal local use. Binding to `0.0.0.0` is a security-sensitive deployment choice.
+Keep `LLMR_HOST=127.0.0.1` for normal local use.
 
-## Current API surface
+## Native VST3 UI parity audit
 
-The FastAPI surface includes health, settings/model endpoints, the capability registry, planning/execution, streaming, macro CRUD and macro planning, live state, Device Bridge status/devices/resolve, OSC reply status/recent endpoints, Ollama local-runtime management, oMLX local-runtime management, model metadata, sessions, and history.
+Audit performed on 2026-05-20 by code inspection while updating docs. This was
+not a manual plug-in smoke test.
 
-oMLX endpoints currently implemented:
+Current parity findings:
 
-- `GET /api/omlx/status`
-- `GET /api/omlx/local_models`
-- `GET /api/omlx/remote_models`
-- `GET /api/omlx/running_models`
-- `POST /api/omlx/start`
-- `POST /api/omlx/stop`
-- `POST /api/omlx/install`
-- `POST /api/omlx/download`
-- `POST /api/omlx/delete`
-- `POST /api/omlx/serve`
-- `POST /api/omlx/stop_serving`
+- Plan/Details workflow, dry-run, Auto-approve, destructive approval, Device
+    Bridge checks, and Ollama controls are present in VST3.
+- PyQt and web UI expose readiness from `GET /api/readiness`; the shipped VST3
+    does not currently expose that same readiness strip.
+- PyQt exposes Ollama and oMLX runtime tabs; the shipped VST3 currently exposes
+    Ollama controls only.
+- PyQt ships onboarding; the VST3 currently ships only lighter initial guidance.
 
-## Important files and directories
+Implication for docs:
 
-- `README.md`: top-level product overview and API summary.
-- `STATUS.md`: current project status and roadmap.
-- `AGENTS.md`: durable coding-agent instructions.
-- `pyproject.toml`: package metadata and dependency declarations.
-- `llmr/`: Python package source.
-- `llmr/app.py`: FastAPI server and API route surface.
-- `llmr/planner.py`: LLM planner integration and plan persistence.
-- `llmr/executor.py`: Python-side execution and transport routing.
-- `llmr/ableton_osc.py`: tool registry and AbletonOSC action mapping.
-- `llmr/modelito_adapter.py`: Modelito adapter helpers and local runtime management wrappers.
-- `llmr/device_bridge.py`: Python HTTP client for the Live Device Bridge.
-- `llmr/osc_replies.py`: OSC reply listener and reconciliation.
-- `native/vst3/llmr_vst3_plugin.cpp`: self-contained VST3 implementation.
-- `gui/pyqt_app.py`: PyQt companion GUI.
-- `remote_scripts/LLMRDeviceBridge/`: Ableton Live Remote Script.
-- `backend/`: server/device-server entry points.
-- `web/`: companion web UI.
-- `docs/`: user, release, security, capability, compatibility, Modelito, scenario, and smoke-test documentation.
-- `scripts/`: VST3 build/install helpers, release helper, probes, and real Ableton smoke-test harness.
-- `tests/`: automated Python tests.
-- `.github/workflows/release.yml`: release artifact workflow.
+- Docs must describe VST3 as primary without claiming PyQt/web parity where it
+    does not exist yet.
 
-## Audit findings: codebase
+## Important files
 
-### Good state
+- `README.md`: top-level product overview
+- `STATUS.md`: current project snapshot
+- `llmr/app.py`: FastAPI routes and web UI serving
+- `llmr/readiness.py`: readiness computation
+- `llmr/modelito_adapter.py`: Modelito provider/runtime helpers
+- `native/vst3/llmr_vst3_plugin.cpp`: VST3 implementation
+- `gui/pyqt_app.py`: PyQt companion GUI
+- `web/index.html`: lightweight browser companion UI
+- `docs/USER_MANUAL.md`: user-facing workflow guide
+- `docs/MODELITO.md`: provider/runtime guide
+- `docs/RELEASE.md`: release process and manual checklist
+- `docs/ABLETON_SMOKE_TEST.md`: real Ableton validation checklist
 
-- The package requires Python 3.11+ and depends on `modelito>=1.4.5`.
-- Version metadata is consistently `0.6.9` across pyproject.toml, llmr/__init__.py, VST3 source, VST3 build script, and related docs.
-- The API uses `LocalModelRequest` for both Ollama and oMLX model-operation endpoints.
-- oMLX API routes are present and covered by dedicated automated tests in `tests/test_omlx_api.py`.
-- PyQt has a real oMLX management tab and local-model loading path.
-- Modelito remains the provider abstraction for planner calls.
-- Release workflow builds artifacts on `v*` tags and now includes validation + tag/version consistency checks.
-- `gui_run.log` has been removed from tracking; `*.log` is in `.gitignore`.
-- `pytest-asyncio` is declared in dev deps; `asyncio_default_fixture_loop_scope = "function"` is set.
-- README updated for oMLX and Modelito.
-- `docs/USER_MANUAL.md` updated with oMLX section and provider flow.
-- `docs/RELEASE.md` updated with pre-tag checklist and version consistency guide.
-- `docs/DEVELOPMENT_PLAN.md` updated current version and priorities.
+## Recent documentation changes
 
-### Issues to fix before bumping release
-
-All pre-`0.6.9` release hygiene tasks are now complete. The following are the remaining gaps before declaring a final release:
-
-1. Real Ableton Live execution is not covered by unit tests — requires manual smoke testing.
-2. Native VST3 build/install/load on macOS requires manual verification.
-3. LLMRDeviceBridge install and browser/device loading requires manual verification in Ableton.
-4. Real oMLX runtime behaviour is not automated — only the FastAPI route layer is tested.
-
-## Audit findings: documentation
-
-### README
-
-README is strong as a high-level overview, but before release it should:
-
-- include oMLX in the top architecture diagram provider list
-- include oMLX in the GUI/Advanced Settings section
-- mention `docs/MODELITO.md` from the local provider/model section
-- use `ruff check .` rather than `ruff .`
-- include a short “Current limitations” section pointing to real Ableton smoke-test requirements
-
-### docs/USER_MANUAL.md
-
-Needs updates:
-
-- add oMLX to requirements and provider list
-- add an oMLX section parallel to the Ollama section
-- explain that Ollama-pulled models are not automatically available to oMLX
-- mention the PyQt oMLX tab if user-facing
-- distinguish VST3 Advanced Settings from PyQt Advanced Settings if their local-runtime surfaces differ
-
-### docs/MODELITO.md
-
-Good and mostly current. Improve before release:
-
-- avoid using `llama3:latest` as the oMLX example unless that exact ID is known to work in Modelito/oMLX
-- link back to the user manual and README
-- add a short “Which provider should I use?” section for ordinary users
-
-### docs/RELEASE.md
-
-Needs updates:
-
-- bump tag example from `v0.6.8` to the next intended version when bumping
-- mention oMLX controls alongside Ollama controls
-- add a mandatory pre-tag checklist
-- add tag/version consistency checks
-- state which artifacts are considered primary versus companion
-
-### docs/DEVELOPMENT_PLAN.md
-
-Needs updates:
-
-- current package version should be bumped with release
-- current baseline should mention oMLX local-runtime controls
-- prioritised work should emphasise release polish, tests, docs, native validation, and smoke testing
-- remove stale pre-oMLX wording
+- README now makes the product-surface hierarchy explicit.
+- README now includes first-run and local-model guidance.
+- USER_MANUAL now includes a UI tour, plan-review guidance, safety controls,
+    and local-runtime setup flow.
+- MODELITO now explains provider choice, model stores, and model-ID boundaries
+    for ordinary users.
+- RELEASE now includes a pre-release UI checklist and removes VST3 oMLX/readiness overclaim.
+- DEVELOPMENT_PLAN now reflects completed UI work and the current VST3 parity boundary.
 
 ## Tests and verification status
 
-Last run: 2026-05-19.
+This change set is documentation-only.
 
-```
-python3 -m pytest -q          -> 73 passed (includes 13 new tests/test_omlx_api.py)
-ruff check .                  -> All checks passed
-python3 -m py_compile ...     -> passed (all Python surfaces)
-git diff --check              -> passed
-```
+Automated validation run in this pass:
 
-Test suite covers:
+- not required for code correctness because no code changed
 
-- FastAPI route tests for capabilities, settings, plans, execution, macros, live-state, history, streaming, Ollama routes, oMLX routes (all 11 endpoints, including model-arg forwarding and 422 validation)
-- planner unit tests
-- executor unit tests
-- Modelito adapter unit tests
-- OSC action mapping tests
+Manual/documentation validation run in this pass:
 
-Manual validation still required:
+- code inspection of VST3, PyQt, and web UI surfaces to remove doc overclaims
+- heading/link coherence review across edited Markdown files
 
-- real Ableton Live execution with AbletonOSC
-- LLMRDeviceBridge install and browser/device loading
-- native macOS VST3 build/install/load
-- ambiguous Device Bridge candidate picker
-- real oMLX install/runtime behaviour
+Last recorded automated product validation before this docs pass, as documented
+in the repository, included the expanded plan-summary/readiness tests and was
+reported as 96 passing tests. That result was not re-run during this
+documentation-only update.
 
-## Known issues, risks, and limitations
+## Manual validation still required
+
+These are still outstanding and should be treated as release blockers for a
+truthful release candidate:
+
+- native macOS VST3 build verification
+- native macOS VST3 install verification
+- native macOS VST3 load/open verification inside Ableton Live
+- real AbletonOSC smoke test
+- LLMRDeviceBridge install verification in Ableton Live
+- real Device Bridge browser/device loading
+- ambiguous Device Bridge candidate flow verification
+- real Ollama runtime verification against the shipped UI surfaces
+- real oMLX runtime verification against the shipped PyQt/web/API surfaces
+
+## Known risks and limitations
 
 - Real Ableton execution is not covered by unit tests.
-- Native VST3 build/install/load validation requires macOS and Ableton Live.
-- Actual browser paths and candidate scoring need verification across varied user libraries and plug-in installations.
-- Real oMLX runtime validation remains manual; automated tests cover FastAPI routes with monkeypatched adapters only.
+- Native VST3 load/install validation requires macOS and Ableton Live.
+- Real local-runtime behaviour remains partially manual, especially for oMLX.
+- Actual browser paths and candidate resolution behaviour need verification
+    across different user libraries and plug-in inventories.
 - Multi-device chain loading remains outside the current capability contract.
-- Reply parsing and semantic maps should expand only from verified AbletonOSC/Live readback data.
-- Semantic parameter maps remain intentionally conservative.
 
-## Release-readiness checklist for `0.6.9`
+## Pending tasks
 
-Completed:
+- run the manual release checklist from `docs/RELEASE.md`
+- run the real smoke-test checklist from `docs/ABLETON_SMOKE_TEST.md`
+- decide whether VST3 should gain readiness and oMLX-management parity before release
 
-- [x] Add explicit `/api/omlx/...` route tests (`tests/test_omlx_api.py`, 13 tests)
-- [x] Remove tracked `gui_run.log` and ignore logs (`*.log` in `.gitignore`)
-- [x] Update README oMLX/Modelito wording, add limitations section, fix `ruff check .`
-- [x] Update `docs/USER_MANUAL.md` for oMLX and Modelito provider flow
-- [x] Update `docs/RELEASE.md` with pre-tag checklist and version consistency guide
-- [x] Update `docs/DEVELOPMENT_PLAN.md` with current baseline and priorities
-- [x] Add `pytest-asyncio` to dev deps and set `asyncio_default_fixture_loop_scope`
-- [x] Add validate job with tests/lint/version check to release workflow
-- [x] Bump version to `0.6.9` in all sources
-- [x] 73 tests pass, ruff clean, py_compile clean, git diff --check clean
+## Next steps
 
-Still required (manual):
+1. Build and install the macOS VST3 bundle.
+2. Open the VST3 in Ableton Live and verify the documented first-run flow.
+3. Run the disposable-set smoke tests for AbletonOSC and Device Bridge.
+4. Manually verify local runtime flows for Ollama and oMLX.
 
-- [ ] Native macOS VST3 build/install/load verification
-- [ ] Real Ableton Live smoke test
-- [ ] LLMRDeviceBridge install and browser/device loading
-- [ ] Real oMLX runtime test
+## Longer-term steps
 
-```bash
-python3 -m pytest -q
-ruff check .
-PYTHONPYCACHEPREFIX=/tmp/llmr-pyc python3 -m py_compile gui/pyqt_app.py backend/device_server.py llmr/device_bridge.py llmr/osc_replies.py llmr/device_parameters.py remote_scripts/LLMRDeviceBridge/__init__.py remote_scripts/LLMRDeviceBridge/LLMRDeviceBridge.py scripts/smoke_test_live_integration.py
-python3 -m build
-git diff --check
-```
+- expand live-state reconciliation where AbletonOSC exposes reliable readback
+- broaden capability coverage for richer track/device workflows
+- improve plan-diff/review tools before live execution
+- decide whether companion-only features should migrate into the VST3
 
-Recommended macOS validation:
+## Decisions
 
-```bash
-./scripts/build_vst3.sh
-bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
-python3 scripts/smoke_test_live_integration.py
-```
+- VST3 remains the primary surface.
+- PyQt remains the richest setup/control/debug companion.
+- Web UI remains a lightweight browser companion.
+- Documentation should not claim VST3 readiness/oMLX parity until that parity exists and has been validated.
 
-## Roadmap
-
-### Phase 1 — Release hygiene and truthfulness
-
-Goal: make the repository internally consistent.
-
-Tasks:
-
-- add oMLX API route tests
-- remove tracked local log artefact
-- update README, user manual, release docs, development plan, and status
-- reconcile pytest async config
-- add release workflow tests and version guard
-- rerun normal validation
-- bump to `0.6.9`
-
-Exit criteria:
-
-- docs agree with shipped behaviour
-- no known false claims in status/docs
-- tests and lint pass
-- release metadata is consistent
-
-### Phase 2 — Professional packaging
-
-Goal: make a user-installable pre-release.
-
-Tasks:
-
-- validate GitHub release workflow on tag
+Last updated: 2026-05-20 12:44
 - confirm artifacts contain expected wheel/sdist/binaries
 - confirm VST3 bundle shape and metadata
 - document install path clearly
@@ -545,4 +415,4 @@ Longer-term:
 
 ---
 
-Last updated: 2026-05-19 21:00
+Last updated: 2026-05-20 12:39

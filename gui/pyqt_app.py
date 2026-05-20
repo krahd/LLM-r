@@ -89,6 +89,11 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from llmr import __version__  # noqa: E402
+from llmr.plan_summary import (  # noqa: E402
+    infer_target_label,
+    infer_transport,
+    summarise_actions,
+)
 
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
@@ -353,6 +358,17 @@ def _save_gui_settings(data: dict) -> None:
     _GUI_SETTINGS_PATH.write_text(json.dumps(data, indent=2))
 
 
+def _is_first_run() -> bool:
+    """Check if GUI has been set up before (provider/model configured)."""
+    settings = _load_gui_settings()
+    # First-run if flag is missing, false, or provider/model are not configured
+    if not settings.get("first_run_complete", False):
+        return True
+    if not settings.get("provider") or not settings.get("model"):
+        return True
+    return False
+
+
 def _provider_api_keys(data: dict) -> dict[str, str]:
     keys = data.get("provider_api_keys", {})
     if not isinstance(keys, dict):
@@ -496,6 +512,7 @@ class Backend:
                             model: str = "") -> dict: raise NotImplementedError
     def ollama(self, action: str, model: str = "") -> dict: raise NotImplementedError
     def omlx(self, action: str, model: str = "") -> dict: raise NotImplementedError
+    def readiness(self) -> dict: raise NotImplementedError
 
 
 class HttpBackend(Backend):
@@ -565,6 +582,9 @@ class HttpBackend(Backend):
         if action in {"download", "delete", "serve", "stop_serving"}:
             return self._request("POST", f"/api/omlx/{action}", {"model": model})
         raise ValueError(f"Unknown oMLX action: {action}")
+
+    def readiness(self) -> dict:
+        return self._request("GET", "/api/readiness")
 
 
 class EmbeddedBackend(Backend):
@@ -723,6 +743,12 @@ class EmbeddedBackend(Backend):
         if action not in actions:
             raise ValueError(f"Unknown oMLX action: {action}")
         return actions[action]()
+
+    def readiness(self) -> dict:
+        from llmr.config import settings
+        from llmr.readiness import compute_readiness
+
+        return compute_readiness(settings)
 
 
 def _choose_backend(base_url: str, token: str) -> tuple[Backend, str]:
@@ -1000,7 +1026,19 @@ class AdvancedSettingsDialog(QDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
 
-        svc_grp = QGroupBox("Ollama Service")
+        # Header with explanation
+        header_lbl = QLabel("Ollama Models")
+        header_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #f8fafc;")
+        info_lbl = QLabel(
+            "Ollama manages its own model store. Models you pull with Ollama are only available "
+            "to Ollama, not to oMLX or other runtimes. See docs/MODELITO.md for more."
+        )
+        info_lbl.setWordWrap(True)
+        info_lbl.setStyleSheet("font-size: 11px; color: #aeb7c6; margin-bottom: 6px;")
+        layout.addWidget(header_lbl)
+        layout.addWidget(info_lbl)
+
+        svc_grp = QGroupBox("Step 1: Ollama Service Status & Control")
         svc_layout = QVBoxLayout()
         svc_layout.setSpacing(8)
         self.ollama_status_lbl = QLabel("Status not checked.")
@@ -1087,7 +1125,7 @@ class AdvancedSettingsDialog(QDialog):
         local_layout.addLayout(served_row)
         local_grp.setLayout(local_layout)
 
-        remote_grp = QGroupBox("Downloadable Ollama Models")
+        remote_grp = QGroupBox("Step 2: Download Models")
         remote_layout = QVBoxLayout()
         remote_layout.setSpacing(8)
         self.remote_models_combo = self._new_combo(
@@ -1107,14 +1145,21 @@ class AdvancedSettingsDialog(QDialog):
         remote_layout.addLayout(remote_btns)
         remote_grp.setLayout(remote_layout)
 
-        log_grp = QGroupBox("Ollama Activity")
+        log_grp = QGroupBox("Activity Log")
         log_layout = QVBoxLayout()
+        log_layout.setSpacing(8)
         self.ollama_log = QTextEdit()
         self.ollama_log.setReadOnly(True)
         self.ollama_log.setMaximumHeight(110)
-        self.ollama_log.setPlaceholderText("Ollama operation output appears here.")
+        self.ollama_log.setPlaceholderText("Operation logs appear here (timestamped).")
         self.ollama_log.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
+        self.ollama_log_lines = []  # Track bounded log entries
         log_layout.addWidget(self.ollama_log)
+        clear_log_btn = QPushButton("Clear Log")
+        clear_log_btn.setMaximumWidth(100)
+        clear_log_btn.clicked.connect(lambda: self._clear_log(
+            self.ollama_log, self.ollama_log_lines))
+        log_layout.addWidget(clear_log_btn)
         log_grp.setLayout(log_layout)
 
         layout.addWidget(svc_grp)
@@ -1146,7 +1191,20 @@ class AdvancedSettingsDialog(QDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
 
-        svc_grp = QGroupBox("oMLX Service")
+        # Header with explanation
+        header_lbl = QLabel("oMLX Models")
+        header_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #f8fafc;")
+        info_lbl = QLabel(
+            "oMLX uses its own separate model store. Models you download with "
+            "`ollama pull` are not automatically available in oMLX—use oMLX controls "
+            "to download models. See docs/MODELITO.md for more."
+        )
+        info_lbl.setWordWrap(True)
+        info_lbl.setStyleSheet("font-size: 11px; color: #aeb7c6; margin-bottom: 6px;")
+        layout.addWidget(header_lbl)
+        layout.addWidget(info_lbl)
+
+        svc_grp = QGroupBox("Step 1: oMLX Service Status & Control")
         svc_layout = QVBoxLayout()
         svc_layout.setSpacing(8)
         self.omlx_status_lbl = QLabel("Status not checked.")
@@ -1172,17 +1230,17 @@ class AdvancedSettingsDialog(QDialog):
         svc_layout.addLayout(svc_btns)
         svc_grp.setLayout(svc_layout)
 
-        local_grp = QGroupBox("Local and Served Models")
+        local_grp = QGroupBox("Step 2 & 3: Local Models & Serving")
         local_grp.setMinimumHeight(185)
         local_layout = QVBoxLayout()
         local_layout.setSpacing(7)
         self.omlx_local_models_combo = self._new_combo(
             editable=False,
-            placeholder="Local oMLX models appear here",
+            placeholder="Refresh to list local oMLX models",
         )
         self.omlx_running_models_combo = self._new_combo(
             editable=False,
-            placeholder="Served oMLX models appear here",
+            placeholder="Refresh to list served models",
         )
 
         self.set_omlx_model_btn = QPushButton("Set Active")
@@ -1233,7 +1291,7 @@ class AdvancedSettingsDialog(QDialog):
         local_layout.addLayout(served_row)
         local_grp.setLayout(local_layout)
 
-        remote_grp = QGroupBox("Downloadable oMLX Models")
+        remote_grp = QGroupBox("Step 2: Download Models")
         remote_layout = QVBoxLayout()
         remote_layout.setSpacing(8)
         self.omlx_remote_models_combo = self._new_combo(
@@ -1253,14 +1311,20 @@ class AdvancedSettingsDialog(QDialog):
         remote_layout.addLayout(remote_btns)
         remote_grp.setLayout(remote_layout)
 
-        log_grp = QGroupBox("oMLX Activity")
+        log_grp = QGroupBox("Activity Log")
         log_layout = QVBoxLayout()
+        log_layout.setSpacing(8)
         self.omlx_log = QTextEdit()
         self.omlx_log.setReadOnly(True)
         self.omlx_log.setMaximumHeight(110)
-        self.omlx_log.setPlaceholderText("oMLX operation output appears here.")
+        self.omlx_log.setPlaceholderText("Operation logs appear here (timestamped).")
         self.omlx_log.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
+        self.omlx_log_lines = []  # Track bounded log entries
         log_layout.addWidget(self.omlx_log)
+        clear_log_btn = QPushButton("Clear Log")
+        clear_log_btn.setMaximumWidth(100)
+        clear_log_btn.clicked.connect(lambda: self._clear_log(self.omlx_log, self.omlx_log_lines))
+        log_layout.addWidget(clear_log_btn)
         log_grp.setLayout(log_layout)
 
         layout.addWidget(svc_grp)
@@ -1568,13 +1632,20 @@ class AdvancedSettingsDialog(QDialog):
     def _load_local_models(self) -> None:
         def on_done(payload: dict) -> None:
             models = [str(m) for m in payload.get("models", []) if str(m).strip()]
-            _set_combo_items(self.local_models_combo, models, _combo_text(self.local_models_combo))
-            if _combo_text(self.provider_combo) == "ollama":
-                _set_combo_items(
-                    self.model_combo,
-                    models + _MODEL_FALLBACKS.get("ollama", []),
-                    _combo_text(self.model_combo),
-                )
+            if not models:
+                _set_combo_items(self.local_models_combo, [], "")
+                self.local_models_combo.setCurrentText("")
+                self.ollama_status_lbl.setText(
+                    "No local models. Download one below or run 'ollama pull <model>'.")
+            else:
+                _set_combo_items(self.local_models_combo, models,
+                                 _combo_text(self.local_models_combo))
+                if _combo_text(self.provider_combo) == "ollama":
+                    _set_combo_items(
+                        self.model_combo,
+                        models + _MODEL_FALLBACKS.get("ollama", []),
+                        _combo_text(self.model_combo),
+                    )
             self._set_ollama_status(payload)
 
         self._run_async(
@@ -1694,7 +1765,12 @@ class AdvancedSettingsDialog(QDialog):
 
     def _set_ollama_status(self, payload: dict) -> None:
         ok = payload.get("ok", True)
-        self.ollama_status_lbl.setText(payload.get("message", "Ollama status updated."))
+        message = payload.get("message", "Ollama status updated.")
+        if not ok and "Runtime not found" in message:
+            message = "Runtime not found. Install Ollama first, then refresh."
+        elif not ok and "not running" in message.lower():
+            message = "Runtime not running. Start the service above, then refresh."
+        self.ollama_status_lbl.setText(message)
         self.ollama_status_lbl.setStyleSheet(
             f"font-size: 12px; color: {'#7de2a0' if ok else '#ff6b7a'};"
         )
@@ -1705,9 +1781,27 @@ class AdvancedSettingsDialog(QDialog):
         self._log_ollama({"error": msg})
 
     def _log_ollama(self, payload) -> None:
+        self._log_runtime(self.ollama_log, self.ollama_log_lines, payload)
+
+    def _log_omlx(self, payload) -> None:
+        self._log_runtime(self.omlx_log, self.omlx_log_lines, payload)
+
+    def _log_runtime(self, log_widget: QTextEdit, log_lines: list, payload) -> None:
+        """Log with timestamp and bounded size (max 50 lines per session)."""
         text = json.dumps(payload, indent=2, ensure_ascii=False) if isinstance(
             payload, dict) else str(payload)
-        self.ollama_log.append(text)
+        timestamp = time.strftime("%H:%M:%S")
+        entry = f"[{timestamp}] {text}"
+        log_lines.append(entry)
+        if len(log_lines) > 50:
+            log_lines.pop(0)
+        log_widget.setPlainText("\n".join(log_lines))
+        log_widget.verticalScrollBar().setValue(log_widget.verticalScrollBar().maximum())
+
+    def _clear_log(self, log_widget: QTextEdit, log_lines: list) -> None:
+        """Clear the log display and history."""
+        log_lines.clear()
+        log_widget.clear()
 
     # ── oMLX ─────────────────────────────────────────────────────────────────
 
@@ -1742,21 +1836,21 @@ class AdvancedSettingsDialog(QDialog):
         )
 
     def _load_local_omlx_models(self) -> None:
-        self.model_status.setText("Loading local oMLX models...")
-
         def on_done(payload: dict) -> None:
             models = [str(m) for m in payload.get("models", []) if str(m).strip()]
-            _set_combo_items(self.omlx_local_models_combo, models,
-                             _combo_text(self.omlx_local_models_combo))
-            if _combo_text(self.provider_combo) == "omlx":
-                _set_combo_items(
-                    self.model_combo,
-                    models + _MODEL_FALLBACKS.get("omlx", []),
-                    _combo_text(self.model_combo),
-                )
-                count = len(models)
-                suffix = " Use oMLX controls to start oMLX or download models." if count == 0 else ""
-                self.model_status.setText(f"{count} local oMLX model(s) found.{suffix}")
+            if not models:
+                _set_combo_items(self.omlx_local_models_combo, [], "")
+                self.omlx_local_models_combo.setCurrentText("")
+                self.omlx_status_lbl.setText("No local models. Download one below to get started.")
+            else:
+                _set_combo_items(self.omlx_local_models_combo, models,
+                                 _combo_text(self.omlx_local_models_combo))
+                if _combo_text(self.provider_combo) == "omlx":
+                    _set_combo_items(
+                        self.model_combo,
+                        models + _MODEL_FALLBACKS.get("omlx", []),
+                        _combo_text(self.model_combo),
+                    )
             self._set_omlx_status(payload)
 
         self._run_async(
@@ -1877,7 +1971,12 @@ class AdvancedSettingsDialog(QDialog):
 
     def _set_omlx_status(self, payload: dict) -> None:
         ok = payload.get("ok", True)
-        self.omlx_status_lbl.setText(payload.get("message", "oMLX status updated."))
+        message = payload.get("message", "oMLX status updated.")
+        if not ok and "Runtime not found" in message:
+            message = "Runtime not found. Install oMLX first, then refresh."
+        elif not ok and "not running" in message.lower():
+            message = "Runtime not running. Start the service above, then refresh."
+        self.omlx_status_lbl.setText(message)
         self.omlx_status_lbl.setStyleSheet(
             f"font-size: 12px; color: {'#7de2a0' if ok else '#ff6b7a'};"
         )
@@ -1887,10 +1986,7 @@ class AdvancedSettingsDialog(QDialog):
         self.omlx_status_lbl.setStyleSheet("font-size: 12px; color: #ff6b7a;")
         self._log_omlx({"error": msg})
 
-    def _log_omlx(self, payload) -> None:
-        text = json.dumps(payload, indent=2, ensure_ascii=False) if isinstance(
-            payload, dict) else str(payload)
-        self.omlx_log.append(text)
+
 
     # ── File browser and async runner ─────────────────────────────────────────
 
@@ -2025,6 +2121,430 @@ class AdvancedSettingsDialog(QDialog):
             self.accept()
 
 
+class FirstRunDialog(QDialog):
+    """Guided first-run setup wizard for initial provider/model configuration."""
+
+    def __init__(self, backend: Backend, cached: dict, parent=None) -> None:
+        super().__init__(parent)
+        self._backend = backend
+        self._settings = dict(cached)
+        self._current_step = 0
+        self._choices = {
+            "model_type": None,  # "cloud_openai", "cloud_anthropic", "cloud_google", "local_ollama", "local_omlx", "later"
+            "provider": None,
+            "model": None,
+            "api_key": None,
+            "dry_run": True,
+            "auto_approve": False,
+            "allow_destructive": False,
+        }
+
+        self.setWindowTitle("LLM-r Setup")
+        self.setMinimumSize(640, 480)
+        self.resize(700, 550)
+        self.setModal(True)
+
+        self._build_ui()
+        self._show_step(0)
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout()
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        header = QWidget()
+        header_layout = QVBoxLayout()
+        header_layout.setContentsMargins(24, 20, 24, 16)
+        header_layout.setSpacing(4)
+        self._step_title = QLabel("")
+        self._step_title.setStyleSheet("font-size: 18px; font-weight: 700; color: #f8fafc;")
+        self._step_subtitle = QLabel("")
+        self._step_subtitle.setWordWrap(True)
+        self._step_subtitle.setStyleSheet("font-size: 12px; color: #aeb7c6;")
+        header_layout.addWidget(self._step_title)
+        header_layout.addWidget(self._step_subtitle)
+        header.setLayout(header_layout)
+
+        # Content area (will be populated per step)
+        self._content_area = QWidget()
+        self._content_layout = QVBoxLayout()
+        self._content_layout.setContentsMargins(24, 16, 24, 16)
+        self._content_layout.setSpacing(12)
+        self._content_area.setLayout(self._content_layout)
+
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #c8d0dc;")
+
+        # Footer with navigation
+        footer = QHBoxLayout()
+        footer.setContentsMargins(24, 10, 24, 14)
+        footer.setSpacing(8)
+        self._step_lbl = QLabel("Step 1 of 5")
+        self._step_lbl.setStyleSheet("font-size: 11px; color: #aeb7c6;")
+        self._back_btn = QPushButton("Back")
+        self._back_btn.clicked.connect(self._on_back)
+        self._next_btn = QPushButton("Next")
+        self._next_btn.setProperty("role", "primary")
+        self._next_btn.setStyle(self._next_btn.style())
+        self._next_btn.clicked.connect(self._on_next)
+        self._skip_btn = QPushButton("Skip Setup")
+        self._skip_btn.clicked.connect(self._on_skip)
+        footer.addWidget(self._step_lbl)
+        footer.addStretch()
+        footer.addWidget(self._back_btn)
+        footer.addWidget(self._skip_btn)
+        footer.addWidget(self._next_btn)
+
+        root.addWidget(header)
+        root.addWidget(self._content_area, stretch=1)
+        root.addWidget(sep)
+        root.addLayout(footer)
+        self.setLayout(root)
+
+    def _show_step(self, step_num: int) -> None:
+        """Display a specific step."""
+        self._current_step = step_num
+
+        # Clear previous content
+        for i in reversed(range(self._content_layout.count())):
+            self._content_layout.itemAt(i).widget().setParent(None)
+
+        # Update step label
+        self._step_lbl.setText(f"Step {step_num + 1} of 5")
+        self._back_btn.setEnabled(step_num > 0)
+
+        if step_num == 0:
+            self._show_welcome()
+        elif step_num == 1:
+            self._show_model_type()
+        elif step_num == 2:
+            self._show_configure_provider()
+        elif step_num == 3:
+            self._show_ableton_connection()
+        elif step_num == 4:
+            self._show_finish()
+
+    def _show_welcome(self) -> None:
+        self._step_title.setText("Welcome to LLM-r")
+        self._step_subtitle.setText("Let's get you set up.")
+
+        msg = QLabel(
+            "LLM-r lets you describe Ableton Live actions in natural language, "
+            "review a plan, dry-run it, then execute it safely.\n\n"
+            "This guide will help you choose a planner model (cloud or local) "
+            "and configure your Ableton connection.\n\n"
+            "You can change these settings anytime in the Settings dialog."
+        )
+        msg.setWordWrap(True)
+        msg.setStyleSheet("font-size: 12px; color: #d9e0ea; line-height: 1.6;")
+        self._content_layout.addWidget(msg)
+        self._content_layout.addStretch()
+        self._next_btn.setText("Next")
+
+    def _show_model_type(self) -> None:
+        self._step_title.setText("Choose Model Type")
+        self._step_subtitle.setText("Where should we get your planner model?")
+
+        self._model_type_group = QGroupBox("Model Source")
+        group_layout = QVBoxLayout()
+        group_layout.setSpacing(12)
+
+        self._model_type_var = None
+        options = [
+            ("cloud_openai", "☁ Cloud Model: OpenAI (GPT-4o, etc.)"),
+            ("cloud_anthropic", "☁ Cloud Model: Anthropic (Claude, etc.)"),
+            ("cloud_google", "☁ Cloud Model: Google (Gemini, etc.)"),
+            ("local_ollama", "🖥 Local Model: Ollama"),
+            ("local_omlx", "🖥 Local Model: oMLX"),
+            ("later", "⏸ I'll configure this later"),
+        ]
+
+        for opt_id, opt_label in options:
+            btn = QPushButton(opt_label)
+            btn.setMinimumHeight(36)
+            btn.setFlat(False)
+            btn.setStyleSheet(
+                "text-align: left; padding-left: 12px; border: 1px solid #5c6b7d; "
+                "border-radius: 4px; background: transparent; color: #d9e0ea;"
+            )
+            btn.clicked.connect(lambda checked=False, opt=opt_id: self._select_model_type(opt, btn))
+            self._model_type_buttons = getattr(self, "_model_type_buttons", {})
+            self._model_type_buttons[opt_id] = btn
+            group_layout.addWidget(btn)
+
+        self._model_type_group.setLayout(group_layout)
+        self._content_layout.addWidget(self._model_type_group)
+        self._content_layout.addStretch()
+        self._next_btn.setText("Next")
+
+    def _select_model_type(self, model_type: str, btn: QPushButton) -> None:
+        self._choices["model_type"] = model_type
+        # Highlight selected button
+        for b in self._model_type_buttons.values():
+            b.setStyleSheet(
+                "text-align: left; padding-left: 12px; border: 1px solid #5c6b7d; "
+                "border-radius: 4px; background: transparent; color: #d9e0ea;"
+            )
+        btn.setStyleSheet(
+            "text-align: left; padding-left: 12px; border: 2px solid #2dd4bf; "
+            "border-radius: 4px; background: rgba(45, 212, 191, 0.1); color: #2dd4bf; font-weight: 600;"
+        )
+
+    def _show_configure_provider(self) -> None:
+        self._step_title.setText("Configure Model")
+        self._step_subtitle.setText("Set up your chosen planner source.")
+
+        model_type = self._choices.get("model_type")
+        if not model_type:
+            msg = QLabel("Please go back and select a model type.")
+            msg.setStyleSheet("color: #ff6b7a;")
+            self._content_layout.addWidget(msg)
+            self._next_btn.setText("Next")
+            return
+
+        if model_type == "later":
+            msg = QLabel("You can configure your model anytime in Settings.")
+            msg.setStyleSheet("font-size: 12px; color: #aeb7c6;")
+            self._content_layout.addWidget(msg)
+            self._next_btn.setText("Skip to Finish")
+            return
+
+        form = QFormLayout()
+        form.setSpacing(12)
+
+        if model_type.startswith("cloud_"):
+            # Cloud provider setup
+            provider_map = {
+                "cloud_openai": "openai",
+                "cloud_anthropic": "anthropic",
+                "cloud_google": "google",
+            }
+            provider = provider_map.get(model_type, "openai")
+            self._choices["provider"] = provider
+
+            self._config_provider_combo = QComboBox()
+            self._config_provider_combo.addItems([provider])
+            self._config_provider_combo.setEditable(False)
+            form.addRow("Provider", self._config_provider_combo)
+
+            self._config_model_combo = QComboBox()
+            self._config_model_combo.setEditable(True)
+            self._config_model_combo.addItems(_MODEL_FALLBACKS.get(provider, []))
+            form.addRow("Model", self._config_model_combo)
+
+            self._config_api_key_edit = QLineEdit()
+            self._config_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            self._config_api_key_edit.setPlaceholderText(
+                "Paste your API key (will be stored locally)")
+            form.addRow("API Key", self._config_api_key_edit)
+
+            info = QLabel(
+                f"Get your API key from {provider}.com, then paste it above. "
+                "The key is stored locally on your machine."
+            )
+            info.setWordWrap(True)
+            info.setStyleSheet("font-size: 11px; color: #aeb7c6;")
+            form.addRow("", info)
+
+        else:
+            # Local runtime setup
+            is_ollama = model_type == "local_ollama"
+            provider = "ollama" if is_ollama else "omlx"
+            self._choices["provider"] = provider
+
+            status_lbl = QLabel("Checking service status...")
+            status_lbl.setStyleSheet("font-size: 11px; color: #aeb7c6;")
+            form.addRow("Status", status_lbl)
+
+            btn_row = QHBoxLayout()
+            install_btn = QPushButton("Install")
+            start_btn = QPushButton("Start Service")
+            refresh_btn = QPushButton("Refresh")
+            btn_row.addWidget(install_btn)
+            btn_row.addWidget(start_btn)
+            btn_row.addWidget(refresh_btn)
+            btn_row.addStretch()
+            form.addRow("", btn_row)
+
+            info = QLabel(
+                "A local model runs on your machine and doesn't require an API key. "
+                f"Install {provider.upper()} first, then start the service and download a model."
+            )
+            info.setWordWrap(True)
+            info.setStyleSheet("font-size: 11px; color: #aeb7c6;")
+            form.addRow("", info)
+
+        grp = QGroupBox("Configuration")
+        grp.setLayout(form)
+        self._content_layout.addWidget(grp)
+        self._content_layout.addStretch()
+        self._next_btn.setText("Next")
+
+    def _show_ableton_connection(self) -> None:
+        self._step_title.setText("Ableton Connection")
+        self._step_subtitle.setText("Configure how LLM-r communicates with Ableton.")
+
+        msg = QLabel(
+            "LLM-r uses AbletonOSC to send commands to Ableton Live. "
+            "The default connection is local (127.0.0.1:11000).\n\n"
+            "Dry run works anytime, but live execution requires Ableton to be running with "
+            "AbletonOSC installed and listening."
+        )
+        msg.setWordWrap(True)
+        msg.setStyleSheet("font-size: 12px; color: #d9e0ea; line-height: 1.6;")
+        self._content_layout.addWidget(msg)
+
+        form = QFormLayout()
+        form.setSpacing(10)
+
+        host_edit = QLineEdit()
+        host_edit.setText("127.0.0.1")
+        host_edit.setReadOnly(True)
+        form.addRow("AbletonOSC Host", host_edit)
+
+        port_spin = QSpinBox()
+        port_spin.setValue(11000)
+        port_spin.setReadOnly(True)
+        form.addRow("AbletonOSC Port", port_spin)
+
+        grp = QGroupBox("Connection Settings")
+        grp.setLayout(form)
+        self._content_layout.addWidget(grp)
+        self._content_layout.addStretch()
+        self._next_btn.setText("Next")
+
+    def _show_finish(self) -> None:
+        self._step_title.setText("Setup Complete")
+        self._step_subtitle.setText("Review your settings.")
+
+        provider = self._choices.get("provider") or "not configured"
+        model = self._choices.get("model") or "not configured"
+
+        summary = QLabel(f"Provider: <b>{provider}</b><br>Model: <b>{model}</b>")
+        summary.setWordWrap(True)
+        summary.setStyleSheet("font-size: 12px; color: #d9e0ea;")
+        self._content_layout.addWidget(summary)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #5c6b7d;")
+        self._content_layout.addWidget(sep)
+
+        defaults_grp = QGroupBox("Execution Safety Defaults")
+        defaults_layout = QVBoxLayout()
+
+        self._finish_dry_run = QCheckBox("Dry run by default")
+        self._finish_dry_run.setChecked(True)
+        self._finish_dry_run.setToolTip(
+            "Preview OSC messages without sending them to Ableton (safe for testing)"
+        )
+
+        self._finish_auto_approve = QCheckBox("Auto-approve plans after planning")
+        self._finish_auto_approve.setChecked(False)
+        self._finish_auto_approve.setToolTip(
+            "Automatically execute reviewed plans (still dry-runs first if enabled)"
+        )
+
+        self._finish_allow_destructive = QCheckBox("Allow destructive execution")
+        self._finish_allow_destructive.setChecked(False)
+        self._finish_allow_destructive.setToolTip(
+            "Permit actions that permanently change arrangements, devices, or clips"
+        )
+
+        defaults_layout.addWidget(self._finish_dry_run)
+        defaults_layout.addWidget(self._finish_auto_approve)
+        defaults_layout.addWidget(self._finish_allow_destructive)
+        defaults_grp.setLayout(defaults_layout)
+        self._content_layout.addWidget(defaults_grp)
+
+        self._content_layout.addStretch()
+        self._next_btn.setText("Save & Continue")
+        self._skip_btn.setText("Cancel")
+
+    def _on_back(self) -> None:
+        if self._current_step > 0:
+            self._show_step(self._current_step - 1)
+
+    def _on_next(self) -> None:
+        if self._current_step < 4:
+            if self._current_step == 1:
+                # Validate model type selection
+                if not self._choices.get("model_type"):
+                    QMessageBox.warning(self, "Selection Required", "Please select a model type.")
+                    return
+            self._show_step(self._current_step + 1)
+        else:
+            # Finish: save settings
+            self._finish_setup()
+
+    def _on_skip(self) -> None:
+        """Skip setup or cancel from finish screen."""
+        if self._current_step == 4:
+            # Cancel from finish
+            self.reject()
+        else:
+            # Skip during setup
+            msg = QMessageBox.question(
+                self,
+                "Skip Setup?",
+                "You can configure your model later in Settings. Continue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if msg == QMessageBox.StandardButton.Yes:
+                # Mark as first-run complete but don't save any model settings
+                self._settings["first_run_complete"] = True
+                _save_gui_settings(self._settings)
+                self.accept()
+
+    def _finish_setup(self) -> None:
+        """Save all settings and close."""
+        # Collect values from finish screen
+        if hasattr(self, "_finish_dry_run"):
+            self._choices["dry_run"] = self._finish_dry_run.isChecked()
+            self._choices["auto_approve"] = self._finish_auto_approve.isChecked()
+            self._choices["allow_destructive"] = self._finish_allow_destructive.isChecked()
+
+        # Collect cloud provider config if applicable
+        if hasattr(self, "_config_model_combo"):
+            model = self._config_model_combo.currentText().strip()
+            if model:
+                self._choices["model"] = model
+
+            if hasattr(self, "_config_api_key_edit"):
+                api_key = self._config_api_key_edit.text().strip()
+                if api_key:
+                    self._choices["api_key"] = api_key
+
+        if not self._choices.get("provider"):
+            QMessageBox.warning(self, "Provider Required", "Please select a provider.")
+            return
+
+        # Save to settings
+        self._settings.update({
+            "provider": self._choices.get("provider", "openai"),
+            "model": self._choices.get("model", ""),
+            "dry_run": self._choices.get("dry_run", True),
+            "auto_approve": self._choices.get("auto_approve", False),
+            "allow_destructive": self._choices.get("allow_destructive", False),
+            "first_run_complete": True,
+        })
+
+        # Save API key if provided
+        if self._choices.get("api_key"):
+            _apply_provider_api_keys({
+                "provider_api_keys": {
+                    self._choices.get("provider"): self._choices.get("api_key")
+                }
+            })
+
+        _save_gui_settings(self._settings)
+        self.accept()
+
+
 class SettingsDialog(QDialog):
     """Simple first-run settings screen for the normal plan/execute workflow."""
 
@@ -2084,6 +2604,16 @@ class SettingsDialog(QDialog):
         model_row.addWidget(self.refresh_models_btn)
         model_form.addRow("Provider", self.provider_combo)
         model_form.addRow("Model", model_row)
+
+        # Add explanatory text for provider/model
+        provider_info = QLabel(
+            "<b>Cloud models</b> (OpenAI, Anthropic, Google) need an API key.<br>"
+            "<b>Local models</b> (Ollama, oMLX) need local runtime & downloaded models."
+        )
+        provider_info.setWordWrap(True)
+        provider_info.setStyleSheet("font-size: 10px; color: #8b95a5; margin-top: 4px;")
+        model_form.addRow("", provider_info)
+
         model_form.addRow("", self.model_status)
         model_grp.setLayout(model_form)
 
@@ -2113,6 +2643,11 @@ class SettingsDialog(QDialog):
         self._status_lbl = QLabel("")
         self._status_lbl.setStyleSheet("color: #aeb7c6; font-size: 12px;")
         self._help_btn = QPushButton("Open Help")
+        self._reset_onboarding_btn = QPushButton("Reset Onboarding")
+        self._reset_onboarding_btn.setProperty("role", "ghost")
+        self._reset_onboarding_btn.setStyle(self._reset_onboarding_btn.style())
+        self._reset_onboarding_btn.setToolTip("Show the first-run setup guide on next launch")
+        self._reset_onboarding_btn.clicked.connect(self._reset_onboarding)
         self._advanced_btn = QPushButton("Advanced Settings")
         self._save_btn = QPushButton("Save")
         self._save_btn.setProperty("role", "primary")
@@ -2120,6 +2655,7 @@ class SettingsDialog(QDialog):
         self._cancel_btn = QPushButton("Cancel")
         footer.addWidget(self._status_lbl, stretch=1)
         footer.addWidget(self._help_btn)
+        footer.addWidget(self._reset_onboarding_btn)
         footer.addWidget(self._advanced_btn)
         footer.addWidget(self._cancel_btn)
         footer.addWidget(self._save_btn)
@@ -2307,6 +2843,20 @@ class SettingsDialog(QDialog):
     def _open_help(self) -> None:
         QDesktopServices.openUrl(QUrl(_HELP_URL))
 
+    def _reset_onboarding(self) -> None:
+        """Reset the first-run flag so onboarding shows again on next launch."""
+        msg = QMessageBox.question(
+            self,
+            "Reset Onboarding?",
+            "Show the setup guide again on the next launch?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if msg == QMessageBox.StandardButton.Yes:
+            self._cached["first_run_complete"] = False
+            _save_gui_settings(self._cached)
+            self._set_status("Onboarding will show on next launch.", "ok")
+
     def _mark_dirty(self, *_args) -> None:
         if not self._loading:
             self._set_dirty(True)
@@ -2465,8 +3015,10 @@ class MainWindow(QMainWindow):
         self.last_requires_approval = False
         self._plan_action_count = 0
         self._plan_executed = False
+        self._live_auto_approve_warning_shown = False
         self._allow_destructive = bool(self._gui_cfg.get("allow_destructive", False))
         self._worker: QThread | None = None
+        self._readiness_worker: QThread | None = None
         self._server_proc: subprocess.Popen | None = None
         self._server_watcher: _ServerStartWatcher | None = None
 
@@ -2479,6 +3031,10 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._status_bar.showMessage(mode)
         self._update_server_ui()
+        self._refresh_readiness()
+
+        # Show first-run onboarding if needed (do this after UI is built)
+        QTimer.singleShot(100, self._check_first_run)
 
     def _build_ui(self) -> None:
         root = QWidget()
@@ -2601,7 +3157,7 @@ class MainWindow(QMainWindow):
         self._chat_view.setHtml(self._empty_chat_html())
 
         self._actions_table = self._make_table(
-            ["#", "Tool", "Safety", "Description", "Args", "OSC Address"]
+            ["Step", "Action", "Target", "Safety", "Transport", "Description", "Arguments"]
         )
         self._execution_table = self._make_table(
             ["#", "Status", "Tool", "Args", "OSC Address", "Message"]
@@ -2629,6 +3185,35 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 4)
 
         layout.addLayout(top_bar)
+        # ── Readiness bar ─────────────────────────────────────────────────────
+        readiness_bar = QHBoxLayout()
+        readiness_bar.setSpacing(8)
+
+        readiness_lbl = QLabel("Readiness:")
+        readiness_lbl.setStyleSheet("font-size: 11px; color: #8892a0;")
+        self._rdy_plan_chip = _new_chip("Plan …", "neutral")
+        self._rdy_dry_chip = _new_chip("Dry run …", "neutral")
+        self._rdy_exec_chip = _new_chip("Execute …", "neutral")
+        self._rdy_msg_lbl = QLabel("")
+        self._rdy_msg_lbl.setStyleSheet("font-size: 11px; color: #ffd28a;")
+        self._rdy_msg_lbl.setWordWrap(False)
+        self._rdy_refresh_btn = QPushButton("↺")
+        self._rdy_refresh_btn.setFixedWidth(28)
+        self._rdy_refresh_btn.setToolTip("Refresh readiness")
+        self._rdy_refresh_btn.setStyleSheet(
+            "QPushButton { font-size: 14px; border: none; color: #8892a0; background: transparent; }"
+            "QPushButton:hover { color: #eef2f7; }"
+        )
+        self._rdy_refresh_btn.clicked.connect(self._refresh_readiness)
+
+        readiness_bar.addWidget(readiness_lbl)
+        readiness_bar.addWidget(self._rdy_plan_chip)
+        readiness_bar.addWidget(self._rdy_dry_chip)
+        readiness_bar.addWidget(self._rdy_exec_chip)
+        readiness_bar.addWidget(self._rdy_msg_lbl, stretch=1)
+        readiness_bar.addWidget(self._rdy_refresh_btn)
+
+        layout.addLayout(readiness_bar)
         layout.addWidget(splitter, stretch=1)
 
         root.setLayout(layout)
@@ -2689,6 +3274,26 @@ class MainWindow(QMainWindow):
             ul { margin: 6px 0 0 18px; padding: 0; }
             li { margin-bottom: 5px; }
             .action-grid { display: block; margin-top: 10px; }
+                        .summary-grid {
+                            display: grid;
+                            grid-template-columns: repeat(2, minmax(160px, 1fr));
+                            gap: 8px;
+                            margin-top: 8px;
+                        }
+                        .summary-item {
+                            background: #0d1016;
+                            border: 1px solid #2a303a;
+                            border-radius: 8px;
+                            padding: 8px;
+                        }
+                        .summary-label {
+                            color: #aeb7c6;
+                            font-size: 10px;
+                            font-weight: 700;
+                            text-transform: uppercase;
+                            margin-bottom: 2px;
+                        }
+                        .summary-value { font-size: 12px; font-weight: 700; }
             .action-card {
               background: #0d1016;
               border: 1px solid #2a303a;
@@ -2697,6 +3302,7 @@ class MainWindow(QMainWindow):
               padding: 10px 11px;
             }
             .action-title { font-weight: 800; margin-bottom: 4px; }
+                        .target { color: #9bc2ff; font-weight: 700; margin-bottom: 6px; }
             .chip {
               display: inline-block;
               border-radius: 999px;
@@ -2715,6 +3321,8 @@ class MainWindow(QMainWindow):
               color: #d9e0ea;
               padding: 1px 4px;
             }
+                        details { margin-top: 6px; }
+                        summary { cursor: pointer; color: #aeb7c6; }
             .meta { color: #aeb7c6; margin-top: 8px; }
             .warn { color: #ffd28a; font-weight: 700; }
             .ok { color: #7de2a0; font-weight: 700; }
@@ -2797,9 +3405,12 @@ class MainWindow(QMainWindow):
         items = []
         for idx, action in enumerate(actions, start=1):
             tool = escape(str(action.get("tool", "")))
-            desc = escape(str(action.get("description", "")))
-            args = escape(_json_text(action.get("args", {})))
-            transport = escape(str(action.get("transport") or action.get("address") or "osc"))
+            desc = escape(str(action.get("description", "No description provided.")))
+            target = escape(infer_target_label(action.get("args", {})))
+            args_raw = _json_text(action.get("args", {}))
+            args_compact = escape(args_raw if len(args_raw) <= 160 else f"{args_raw[:160]} ...")
+            args_full = escape(json.dumps(action.get("args", {}), indent=2, ensure_ascii=False))
+            transport = escape(str(infer_transport(action)))
             safety_class = "destructive" if action.get("destructive") else "safe"
             safety_label = "Destructive" if action.get("destructive") else "Safe"
             items.append(
@@ -2807,7 +3418,13 @@ class MainWindow(QMainWindow):
                 f"<div class='action-title'>{idx}. <code>{tool}</code>"
                 f"<span class='chip {safety_class}'>{safety_label}</span>"
                 f"<span class='chip transport'>{transport}</span></div>"
-                f"<p>{desc}</p><code>{args}</code></div>"
+                f"<div class='target'>{target}</div>"
+                f"<p>{desc}</p>"
+                "<details>"
+                f"<summary>Arguments <code>{args_compact}</code></summary>"
+                f"<pre>{args_full}</pre>"
+                "</details>"
+                "</div>"
             )
         return "<div class='action-grid'>" + "".join(items) + "</div>"
 
@@ -2842,10 +3459,16 @@ class MainWindow(QMainWindow):
         table.setWordWrap(True)
         table.verticalHeader().setVisible(False)
         header = table.horizontalHeader()
-        header.setStretchLastSection(True)
-        for index in range(len(headers) - 1):
-            header.setSectionResizeMode(index, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(len(headers) - 1, QHeaderView.ResizeMode.Stretch)
+        header.setStretchLastSection(False)
+        header.setDefaultSectionSize(140)
+        for index, name in enumerate(headers):
+            if name in {"Step", "#", "Safety", "Transport", "Status"}:
+                mode = QHeaderView.ResizeMode.ResizeToContents
+            elif name in {"Description", "Arguments", "Message"}:
+                mode = QHeaderView.ResizeMode.Stretch
+            else:
+                mode = QHeaderView.ResizeMode.Interactive
+            header.setSectionResizeMode(index, mode)
         return table
 
     def _set_table_rows(self, table: QTableWidget, rows: list[list[str]]) -> None:
@@ -2878,13 +3501,15 @@ class MainWindow(QMainWindow):
         data, parsed = self._normalized_plan_payload(payload)
         self._last_plan_payload = data
         actions = data.get("planned_actions", []) or []
+        summary = summarise_actions(actions)
         confidence = self._confidence_percent(data.get("confidence", 0.0))
         requires_approval = bool(data.get("requires_approval", False))
+        transport = summary["transport_counts"]
 
         prompt = escape(str(data.get("prompt", "")).strip())
         detail = escape(str(data.get("explanation") or "No explanation provided."))
         approval = (
-            "<span class='warn'>Approval required for destructive actions.</span>"
+            "<span class='warn'>Live approval required before destructive execution.</span>"
             if requires_approval
             else "<span class='ok'>No destructive-action approval required.</span>"
         )
@@ -2892,6 +3517,15 @@ class MainWindow(QMainWindow):
             "<p class='meta'>The model's raw JSON was parsed and normalized for this view.</p>"
             if parsed is not None
             else ""
+        )
+        summary_html = (
+            "<div class='summary-grid'>"
+            f"<div class='summary-item'><div class='summary-label'>Actions</div><div class='summary-value'>{summary['count']}</div></div>"
+            f"<div class='summary-item'><div class='summary-label'>Confidence</div><div class='summary-value'>{confidence}%</div></div>"
+            f"<div class='summary-item'><div class='summary-label'>Safety</div><div class='summary-value'>{summary['safe_count']} safe / {summary['destructive_count']} destructive</div></div>"
+            f"<div class='summary-item'><div class='summary-label'>Transport</div><div class='summary-value'>OSC {transport['osc']} | Device Bridge {transport['device_bridge']}</div></div>"
+            f"<div class='summary-item'><div class='summary-label'>Approval</div><div class='summary-value'>{'Required' if requires_approval else 'Not required'}</div></div>"
+            "</div>"
         )
         prompt_html = (
             f"<div class='bubble user'><div class='eyebrow'>Prompt</div><p>{prompt}</p></div>"
@@ -2902,7 +3536,7 @@ class MainWindow(QMainWindow):
             f"{prompt_html}<div class='bubble'><div class='eyebrow'>Processed Plan</div>"
             f"<h2>Plan ready: {len(actions)} action(s)</h2>"
             f"<p>{detail}</p>"
-            f"<p>Confidence: <strong>{confidence}%</strong></p>"
+            f"{summary_html}"
             f"<p>{approval}</p>"
             f"{self._actions_html(actions)}{parsed_note}</div>"
         )
@@ -2911,13 +3545,15 @@ class MainWindow(QMainWindow):
         rows: list[list[str]] = []
         for idx, action in enumerate(actions, start=1):
             destructive = bool(action.get("destructive", False))
+            transport_label = infer_transport(action)
             rows.append([
                 str(idx),
                 str(action.get("tool", "")),
+                infer_target_label(action.get("args", {})),
                 "Destructive" if destructive else "Safe",
+                transport_label,
                 str(action.get("description", "")),
                 _json_text(action.get("args", [])),
-                str(action.get("address", "")),
             ])
         self._set_table_rows(self._actions_table, rows)
         self._set_table_rows(self._execution_table, [])
@@ -2974,6 +3610,53 @@ class MainWindow(QMainWindow):
         ableton_host = self._gui_cfg.get("ableton_host", "127.0.0.1")
         ableton_port = self._gui_cfg.get("ableton_port", 11000)
         _set_chip(self._osc_chip, f"OSC {ableton_host}:{ableton_port}", "neutral")
+
+    # ── Readiness panel ───────────────────────────────────────────────────────
+
+    def _refresh_readiness(self) -> None:
+        if self._readiness_worker is not None and self._readiness_worker.isRunning():
+            return
+        _set_chip(self._rdy_plan_chip, "Plan …", "neutral")
+        _set_chip(self._rdy_dry_chip, "Dry run …", "neutral")
+        _set_chip(self._rdy_exec_chip, "Execute …", "neutral")
+        self._rdy_msg_lbl.setText("")
+
+        worker = _ActionWorker(lambda: self._backend.readiness())
+        worker.finished.connect(self._on_readiness_done)
+        worker.error.connect(self._on_readiness_error)
+        worker.finished.connect(lambda _: worker.deleteLater())
+        worker.error.connect(lambda _: worker.deleteLater())
+        self._readiness_worker = worker
+        worker.start()
+
+    def _on_readiness_done(self, r: dict) -> None:
+        _set_chip(
+            self._rdy_plan_chip,
+            "Plan \u2713" if r.get("ready_to_plan") else "Plan \u2717",
+            "ok" if r.get("ready_to_plan") else "error",
+        )
+        _set_chip(
+            self._rdy_dry_chip,
+            "Dry run \u2713" if r.get("ready_to_dry_run") else "Dry run \u2717",
+            "ok" if r.get("ready_to_dry_run") else "error",
+        )
+        _set_chip(
+            self._rdy_exec_chip,
+            "Execute \u2713" if r.get("ready_to_execute") else "Execute \u2717",
+            "ok" if r.get("ready_to_execute") else "warn",
+        )
+        issues: list[str] = r.get("errors", []) + r.get("warnings", [])
+        if issues:
+            # Show the most important message only; keep the bar compact.
+            self._rdy_msg_lbl.setText(issues[0])
+        else:
+            self._rdy_msg_lbl.setText("")
+
+    def _on_readiness_error(self, message: str) -> None:
+        _set_chip(self._rdy_plan_chip, "Plan ?", "neutral")
+        _set_chip(self._rdy_dry_chip, "Dry run ?", "neutral")
+        _set_chip(self._rdy_exec_chip, "Execute ?", "neutral")
+        self._rdy_msg_lbl.setText(f"Readiness check failed: {message}")
 
     def _on_auto_approve_changed(self, checked: bool) -> None:
         self._gui_cfg["auto_approve"] = checked
@@ -3032,11 +3715,11 @@ class MainWindow(QMainWindow):
         if not indexes:
             return
         rows = sorted({idx.row() for idx in indexes})
-        cols = sorted({idx.column() for idx in indexes})
-        lines = []
+        headers = [table.horizontalHeaderItem(i).text() for i in range(table.columnCount())]
+        lines = ["\t".join(headers)]
         for row in rows:
             values = []
-            for col in cols:
+            for col in range(table.columnCount()):
                 item = table.item(row, col)
                 values.append(item.text() if item else "")
             lines.append("\t".join(values))
@@ -3084,10 +3767,31 @@ class MainWindow(QMainWindow):
             f"Plan: {_short_id(self.last_plan_id)}" if self.last_plan_id else "")
         self._show_output(payload)
         self._set_busy(False)
-        self._status_bar.showMessage(
-            f"Plan ready — {self._plan_action_count} action(s). Review and click Execute."
-        )
+        if self._plan_action_count == 0:
+            self.execute_btn.setEnabled(False)
+            self._status_bar.showMessage(
+                "Plan has 0 actions. Execute is disabled because there is nothing to run."
+            )
+        else:
+            self._status_bar.showMessage(
+                f"Plan ready — {self._plan_action_count} action(s). Review and click Execute."
+            )
         if self.auto_approve.isChecked() and self._can_execute():
+            if not self.dry_run.isChecked() and not self._live_auto_approve_warning_shown:
+                self._live_auto_approve_warning_shown = True
+                proceed = QMessageBox.question(
+                    self,
+                    "Live Auto-approve Warning",
+                    "Auto-approve is enabled and Dry run is off.\n\n"
+                    "The next auto-execution will send live commands to Ableton immediately after planning.\n"
+                    "This warning is shown once per session.\n\n"
+                    "Do you want to continue with live auto-execution now?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if proceed != QMessageBox.StandardButton.Yes:
+                    self._status_bar.showMessage("Auto-approve live execution was cancelled.")
+                    return
             self._status_bar.showMessage(
                 "Plan ready — Auto-approve is on, executing immediately."
             )
@@ -3099,7 +3803,20 @@ class MainWindow(QMainWindow):
         if not self.last_plan_id:
             QMessageBox.warning(self, "No Plan", "Create a plan first.")
             return
+        if self._plan_action_count == 0:
+            self.execute_btn.setEnabled(False)
+            QMessageBox.information(
+                self,
+                "Nothing To Execute",
+                "This plan contains zero actions, so there is nothing to execute.",
+            )
+            return
         dry_run = self.dry_run.isChecked()
+        destructive_names = [
+            str(action.get("tool") or "action")
+            for action in (self._last_plan_payload.get("planned_actions", []) or [])
+            if bool(action.get("destructive", False))
+        ]
         if self.last_requires_approval and not dry_run and not self._allow_destructive:
             QMessageBox.warning(
                 self, "Approval Required",
@@ -3108,6 +3825,24 @@ class MainWindow(QMainWindow):
                 "or keep Dry run checked.",
             )
             return
+        if destructive_names and not dry_run:
+            joined = "\n".join(f"- {name}" for name in destructive_names[:8])
+            if len(destructive_names) > 8:
+                joined += "\n- ..."
+            confirmation = QMessageBox.question(
+                self,
+                "Confirm Live Destructive Execution",
+                f"This plan has {self._plan_action_count} action(s), including "
+                f"{len(destructive_names)} destructive action(s).\n\n"
+                "Destructive actions:\n"
+                f"{joined}\n\n"
+                "Continue with live execution?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if confirmation != QMessageBox.StandardButton.Yes:
+                self._status_bar.showMessage("Live destructive execution cancelled.")
+                return
         self._set_busy(True)
         self._status_bar.showMessage("Executing…")
 
@@ -3173,6 +3908,7 @@ class MainWindow(QMainWindow):
         self._backend, mode = _choose_backend(self._server_url, self._gui_cfg.get("token", ""))
         self._status_bar.showMessage(mode)
         self._update_server_ui()
+        self._refresh_readiness()
 
     def _on_server_failed(self, message: str) -> None:
         _set_chip(self._server_status_lbl, f"Server failed: {message}", "error")
@@ -3192,6 +3928,7 @@ class MainWindow(QMainWindow):
         self._backend, mode = _choose_backend(self._server_url, self._gui_cfg.get("token", ""))
         self._status_bar.showMessage(mode)
         self._update_server_ui()
+        self._refresh_readiness()
 
     def closeEvent(self, event) -> None:
         if self._server_proc and self._server_proc.poll() is None:
@@ -3203,6 +3940,19 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     # ── Settings ──────────────────────────────────────────────────────────────
+
+    def _check_first_run(self) -> None:
+        """Check if first-run setup is needed and show dialog if necessary."""
+        if not _is_first_run():
+            return
+
+        dlg = FirstRunDialog(self._backend, self._gui_cfg, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            # Re-read persisted settings
+            self._gui_cfg = _load_gui_settings()
+            _apply_provider_api_keys(self._gui_cfg)
+            self._update_model_badge()
+            self._refresh_readiness()
 
     def on_settings(self) -> None:
         dlg = SettingsDialog(self._backend, self._gui_cfg, parent=self)
@@ -3221,6 +3971,7 @@ class MainWindow(QMainWindow):
         self.dry_run.setChecked(bool(self._gui_cfg.get("dry_run", True)))
         self.auto_approve.setChecked(bool(self._gui_cfg.get("auto_approve", False)))
         self._update_model_badge()
+        self._refresh_readiness()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

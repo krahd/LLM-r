@@ -1,12 +1,20 @@
 # LLM-r
 
-**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. Describe what you want in plain language inside the VST3 plug-in; LLM-r translates it into AbletonOSC actions, plus optional Device Bridge requests for browser loading. The desktop app, server, and API are optional companion surfaces for the same workflow.
+**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. The **VST3 plug-in is the primary product surface**: describe what you want in plain language inside Ableton Live, review the generated plan, then dry-run or execute it.
+
+The other surfaces are companions for the same workflow:
+
+- **PyQt GUI**: control, setup, debugging, and local-runtime management companion
+- **Web UI**: lightweight browser companion for planning, review, and readiness checks
+- **FastAPI**: automation and headless surface for scripts, agents, and HTTP clients
 
 ```text
 Natural language prompt in the VST3
         │
         ▼
-   LLM-r planner  ────────────────►  LLM (OpenAI-compatible / Anthropic / Ollama)
+  LLM-r planner  ────────────────►  Modelito-backed LLM runtime
+                           (OpenAI / Anthropic / Google /
+                            Ollama / oMLX / custom)
         │
         ▼
    Action plan  (dry-run or execute)
@@ -20,6 +28,7 @@ Natural language prompt in the VST3
 ## Features
 
 - **Self-contained VST3 plug-in** — configure the LLM, write prompts, review plans, dry-run, and execute from inside Ableton Live
+- **Clear surface split** — VST3 for primary in-Live use, PyQt for setup/debug/control, web UI for lightweight browser access, and FastAPI for automation/headless workflows
 - **Natural-language planner** — the plug-in and `POST /api/plan` convert a free-text prompt into a typed, validated action plan
 - **Safe execution** — dry-run mode, destructive-action approval step, and a strict capability registry
 - **Macro system** — named sequences of actions (`idea_sketch`, `performance_prep`, …) with full CRUD via the API
@@ -29,8 +38,9 @@ Natural language prompt in the VST3
 - **Audio clip controls** — set clip gain, transpose/detune, warping, warp mode, and RAM mode for existing audio clips
 - **Session history** — plans, executions, and sessions are persisted to disk and survive restarts
 - **SSE streaming** — `POST /api/stream` for streaming LLM completions
-- **Desktop GUI** — optional PyQt6 companion app with embedded mode, server attach/start controls, and runtime settings
-- **Multi-provider LLM support** — use cloud or local models from the plug-in, GUI, or API; local runtimes (Ollama and oMLX) are mediated by [Modelito](docs/MODELITO.md)
+- **Desktop GUI** — optional PyQt6 companion app with embedded mode, onboarding, server attach/start controls, readiness display, and local-runtime management tabs
+- **Web UI** — optional browser companion with readiness chips, Plan Board, run log, and details view
+- **Multi-provider LLM support** — use cloud or local models from the appropriate surface; local runtimes (Ollama and oMLX) are mediated by [Modelito](docs/MODELITO.md)
 
 ---
 
@@ -85,11 +95,14 @@ Build/install the local VST3 bundle, then open the Ableton test set:
 bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
 ```
 
-Open the `LLM-r` plug-in window in Ableton Live. The plug-in GUI includes LLM
-provider/model selection, readiness chips, a Plan Board, Details output,
-explicit Save/Cancel settings, Advanced Settings for API keys and local
-runtime controls (Ollama and oMLX), prompt, dry-run, Auto-approve,
-destructive-action approval, plan, and execute controls.
+Open the `LLM-r` plug-in window in Ableton Live. The plug-in GUI is the main
+user-facing workflow: provider/model settings, prompt entry, plan review,
+dry-run, Auto-approve, destructive-action approval, Plan/Details tabs, and
+Advanced Settings for cloud API keys, Device Bridge checks, and Ollama runtime
+controls.
+
+The shipped VST3 does **not** currently expose the PyQt/web readiness strip or
+an oMLX runtime-management UI. Use the companion surfaces for those tasks.
 
 #### Option B — Desktop GUI (optional)
 
@@ -100,11 +113,11 @@ python gui/pyqt_app.py
 The GUI can run in embedded mode, attach to a running server, or start a local
 server from the toolbar. Its main Settings dialog keeps the normal workflow
 short: choose the provider, choose the model, set execution defaults, and save.
-Advanced Settings contains provider API keys, local runtime controls for
-both Ollama and oMLX (service management, model download, serve, delete),
-planner guidance, Ableton connection, server URL, and API token. See
-[docs/MODELITO.md](docs/MODELITO.md) for provider setup details. Use Open
-Help in the toolbar to open the GitHub manual.
+It also includes the most complete first-run/setup surface today: onboarding,
+readiness display, and local runtime controls for both Ollama and oMLX
+(service management, model download, serve, stop serving, delete). See
+[docs/MODELITO.md](docs/MODELITO.md) for provider setup details. Use Open Help
+in the toolbar to open the GitHub manual.
 
 #### Option C — Server only (headless / API)
 
@@ -113,6 +126,42 @@ python backend/main.py
 ```
 
 Configure via environment variables (see [Configuration](#configuration)) before launching. The web UI is available at `http://127.0.0.1:8787`.
+
+#### Web UI (lightweight browser companion)
+
+When the FastAPI server is running, open `http://127.0.0.1:8787` for a compact
+browser companion. It is useful for remote/local browser access, readiness
+checks, prompt testing, plan review, and manual execution outside Ableton's
+plug-in window.
+
+### First run
+
+Use this sequence on a new install:
+
+1. Choose a provider and model.
+2. Keep **Dry run** enabled.
+3. Check readiness before trusting live execution.
+  - In PyQt or web UI, read the readiness status directly.
+  - In headless mode, call `GET /api/readiness`.
+  - In the VST3, confirm your provider/API key settings and run a dry run first; the plug-in does not yet show the same readiness strip as the companion surfaces.
+4. Try a safe prompt such as `Set the tempo to 120 BPM` or `Create one MIDI track named Ideas`.
+5. Review the plan before executing.
+6. Execute only after the plan looks correct and any destructive steps are intentional.
+
+### Local models
+
+LLM-r does not talk to Ollama or oMLX directly from planner code. **Modelito
+mediates provider access** and normalises the planner-facing interface.
+
+Ollama and oMLX are still separate local runtimes:
+
+- Ollama has its own service, model store, and model IDs.
+- oMLX has its own service, model store, and model IDs.
+- A model pulled with `ollama pull` does **not** automatically become an oMLX model.
+- If you want the same family in both runtimes, download it separately in each runtime and use the ID exposed by that runtime.
+
+See [docs/MODELITO.md](docs/MODELITO.md) for the ordinary-user provider guide,
+runtime differences, and model-ID notes.
 
 ### 3. Send a prompt
 
@@ -337,16 +386,21 @@ own runtime settings in macOS user defaults and can:
 - switch between Plan and Details response tabs
 - copy/select text from the response panel
 - keep provider/model on the basic settings screen while API keys, AbletonOSC,
-  and Ollama controls live under Advanced Settings
-- show Ollama and oMLX status, installed models, and currently served models
+  Device Bridge checks, and Ollama controls live under Advanced Settings
+- show transport/device status checks and Ollama model/runtime state
 - load the downloadable-model pull-down from the Ollama online model library
-- manage oMLX local models (download, serve, delete) from Advanced Settings
 - save or cancel settings changes explicitly
 - send the built-in LLM-r tool catalog and optional guidance to the LLM
 - parse the returned JSON plan
 - dry-run or execute the resulting AbletonOSC and Device Bridge actions
 - auto-approve plans after planning while respecting the dry-run default
 - block destructive actions unless explicitly allowed
+
+The shipped VST3 currently does **not** provide:
+
+- the PyQt/web readiness strip backed by `GET /api/readiness`
+- an oMLX runtime-management tab
+- the PyQt onboarding wizard
 
 ## Desktop GUI
 
@@ -365,8 +419,23 @@ A **Settings** dialog (accessible from the toolbar) lets you configure everythin
 - Advanced Settings: provider API keys, assistant prompt guidance, Ableton OSC host/port, server URL, and API token
 - Advanced Settings → Ollama: status, start/stop service, installed model picker, served model stop, downloadable-model picker, download, serve, and delete
 - Advanced Settings → oMLX: status, start/stop service, local model picker, download, serve, stop serving, and delete; see [docs/MODELITO.md](docs/MODELITO.md)
+- Readiness bar: ready-to-plan, ready-to-dry-run, and ready-to-execute state with hints
 - Response tabs: Plan for action cards, Action Table for parsed tool calls, Run Log for execution reports, and Details for the complete payload plus parsed `llm_raw` when available
 - Open Help opens the GitHub user manual from the toolbar
+
+## Web UI
+
+The web UI is a lightweight browser companion rather than the primary product
+surface. It is useful when you want a quick plan/review/execute panel outside
+Ableton Live without opening the PyQt app.
+
+It currently provides:
+
+- provider/model summary pulled from runtime settings
+- readiness chips backed by `GET /api/readiness`
+- prompt entry, Plan, Execute, Dry run, Auto-approve, and destructive approval controls
+- Plan Board, Run Log, and Details tabs
+- execution warnings when Dry run is off or destructive approval is missing
 
 GUI connection settings are persisted to `~/.llmr/gui.json`. Runtime settings are
 pushed to the server via `PATCH /api/settings` when connected to HTTP mode, or
@@ -435,6 +504,7 @@ See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
 
 - Real Ableton Live validation (transport, OSC, device loading) is required for release confidence and is not automated.
 - Native VST3 build, install, and load should be verified on macOS before each release.
+- The shipped VST3 plug-in does not yet expose the same readiness strip or oMLX management controls that the PyQt and web companion surfaces expose.
 - Real oMLX runtime validation is manual; automated tests cover the FastAPI routes with monkeypatched adapters only.
 - Some advanced workflows (device loading, ambiguous browser resolution) require both AbletonOSC and the LLMRDeviceBridge Remote Script.
 - Local model access via Ollama and oMLX is mediated by Modelito. Models pulled through Ollama are not automatically available to oMLX unless both runtimes expose the same model identifier.

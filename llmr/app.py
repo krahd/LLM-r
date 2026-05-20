@@ -920,6 +920,13 @@ def get_osc_reply_status() -> dict:
     return listener_status
 
 
+@app.get("/api/readiness")
+def get_readiness() -> dict:
+    from llmr.readiness import compute_readiness
+
+    return compute_readiness(settings, _osc_reply_listener)
+
+
 @app.get("/api/osc-replies/recent")
 def get_recent_osc_replies(limit: int = 50) -> dict:
     limit = min(max(limit, 1), _MAX_OSC_REPLY_EVENTS)

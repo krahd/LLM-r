@@ -40,15 +40,25 @@ LLM-r currently provides:
   `device_load` preflight.
 - Self-contained native VST3 editor with readiness chips, Plan/Details tabs,
   provider-specific model pickers, Save/Cancel settings, Advanced Settings for
-  provider keys and Ollama status/model control, prompt entry, plan review,
-  dry-run, Auto-approve, destructive-action approval, and direct AbletonOSC plus
-  Device Bridge execution.
+  provider keys, Device Bridge checks, Ollama status/model control, prompt
+  entry, plan review, dry-run, Auto-approve, destructive-action approval, and
+  direct AbletonOSC plus Device Bridge execution.
 - PyQt desktop GUI that can connect to a running server or operate in embedded
   mode, with settings for provider, model, prompt guidance, AbletonOSC, server
   URL, and API token; Advanced Settings includes local runtime controls for both
-  Ollama and oMLX (service management, model download, serve, delete).
+  Ollama and oMLX (service management, model download, serve, stop serving,
+  delete), onboarding, and readiness display.
+- Web UI companion surface with readiness chips, Plan Board, Run Log, and
+  Details tab.
 - oMLX local runtime integration through Modelito: `/api/omlx/*` routes,
   PyQt oMLX management tab, and dedicated automated route tests.
+
+Important current UX boundary:
+
+- VST3 is the primary product surface.
+- PyQt is the richest setup/control/debug companion.
+- Web UI is a lightweight browser companion.
+- The shipped VST3 does not yet have PyQt/web parity for readiness display or oMLX runtime management.
 
 ## Current Ableton Coverage
 
@@ -103,10 +113,9 @@ AbletonOSC as the DAW control surface. Important references:
 ## Prioritized Work
 
 1. **Release hygiene and truthfulness (immediate)**
-   - Ensure README, docs, and STATUS.md describe exactly the shipped behaviour.
-   - Dedicated oMLX API route tests covering all `/api/omlx/*` endpoints.
-   - Remove tracked log artefacts; harden release workflow with lint/test guards.
-   - Bump to `0.6.9` after validation.
+  - Keep README, docs, and STATUS.md aligned with the shipped UI split and current parity gaps.
+  - Keep the completed oMLX API route tests in good shape as the runtime surface changes.
+  - Finish release-candidate validation and remove any remaining documentation overclaim.
 
 2. **Real Ableton integration harness**
    - Extend `scripts/smoke_test_live_integration.py` with a mocked OSC server
@@ -146,10 +155,11 @@ AbletonOSC as the DAW control surface. Important references:
      project-level operations.
 
 7. **Desktop and web UX**
-   - Capability explorer and live-state browser.
-   - Plan diff/review panel before execution.
-   - Macro editor with parameterized macro templates.
-   - Streaming planner output and execution progress.
+  - Capability explorer and live-state browser.
+  - Plan diff/review panel before execution.
+  - Macro editor with parameterized macro templates.
+  - Streaming planner output and execution progress.
+  - Decide whether to bring VST3 to readiness/oMLX parity or continue treating those as companion-surface responsibilities.
 
 8. **Modelito integration cleanup**
    - Once Modelito exposes stable normalized model-list and metadata contracts,

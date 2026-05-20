@@ -1179,7 +1179,16 @@ private:
         [chatView_ addSubview:btm]; [btm release];
 
         // Status label
-        chatStatusLabel_ = labelIn(btm, @"Ready. Type a request and press Plan.",
+        NSString *initialStatus = @"Ready. Type a request and press Plan.";
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        NSString *provider = [defaults stringForKey:@"llmr.vst3.provider"] ?: @"";
+        NSString *apiKey = [defaults stringForKey:@"llmr.vst3.api_key"] ?: @"";
+        if ([provider length] == 0) {
+            initialStatus = @"Setup needed: Choose a provider in Settings.";
+        } else if (![provider isEqualToString:@"ollama"] && ![provider isEqualToString:@"omlx"] && [apiKey length] == 0) {
+            initialStatus = @"Setup needed: Add API key in Advanced Settings.";
+        }
+        chatStatusLabel_ = labelIn(btm, initialStatus,
                                    NSMakeRect(kPad, 4, width - kPad*2, 18),
                                    [NSFont systemFontOfSize:11.0], cSec());
         [chatStatusLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
@@ -2361,7 +2370,13 @@ private:
                 } else {
                     display = [assistantFailureMessage(error, content) retain];
                     rawDisplay = [(content ?: error ?: @"") retain];
-                    status = [@"No executable actions." retain];
+                    if (error && [error length] > 0) {
+                        status = [[NSString stringWithFormat:@"Planning failed: %@", error] retain];
+                    } else if (content && [content length] > 0 && [content rangeOfString:@"no executable actions" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                        status = [@"Plan has no executable actions. Model may need clarification." retain];
+                    } else {
+                        status = [@"No executable actions." retain];
+                    }
                 }
                 __block NSArray *retainedActions = [actions retain];
                 [content release];

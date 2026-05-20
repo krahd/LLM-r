@@ -2,6 +2,8 @@
 
 LLM-r is a VST3 assistant for Ableton Live. You type a production request, LLM-r asks your selected language model for an executable plan, shows you the plan in plain language, and can send the resulting commands to Ableton Live through AbletonOSC and the optional LLM-r Device Bridge.
 
+The VST3 plug-in is the primary product surface. The PyQt GUI, web UI, and FastAPI server are companion surfaces for setup, control, debugging, automation, and headless workflows.
+
 ## Requirements
 
 - macOS with Ableton Live
@@ -31,7 +33,9 @@ You configure the provider and model in LLM-r; Modelito handles the connection t
 6. For cloud providers, open **Advanced Settings** and enter the API key.
 7. Confirm the AbletonOSC host and port. The default is `127.0.0.1:11000`.
 8. If you want device loading, accept the LLMRDeviceBridge install prompt, restart Live, and enable it in a Control Surface slot.
-9. Click **Save**.
+9. Keep **Dry run** enabled.
+10. Run one safe prompt and review the plan before you execute anything live.
+11. Click **Save**.
 
 Use **Advanced Settings** to check Device Bridge reachability before executing
 plans that include `device_load`. Execution also resolves each device-load
@@ -39,6 +43,44 @@ candidate before sending any mutations, so ambiguous browser matches block until
 the plan uses a specific candidate path or a confirmed ambiguous choice.
 
 Settings are only applied when you click **Save**. Click **Cancel** to close settings without applying changes.
+
+## UI Tour
+
+### VST3 plug-in
+
+This is the main in-Live workflow and the best choice for normal use while producing.
+
+Use it for:
+
+- typing prompts inside Ableton Live
+- reviewing a plan before it touches the set
+- dry-running and executing from the plug-in window
+- cloud-provider setup and Ollama setup that fits inside the plug-in's Advanced Settings
+
+The shipped VST3 currently includes prompt entry, Plan and Details tabs, dry run, Auto-approve, destructive approval, Device Bridge checks, and Ollama controls. It does not currently show the same readiness strip or oMLX management tab that the companion surfaces show.
+
+### PyQt GUI
+
+This is the best setup, control, and debugging companion.
+
+Use it for:
+
+- first-run onboarding
+- readiness checks before planning or live execution
+- switching between embedded and attached-server workflows
+- managing local runtimes for both Ollama and oMLX
+- inspecting plan details, parsed actions, and run logs outside Ableton
+
+### Web UI
+
+This is the best lightweight browser companion.
+
+Use it for:
+
+- quick prompt tests in a browser
+- checking readiness without opening the PyQt app
+- reviewing the Plan Board, Run Log, and Details tabs from a browser
+- simple remote/local access while the FastAPI server is running
 
 ## Main Screen
 
@@ -57,6 +99,20 @@ The **Plan** tab is the normal user-facing view. It shows:
 - execution or dry-run results
 
 The plan view is selectable. Use standard macOS shortcuts such as `Cmd+C`, `Cmd+A`, and normal text selection.
+
+## Reviewing A Plan
+
+Treat the plan as the last review step before anything reaches Ableton.
+
+Check these items before you execute:
+
+- whether the explanation matches what you asked for
+- which tracks, clips, scenes, or devices the actions target
+- whether any step is marked destructive
+- whether any `device_load` step is ambiguous and needs a more exact browser path or preset choice
+- whether Dry run is still on for a safe preview
+
+If the plan is wrong, edit the prompt and plan again. Do not execute a plan just because the model answered confidently.
 
 ### Details Tab
 
@@ -80,6 +136,24 @@ Enable **Auto-approve** only when you want LLM-r to run the plan immediately
 after planning. If Dry run is enabled, Auto-approve runs a preview. If Dry run is
 off, Auto-approve sends the actions to Ableton after the same preflight checks.
 
+## Safety Controls
+
+### Dry run
+
+Dry run previews the execution report without mutating the Live set. This should stay on during setup and when testing a new provider or prompt style.
+
+### Auto-approve
+
+Auto-approve removes the extra manual click between planning and execution. It is safer when Dry run is still on. If Dry run is off, Auto-approve becomes live execution immediately after planning.
+
+### Destructive approval
+
+LLM-r marks destructive steps separately. Deleting tracks, clips, scenes, notes, or devices requires explicit destructive approval and Dry run must be off.
+
+### Device Bridge preflight
+
+`device_load` is preflighted before execution. LLM-r checks whether the Device Bridge is reachable and resolves the browser candidate before it starts mutating the set. If the candidate is ambiguous, execution stops instead of partially changing the set.
+
 ## Settings
 
 The basic Settings screen is intentionally short:
@@ -102,6 +176,16 @@ Advanced Settings contains fields that are not needed for every request:
 - AbletonOSC host and port
 - Ollama service and model controls
 - oMLX service and model controls
+
+## Readiness
+
+Readiness answers three separate questions:
+
+- can LLM-r create a plan?
+- can LLM-r dry-run that plan safely?
+- can LLM-r execute that plan live?
+
+The PyQt GUI and web UI expose readiness directly. In headless mode, call `GET /api/readiness`. The current shipped VST3 does not expose the same readiness strip, so for plug-in-only use you should keep Dry run on first and verify your settings manually.
 
 ### Provider API Keys
 
@@ -183,6 +267,22 @@ The **Downloadable model** pull-down lists models available for download. Click 
 Ollama-pulled models are not automatically available to oMLX. The two runtimes maintain separate model stores. If you want a model accessible through oMLX, download it through the oMLX controls. The provider abstraction is handled by Modelito; see [MODELITO.md](MODELITO.md) for details.
 
 When `omlx` is selected as the provider in Settings, LLM-r routes planning requests through the oMLX runtime. Switch the provider back to `ollama` or a cloud provider to use a different runtime.
+
+## Local Runtime Setup Flow
+
+Use this order for local runtimes:
+
+1. Decide which runtime you want.
+  - Use Ollama if you already use Ollama.
+  - Use oMLX if you want Apple Silicon local MLX-style runtime support.
+2. Start the runtime service.
+3. Refresh status.
+4. Download one model into that runtime's own model store.
+5. Serve or activate the model if the runtime requires it.
+6. Set the matching LLM-r provider and model.
+7. Keep Dry run on and test a safe prompt first.
+
+Ollama and oMLX do not share a model store. Download the model separately in the runtime you plan to use.
 
 ## Choosing Models
 
