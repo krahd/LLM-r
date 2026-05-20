@@ -25,7 +25,7 @@
       min-height: 100vh;
       background: var(--bg);
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
     }
     main { max-width: 1400px; margin: 0 auto; padding: 18px; }
     header {
@@ -38,6 +38,7 @@
       flex-wrap: wrap;
     }
     h1 { font-size: 22px; margin: 0 10px 0 0; letter-spacing: 0; }
+    .subtitle { color: var(--muted); font-size: 13px; font-weight: 600; }
     h2 { font-size: 15px; margin: 0 0 10px; }
     h3 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
     .spacer { flex: 1; }
@@ -109,7 +110,17 @@
       cursor: pointer;
       font-size: 13px;
     }
-    button:focus {
+    button:focus,
+    input:focus,
+    textarea:focus,
+    select:focus {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible {
       outline: 2px solid var(--blue);
       outline-offset: 2px;
     }
@@ -170,6 +181,38 @@
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 8px;
     }
+    .template-groups {
+      display: grid;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .template-group {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+      padding: 10px;
+    }
+    .template-group h4 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .template-list {
+      display: grid;
+      gap: 6px;
+    }
+    .template-list button {
+      text-align: left;
+      font-size: 12px;
+      padding: 8px 10px;
+    }
+    .helper-note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
     .settings-form {
       display: grid;
       gap: 10px;
@@ -196,6 +239,59 @@
       font-size: 13px;
     }
     .safety-alert .label { display: flex; gap: 4px; align-items: flex-start; margin-bottom: 4px; }
+    .action-card.destructive {
+      border-color: #a93a4d;
+      background: #2a1820;
+    }
+    .action-card.destructive .tool {
+      color: #ffb4bd;
+    }
+    .inline-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .muted-block {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .collapsible {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+      padding: 10px;
+    }
+    .cap-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .cap-domain {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #0d1016;
+      padding: 10px;
+    }
+    .cap-domain h4 {
+      margin: 0 0 8px;
+      font-size: 13px;
+    }
+    .cap-domain ul {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+    }
+    .safety-inline {
+      font-size: 12px;
+      color: var(--amber);
+      margin-top: 6px;
+      min-height: 16px;
+    }
     @media (max-width: 1024px) {
       main { padding: 12px; }
       header { flex-wrap: wrap; }
@@ -206,11 +302,14 @@
 <body>
   <main>
     <header>
-      <h1>LLM-r Command Surface</h1>
+      <div>
+        <h1>LLM-r Command Surface</h1>
+        <div class="subtitle">Describe an Ableton Live action, review the plan, dry-run it, then execute.</div>
+      </div>
       <span id="apiChip" class="chip">API checking</span>
       <span id="modelChip" class="chip">Model unknown</span>
       <span id="bridgeChip" class="chip">Bridge unknown</span>
-      <span id="replyChip" class="chip">OSC unknown</span>
+      <span id="replyChip" class="chip">Ableton command status unknown</span>
       <span class="spacer"></span>
       <span id="planChip" class="chip">No plan</span>
     </header>
@@ -222,6 +321,7 @@
       <span id="rdyExecChip" class="chip">Execute ?</span>
       <span id="rdyMsg" class="muted"></span>
     </div>
+    <div class="muted" id="fixNext" aria-live="polite">What to fix next: Checking readiness...</div>
 
     <div class="container">
       <!-- LEFT PANEL: Command, Settings, Examples, Safety -->
@@ -235,36 +335,61 @@
             <div>Provider: <strong id="settingsProvider">—</strong></div>
             <div>Model: <strong id="settingsModel">—</strong></div>
           </div>
+          <div class="helper-note">Safe path: Create a plan -> preview with Dry run -> run in Ableton.</div>
         </div>
 
         <!-- Prompt -->
         <textarea id="prompt" maxlength="2000" placeholder="Describe the action. Examples: 'Create a 2-bar drum loop' or 'Load Drum Rack on track 2'." aria-label="Command prompt"></textarea>
         <div class="muted"><span id="charCount">0</span> / 2000</div>
 
-        <!-- Examples -->
+        <!-- Quick starts -->
         <div style="margin-top: 12px;">
-          <h3>Quick Examples</h3>
-          <div class="examples-grid">
-            <button class="example" onclick="fillExample('Set tempo to 120 BPM')" aria-label="Example: Set tempo to 120 BPM">Set tempo 120</button>
-            <button class="example" onclick="fillExample('Create a MIDI track')" aria-label="Example: Create a MIDI track">Create track</button>
-            <button class="example" onclick="fillExample('Load Drum Rack on the selected track')" aria-label="Example: Load Drum Rack">Load Drum Rack</button>
-            <button class="example" onclick="fillExample('Create a 4-bar drum sketch and start playback')" aria-label="Example: 4-bar drum sketch">4-bar drums</button>
+          <h3>Quick Starts</h3>
+          <div class="template-groups" id="quickStarts"></div>
+          <div class="helper-note">Selecting a template only fills the prompt. It does not execute.</div>
+        </div>
+
+        <div class="collapsible" id="macroSection">
+          <h3>Macros</h3>
+          <div class="rows">
+            <label for="macroSelect">Saved macro</label>
+            <select id="macroSelect" aria-label="Select a macro"></select>
+            <div class="row">
+              <button id="macroPlanBtn" class="example" aria-label="Create a plan from selected macro">Create macro plan</button>
+              <button id="macroRefreshBtn" class="example" aria-label="Refresh macros list">Refresh macros</button>
+            </div>
+            <span id="macroStatus" class="muted">Loading macros...</span>
           </div>
         </div>
 
+        <details class="collapsible" id="capabilitiesSection">
+          <summary><strong>What LLM-r can do</strong></summary>
+          <div class="rows" style="margin-top: 10px;">
+            <label>
+              <input type="checkbox" id="includeDestructiveCaps" />
+              Include destructive capabilities
+            </label>
+            <button id="capsRefreshBtn" class="example" aria-label="Refresh capabilities list">Refresh capabilities</button>
+            <span id="capsStatus" class="muted">Loading capabilities...</span>
+            <div id="capsList" class="cap-grid" aria-live="polite"></div>
+          </div>
+        </details>
+
         <!-- Control buttons and toggles -->
         <div class="row">
-          <button id="planBtn" class="primary" aria-label="Plan: generate action list from prompt">Plan</button>
-          <button id="execBtn" disabled aria-label="Execute: send plan to Ableton">Execute</button>
+          <button id="planBtn" class="primary" aria-label="Create a plan from prompt">Create a plan</button>
+          <button id="execBtn" disabled aria-label="Run plan in Ableton">Run in Ableton</button>
         </div>
+        <span id="planHint" class="muted-block" aria-live="polite"></span>
+        <span id="execHint" class="muted-block" aria-live="polite"></span>
 
         <!-- Safety toggles -->
         <div class="rows" style="margin-top: 12px;">
           <label>
             <input type="checkbox" id="dry" checked aria-describedby="dryDesc" />
-            Dry run (preview only)
+            Preview only — do not change Ableton
           </label>
-          <span id="dryDesc" class="muted">Dry run is safe—no changes to Ableton.</span>
+          <span id="dryDesc" class="muted">Recommended while you learn or when testing new prompts.</span>
 
           <label>
             <input type="checkbox" id="autoApprove" aria-describedby="autoDesc" />
@@ -276,13 +401,20 @@
             <input type="checkbox" id="approve" aria-describedby="approveDesc" />
             Allow destructive actions
           </label>
-          <span id="approveDesc" class="muted">Required to execute plans with permanent changes.</span>
+          <span id="approveDesc" class="muted">Required before any permanent arrangement or clip changes.</span>
+          <span id="safetyHint" class="safety-inline" aria-live="polite"></span>
         </div>
 
         <!-- Live execution warning -->
         <div id="liveExecWarning" class="safety-alert hidden" role="alert" aria-live="polite">
           <div class="label">⚠️ <strong>Live Execution Enabled</strong></div>
           <div>Dry run is off. Actions will be sent live to Ableton. Use with caution.</div>
+        </div>
+
+        <div class="safety-alert" role="note" aria-live="polite">
+          <div class="label"><strong>Performance caution</strong></div>
+          <div>For live performance, keep Dry run on until the set is saved and tested.</div>
+          <div>Avoid Auto-approve with Dry run off during performance.</div>
         </div>
       </section>
 
@@ -297,7 +429,7 @@
         <div id="planView" class="board">
           <div class="action-card">
             <span class="tool">No plan yet</span>
-            <div class="muted">Enter a command above and click <strong>Plan</strong>.</div>
+            <div class="muted">Enter a command and click <strong>Create a plan</strong>, then review and preview before running in Ableton.</div>
           </div>
         </div>
 
@@ -310,8 +442,31 @@
   <script>
     let currentPlanId = null;
     let currentPlan = null;
-    let liveAutoApproveWarningShown = false;
     let currentSettings = {};
+    let lastReadiness = null;
+
+    const QUICK_STARTS = {
+      'Novice': [
+        'Set tempo to 120 BPM',
+        'Create a MIDI track called Drums',
+        'Create an audio track called Vox In',
+        'Load Drum Rack on track 2 (requires Device Bridge)',
+      ],
+      'Production': [
+        'Create a 4-bar drum sketch and start playback',
+        'Create a bass MIDI track and set tempo to 128 BPM',
+        'Duplicate the selected clip and launch it',
+      ],
+      'Sound Design': [
+        'Load EQ Eight on the selected track',
+        'Load Compressor on the selected track',
+        'Set the selected track volume lower',
+      ],
+      'Safety': [
+        'Dry-run deleting the selected clip',
+        'Stop all clips',
+      ],
+    };
 
     const promptEl = document.getElementById('prompt');
     const planBtn = document.getElementById('planBtn');
@@ -322,6 +477,21 @@
     const dryEl = document.getElementById('dry');
     const autoApproveEl = document.getElementById('autoApprove');
     const approveEl = document.getElementById('approve');
+    const planHintEl = document.getElementById('planHint');
+    const execHintEl = document.getElementById('execHint');
+    const fixNextEl = document.getElementById('fixNext');
+    const safetyHintEl = document.getElementById('safetyHint');
+
+    const macroSection = document.getElementById('macroSection');
+    const macroSelect = document.getElementById('macroSelect');
+    const macroPlanBtn = document.getElementById('macroPlanBtn');
+    const macroRefreshBtn = document.getElementById('macroRefreshBtn');
+    const macroStatus = document.getElementById('macroStatus');
+
+    const includeDestructiveCaps = document.getElementById('includeDestructiveCaps');
+    const capsRefreshBtn = document.getElementById('capsRefreshBtn');
+    const capsStatus = document.getElementById('capsStatus');
+    const capsList = document.getElementById('capsList');
 
     function setChip(id, text, tone = '') {
       const el = document.getElementById(id);
@@ -352,20 +522,39 @@
       promptEl.value = text;
       document.getElementById('charCount').textContent = promptEl.value.length;
       promptEl.focus();
+      updateControlStates();
+    }
+
+    function renderQuickStarts() {
+      const root = document.getElementById('quickStarts');
+      const groups = Object.entries(QUICK_STARTS).map(([group, prompts]) => {
+        const list = prompts.map(prompt => (
+          `<button class="example" aria-label="Use template: ${escapeHtml(prompt)}" data-template="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>`
+        )).join('');
+        return `<div class="template-group"><h4>${escapeHtml(group)}</h4><div class="template-list">${list}</div></div>`;
+      }).join('');
+      root.innerHTML = groups;
+      root.querySelectorAll('[data-template]').forEach(button => {
+        button.addEventListener('click', () => fillExample(button.getAttribute('data-template') || ''));
+      });
     }
 
     function updateLiveExecWarning() {
       const showWarning = !dryEl.checked;
       document.getElementById('liveExecWarning').classList.toggle('hidden', !showWarning);
+      if (showWarning) {
+        safetyHintEl.textContent = 'Live mode is on. Your next run will change the Ableton set.';
+      } else {
+        safetyHintEl.textContent = 'Preview mode is on. Ableton will not be changed.';
+      }
+      updateControlStates();
     }
 
     dryEl.addEventListener('change', updateLiveExecWarning);
     autoApproveEl.addEventListener('change', () => {
-      // Warn if auto-approve + no dry run
-      if (autoApproveEl.checked && !dryEl.checked) {
-        updateLiveExecWarning();
-      }
+      updateLiveExecWarning();
     });
+    approveEl.addEventListener('change', updateControlStates);
 
     function renderPlan(data) {
       const actions = data.planned_actions || [];
@@ -375,29 +564,39 @@
       setChip('planChip', actions.length ? `${actions.length} action(s)` : 'No actions', actions.length ? 'ok' : 'warn');
       currentPlanId = data.plan_id || null;
       currentPlan = data;
-      execBtn.disabled = !currentPlanId || actions.length === 0;
+
       const summaryHtml = `<div class="plan-summary">
-        <div><strong>Prompt:</strong> ${escapeHtml(data.prompt || '(no prompt)')}</div>
-        <div><strong>Explanation:</strong> ${escapeHtml(data.explanation || 'No explanation provided.')}</div>
+        <div><strong>Your request:</strong> ${escapeHtml(data.prompt || '(no prompt)')}</div>
+        <div><strong>Plan explanation:</strong> ${escapeHtml(data.explanation || 'No explanation provided.')}</div>
         <div class="summary-grid">
-          <div class="summary-item"><div class="summary-label">Actions</div><div class="summary-value">${summary.count}</div></div>
-          <div class="summary-item"><div class="summary-label">Confidence</div><div class="summary-value">${confidence}%</div></div>
-          <div class="summary-item"><div class="summary-label">Safety</div><div class="summary-value">${summary.safeCount} safe / ${summary.destructiveCount} destructive</div></div>
-          <div class="summary-item"><div class="summary-label">Transport</div><div class="summary-value">OSC ${summary.transportCounts.osc} | Bridge ${summary.transportCounts.device_bridge}</div></div>
-          <div class="summary-item"><div class="summary-label">Approval</div><div class="summary-value">${requiresApproval ? 'Required' : 'Not required'}</div></div>
+          <div class="summary-item"><div class="summary-label">Step count</div><div class="summary-value">${summary.count}</div></div>
+          <div class="summary-item"><div class="summary-label">Model confidence</div><div class="summary-value">${confidence}%</div></div>
+          <div class="summary-item"><div class="summary-label">Safety profile</div><div class="summary-value">${summary.safeCount} safe / ${summary.destructiveCount} destructive</div></div>
+          <div class="summary-item"><div class="summary-label">Execution path</div><div class="summary-value">AbletonOSC (Ableton command) ${summary.transportCounts.osc} | Device Bridge (Browser/device loading) ${summary.transportCounts.device_bridge}</div></div>
+          <div class="summary-item"><div class="summary-label">Manual approval</div><div class="summary-value">${requiresApproval ? 'Required' : 'Not required'}</div></div>
         </div>
-        ${summary.destructiveCount ? `<div class="warning">⚠️ This plan includes destructive steps. Dry run is safer for preview.</div>` : '<div class="success">✓ All steps are non-destructive.</div>'}
+        ${summary.destructiveCount ? `<div class="warning"><strong>Warning:</strong> This plan includes destructive steps. Keep preview mode on until you are fully sure.</div>` : '<div class="success"><strong>Safe preview:</strong> All planned steps are non-destructive.</div>'}
+        <div class="inline-actions">
+          <button id="copyPlanJsonBtn" class="example" aria-label="Copy full plan JSON">Copy plan JSON</button>
+          <button id="copyPlanSummaryBtn" class="example" aria-label="Copy plain summary">Copy summary</button>
+          <button id="planAgainBtn" class="example" aria-label="Create a new plan from current prompt">Plan again</button>
+        </div>
       </div>`;
 
       const cardsHtml = actions.length ? actions.map((action, index) => {
         const destructive = action.destructive ? "<span class='chip warn'>destructive</span>" : "<span class='chip ok'>safe</span>";
         const transport = inferTransport(action);
+        const route = renderRouteLabel(transport);
+        const safetyLabel = action.destructive ? 'Destructive' : 'Safe';
         const argsText = JSON.stringify(action.args || {}, null, 2);
         const compact = argsText.length <= 150 ? argsText : `${argsText.slice(0, 150)} ...`;
-        return `<div class="action-card">
-          <header><span class="tool">${index + 1}. ${escapeHtml(action.tool || 'action')}</span>${destructive}<span class="chip info">${escapeHtml(transport)}</span></header>
-          <div class="target">${escapeHtml(inferTargetLabel(action.args || {}))}</div>
+        return `<div class="action-card ${action.destructive ? 'destructive' : ''}">
+          <header><span class="tool">${index + 1}. ${escapeHtml(action.tool || 'action')}</span>${destructive}<span class="chip info">${escapeHtml(route.technical)}</span></header>
+          <div class="target"><strong>Affects:</strong> ${escapeHtml(inferTargetLabel(action.args || {}))}</div>
+          <div><strong>Safety:</strong> ${safetyLabel}</div>
+          <div><strong>Route:</strong> ${escapeHtml(route.technical)} (${escapeHtml(route.plain)})</div>
           <div>${escapeHtml(action.description || 'No description provided.')}</div>
+          ${action.destructive ? '<div class="warning" style="margin-top:6px;"><strong>Destructive step:</strong> this can permanently change your set.</div>' : ''}
           <details>
             <summary>Arguments ${escapeHtml(compact)}</summary>
             <div class="args"><code>${escapeHtml(argsText)}</code></div>
@@ -406,7 +605,35 @@
       }).join('') : `<div class="action-card"><span class="error">No executable actions were planned. Execute is disabled.</span></div>`;
       planView.innerHTML = `${summaryHtml}${cardsHtml}`;
       detailsView.textContent = JSON.stringify(data, null, 2);
+      hookPlanBoardActions(summary);
+      updateControlStates();
       showTab('plan');
+    }
+
+    function hookPlanBoardActions(summary) {
+      const jsonBtn = document.getElementById('copyPlanJsonBtn');
+      const summaryBtn = document.getElementById('copyPlanSummaryBtn');
+      const planAgainBtn = document.getElementById('planAgainBtn');
+      if (jsonBtn) {
+        jsonBtn.addEventListener('click', () => copyText(JSON.stringify(currentPlan || {}, null, 2), 'Plan JSON copied.'));
+      }
+      if (summaryBtn) {
+        const provider = currentSettings.modelito_provider || 'unknown';
+        const model = currentSettings.modelito_model || 'unknown';
+        const text = [
+          `Prompt: ${currentPlan?.prompt || ''}`,
+          `Explanation: ${currentPlan?.explanation || ''}`,
+          `Actions: ${summary.count}`,
+          `Safety: ${summary.safeCount} safe / ${summary.destructiveCount} destructive`,
+          `Route: AbletonOSC (Ableton command) ${summary.transportCounts.osc}, Device Bridge (Browser/device loading) ${summary.transportCounts.device_bridge}`,
+          `Confidence: ${confidencePercent(currentPlan?.confidence)}%`,
+          `Provider/Model: ${provider} / ${model}`,
+        ].join('\n');
+        summaryBtn.addEventListener('click', () => copyText(text, 'Plan summary copied.'));
+      }
+      if (planAgainBtn) {
+        planAgainBtn.addEventListener('click', () => plan());
+      }
     }
 
     function confidencePercent(value) {
@@ -422,6 +649,25 @@
       const tool = String(action.tool || '').trim().toLowerCase();
       if (tool === 'device_load') return 'device_bridge';
       return action.address ? 'osc' : 'osc';
+    }
+
+    function renderRouteLabel(transport) {
+      if (transport === 'device_bridge') {
+        return {
+          technical: 'Device Bridge',
+          plain: 'Browser/device loading',
+        };
+      }
+      if (transport === 'osc') {
+        return {
+          technical: 'AbletonOSC',
+          plain: 'Ableton command',
+        };
+      }
+      return {
+        technical: String(transport || 'Unknown route'),
+        plain: 'Advanced route',
+      };
     }
 
     function inferTargetLabels(args) {
@@ -484,6 +730,15 @@
       showTab('run');
     }
 
+    async function copyText(text, successMessage) {
+      try {
+        await navigator.clipboard.writeText(text);
+        setChip('planChip', successMessage, 'info');
+      } catch (_err) {
+        setChip('planChip', 'Copy failed in browser', 'warn');
+      }
+    }
+
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, ch => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
@@ -505,9 +760,9 @@
       }
       try {
         const replies = await apiFetch('/api/osc-replies/status');
-        setChip('replyChip', replies.listening ? 'OSC replies on' : 'OSC replies off', replies.listening ? 'ok' : 'warn');
+        setChip('replyChip', replies.listening ? 'Ableton command replies on (OSC)' : 'Ableton command replies off (OSC)', replies.listening ? 'ok' : 'warn');
       } catch (err) {
-        setChip('replyChip', 'OSC replies unknown', 'warn');
+        setChip('replyChip', 'Ableton command replies unknown (OSC)', 'warn');
       }
     }
 
@@ -515,9 +770,11 @@
       try {
         const settings = await apiFetch('/api/settings');
         currentSettings = settings;
-        document.getElementById('settingsProvider').textContent = escapeHtml(settings.provider || '—');
-        document.getElementById('settingsModel').textContent = escapeHtml(settings.model || '—');
-        setChip('modelChip', `${settings.provider || '?'} · ${settings.model || '?'}`, 'info');
+        const provider = settings.modelito_provider || '—';
+        const model = settings.modelito_model || '—';
+        document.getElementById('settingsProvider').textContent = provider;
+        document.getElementById('settingsModel').textContent = model;
+        setChip('modelChip', `${provider} · ${model}`, provider !== '—' && model !== '—' ? 'info' : 'warn');
       } catch (err) {
         document.getElementById('settingsProvider').textContent = '—';
         document.getElementById('settingsModel').textContent = '—';
@@ -528,6 +785,7 @@
     async function refreshReadiness() {
       try {
         const r = await apiFetch('/api/readiness');
+        lastReadiness = r;
         setChip('rdyPlanChip',
           r.ready_to_plan ? 'Plan ✓' : 'Plan ✗',
           r.ready_to_plan ? 'ok' : 'error');
@@ -539,17 +797,63 @@
           r.ready_to_execute ? 'ok' : 'warn');
         const issues = [...(r.errors || []), ...(r.warnings || [])];
         document.getElementById('rdyMsg').textContent = issues[0] || '';
+        fixNextEl.textContent = `What to fix next: ${issues[0] || 'Ready to plan and preview.'}`;
+        updateControlStates();
       } catch (_err) {
+        lastReadiness = null;
         setChip('rdyPlanChip', 'Plan ?', '');
         setChip('rdyDryChip', 'Dry run ?', '');
         setChip('rdyExecChip', 'Execute ?', '');
+        fixNextEl.textContent = 'What to fix next: Readiness unavailable. Check API connection.';
+        updateControlStates();
       }
+    }
+
+    function canExecuteCurrentPlan() {
+      const actions = currentPlan?.planned_actions || [];
+      if (!currentPlanId || actions.length === 0) return { ok: false, reason: 'Create a plan first.' };
+      if (!lastReadiness) return { ok: false, reason: 'Readiness unknown. Try refresh.' };
+
+      if (dryEl.checked) {
+        if (!lastReadiness.ready_to_dry_run) {
+          return { ok: false, reason: 'Dry-run is not ready yet. Fix the readiness issue first.' };
+        }
+        return { ok: true, reason: 'Dry-run is ready. This will preview only.' };
+      }
+
+      if (!lastReadiness.ready_to_execute) {
+        return { ok: false, reason: 'Live execution is not ready. Keep preview mode on or fix readiness.' };
+      }
+      return { ok: true, reason: 'Live execution is ready. Ableton will be changed.' };
+    }
+
+    function updateControlStates() {
+      const prompt = promptEl.value.trim();
+      const readinessKnown = !!lastReadiness;
+      const planReady = readinessKnown ? !!lastReadiness.ready_to_plan : true;
+
+      planBtn.disabled = !prompt || !planReady;
+      planHintEl.textContent = !prompt
+        ? 'Type a prompt or choose a Quick Start template.'
+        : (planReady ? 'Ready: click Create a plan.' : `Cannot plan: ${(lastReadiness?.errors || lastReadiness?.warnings || [])[0] || 'readiness issue'}`);
+
+      const execState = canExecuteCurrentPlan();
+      execBtn.disabled = !execState.ok;
+      execHintEl.textContent = execState.reason;
+      execBtn.setAttribute('aria-disabled', execBtn.disabled ? 'true' : 'false');
+      planBtn.setAttribute('aria-disabled', planBtn.disabled ? 'true' : 'false');
     }
 
     async function plan() {
       const prompt = promptEl.value.trim();
       if (!prompt) {
         promptEl.focus();
+        return;
+      }
+      if (lastReadiness && !lastReadiness.ready_to_plan) {
+        const issue = [...(lastReadiness.errors || []), ...(lastReadiness.warnings || [])][0] || 'Readiness issue';
+        setChip('planChip', `Cannot plan: ${issue}`, 'warn');
+        updateControlStates();
         return;
       }
       planBtn.disabled = true;
@@ -562,8 +866,7 @@
         });
         renderPlan(data);
         if (autoApproveEl.checked && currentPlanId) {
-          if (!dryEl.checked && !liveAutoApproveWarningShown) {
-            liveAutoApproveWarningShown = true;
+          if (!dryEl.checked) {
             const proceed = window.confirm(
               'Auto-approve + Live Execution:\n\n'
               + 'Auto-approve is ON and Dry run is OFF.\n'
@@ -582,7 +885,7 @@
         planView.innerHTML = `<div class="action-card"><span class="error">Plan failed: ${escapeHtml(err.message)}</span></div>`;
         setChip('planChip', 'Plan failed', 'warn');
       } finally {
-        planBtn.disabled = false;
+        updateControlStates();
       }
     }
 
@@ -594,20 +897,28 @@
         alert('This plan has zero actions, so there is nothing to execute.');
         return;
       }
+
+      const execState = canExecuteCurrentPlan();
+      if (!execState.ok) {
+        alert(execState.reason);
+        updateControlStates();
+        return;
+      }
+
       const dryRun = dryEl.checked;
       const destructive = destructiveActionNames(actions);
       if (destructive.length && !dryRun) {
         if (!approveEl.checked) {
-          alert('This plan includes destructive actions.\n\nTick "Allow destructive actions" or enable Dry run.');
+          alert('This plan includes destructive actions.\n\nEnable "Allow destructive actions" first, or keep preview mode on.');
           return;
         }
         const sample = destructive.slice(0, 8).map(name => `• ${name}`).join('\n');
         const overflow = destructive.length > 8 ? '\n• ...' : '';
         const confirmed = window.confirm(
           `Confirm Live Execution\n\n`
-          + `${actions.length} action(s) total, ${destructive.length} destructive.\n\n`
+          + `You are about to run ${actions.length} step(s) live in Ableton, including ${destructive.length} destructive step(s).\n\n`
           + `Destructive actions:\n${sample}${overflow}\n\n`
-          + `Proceed with LIVE execution?`
+          + `Proceed with live execution?`
         );
         if (!confirmed) {
           setChip('planChip', 'Execution cancelled', 'warn');
@@ -635,15 +946,111 @@
         showTab('run');
         setChip('planChip', 'Execution failed', 'warn');
       } finally {
-        execBtn.disabled = !currentPlanId || !actions.length;
+        updateControlStates();
+      }
+    }
+
+    function normalizeMacroList(payload) {
+      const macros = payload?.macros || [];
+      return macros.map(item => {
+        if (typeof item === 'string') return { name: item, label: item };
+        const name = String(item?.name || '').trim();
+        const source = String(item?.source || '').trim();
+        return { name, label: source ? `${name} (${source})` : name };
+      }).filter(item => item.name);
+    }
+
+    async function refreshMacros() {
+      try {
+        macroStatus.textContent = 'Loading macros...';
+        const payload = await apiFetch('/api/macros');
+        const macros = normalizeMacroList(payload);
+        if (!macros.length) {
+          macroSelect.innerHTML = '<option value="">No macros found</option>';
+          macroPlanBtn.disabled = true;
+          macroStatus.textContent = 'No macros available.';
+          return;
+        }
+        macroSelect.innerHTML = macros.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.label)}</option>`).join('');
+        macroPlanBtn.disabled = false;
+        macroStatus.textContent = `Loaded ${macros.length} macro(s).`;
+      } catch (err) {
+        macroPlanBtn.disabled = true;
+        macroRefreshBtn.disabled = true;
+        macroSection.classList.add('hidden');
+        macroStatus.textContent = `Macros unavailable: ${err.message}`;
+      }
+    }
+
+    async function planMacro() {
+      const name = (macroSelect.value || '').trim();
+      if (!name) return;
+      macroPlanBtn.disabled = true;
+      setChip('planChip', 'Planning macro', 'info');
+      try {
+        const data = await apiFetch('/api/plan_macro', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        renderPlan(data);
+        setChip('planChip', `Macro planned: ${name}`, 'ok');
+      } catch (err) {
+        setChip('planChip', `Macro plan failed`, 'warn');
+        planView.innerHTML = `<div class="action-card"><span class="error">Macro plan failed: ${escapeHtml(err.message)}</span></div>`;
+      } finally {
+        macroPlanBtn.disabled = false;
+        updateControlStates();
+      }
+    }
+
+    function groupCapabilitiesByDomain(items) {
+      const grouped = {};
+      for (const item of items) {
+        const domain = String(item.domain || 'general').trim() || 'general';
+        grouped[domain] = grouped[domain] || [];
+        grouped[domain].push(item);
+      }
+      return grouped;
+    }
+
+    async function refreshCapabilities() {
+      const includeDestructive = includeDestructiveCaps.checked;
+      capsStatus.textContent = 'Loading capabilities...';
+      try {
+        const payload = await apiFetch(`/api/capabilities?include_destructive=${includeDestructive ? 'true' : 'false'}`);
+        const items = Array.isArray(payload.capabilities) ? payload.capabilities : [];
+        if (!items.length) {
+          capsList.innerHTML = '<div class="muted">No capabilities returned.</div>';
+          capsStatus.textContent = 'Capabilities loaded.';
+          return;
+        }
+        const grouped = groupCapabilitiesByDomain(items);
+        const domains = Object.keys(grouped).sort();
+        capsList.innerHTML = domains.map(domain => {
+          const rows = grouped[domain]
+            .sort((a, b) => String(a.tool || '').localeCompare(String(b.tool || '')))
+            .map(item => `<li><strong>${escapeHtml(item.tool || 'action')}</strong> — ${escapeHtml(item.description || 'No description')}</li>`)
+            .join('');
+          return `<div class="cap-domain"><h4>${escapeHtml(domain)}</h4><ul>${rows}</ul></div>`;
+        }).join('');
+        capsStatus.textContent = `Capabilities loaded (${items.length}).`;
+      } catch (err) {
+        capsStatus.textContent = 'Capabilities unavailable.';
+        capsList.innerHTML = `<div class="muted">Capabilities unavailable: ${escapeHtml(err.message)}</div>`;
       }
     }
 
     promptEl.addEventListener('input', () => {
       document.getElementById('charCount').textContent = promptEl.value.length;
+      updateControlStates();
     });
     planBtn.addEventListener('click', plan);
     execBtn.addEventListener('click', execute);
+    macroPlanBtn.addEventListener('click', planMacro);
+    macroRefreshBtn.addEventListener('click', refreshMacros);
+    capsRefreshBtn.addEventListener('click', refreshCapabilities);
+    includeDestructiveCaps.addEventListener('change', refreshCapabilities);
     document.getElementById('planTab').addEventListener('click', () => showTab('plan'));
     document.getElementById('runTab').addEventListener('click', () => showTab('run'));
     document.getElementById('detailsTab').addEventListener('click', () => showTab('details'));
@@ -657,12 +1064,17 @@
     });
 
     // Refresh on load and periodically
+    renderQuickStarts();
     refreshHealth();
     refreshSettings();
     refreshReadiness();
+    refreshMacros();
+    refreshCapabilities();
+    updateLiveExecWarning();
     setInterval(refreshHealth, 10000);
     setInterval(refreshSettings, 15000);
     setInterval(refreshReadiness, 8000);
+    setInterval(refreshMacros, 20000);
   </script>
 </body>
 </html>

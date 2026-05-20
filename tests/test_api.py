@@ -237,6 +237,28 @@ def test_settings_patch_persists_omlx_provider_and_model(monkeypatch):
     assert payload["modelito_model"] == "some-model"
 
 
+def test_settings_patch_switches_between_ollama_and_omlx(monkeypatch):
+    client = TestClient(app_module.app)
+    monkeypatch.setattr(app_module.settings, "api_token", "")
+    monkeypatch.setattr(type(app_module.settings), "save", lambda self: None)
+
+    first = client.patch(
+        "/api/settings",
+        json={"modelito_provider": "ollama", "modelito_model": "llama3.2:latest"},
+    )
+    assert first.status_code == 200
+    assert first.json()["modelito_provider"] == "ollama"
+    assert first.json()["modelito_model"] == "llama3.2:latest"
+
+    second = client.patch(
+        "/api/settings",
+        json={"modelito_provider": "omlx", "modelito_model": "mlx-community/Qwen2.5-7B"},
+    )
+    assert second.status_code == 200
+    assert second.json()["modelito_provider"] == "omlx"
+    assert second.json()["modelito_model"] == "mlx-community/Qwen2.5-7B"
+
+
 def test_load_prompt_text(tmp_path):
     prompt_path = tmp_path / "prompt.md"
     prompt_path.write_text("extra planner context", encoding="utf-8")

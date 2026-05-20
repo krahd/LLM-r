@@ -4,7 +4,7 @@ import logging
 import re
 import subprocess
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 from urllib.request import urlopen
 
 
@@ -168,7 +168,15 @@ class ModelitoClient:
 
 def modelito_models(provider: str, model: str) -> list[str]:
     """Return normalized model ids for a provider."""
-    models = ModelitoClient(provider=provider, model=model).list_models()
+    try:
+        models = ModelitoClient(provider=provider, model=model).list_models()
+    except Exception as exc:
+        logging.warning(
+            "Model listing failed for provider '%s' (%s). Falling back to configured model.",
+            provider,
+            exc,
+        )
+        return [model] if model else []
     ids: list[str] = []
     for item in models:
         if isinstance(item, dict):
@@ -186,12 +194,17 @@ def _modelito_module():
     try:
         import modelito  # type: ignore
     except Exception as exc:
-        raise RuntimeError("modelito is not installed. Install modelito to manage Ollama.") from exc
+        raise RuntimeError(
+            "modelito is not installed. Install modelito to manage local runtimes."
+        ) from exc
     return modelito
 
 
 def _ollama_payload(ok: bool, message: str, **extra: Any) -> dict[str, Any]:
-    return {"ok": ok, "message": message, **extra}
+    payload = {"ok": ok, "message": message, "models": []}
+    payload.update(extra)
+    payload.setdefault("models", [])
+    return payload
 
 
 _MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*(?::[A-Za-z0-9._/-]+)?$")
@@ -424,7 +437,18 @@ def ollama_stop_serving(model: str) -> dict[str, Any]:
 
 def _omlx_payload(ok: bool, message: str, **extra: Any) -> dict[str, Any]:
     """Standard response payload for oMLX operations."""
-    return {"ok": ok, "message": message, **extra}
+    payload = {"ok": ok, "message": message, "models": []}
+    payload.update(extra)
+    payload.setdefault("models", [])
+    return payload
+
+
+def _first_callable(module: Any, candidates: tuple[str, ...]) -> Callable[..., Any] | None:
+    for name in candidates:
+        method = getattr(module, name, None)
+        if callable(method):
+            return method
+    return None
 
 
 def omlx_status() -> dict[str, Any]:
@@ -447,8 +471,14 @@ def omlx_status() -> dict[str, Any]:
 def omlx_local_models() -> dict[str, Any]:
     """List models available locally in oMLX."""
     modelito = _modelito_module()
+    method = _first_callable(
+        modelito,
+        ("list_local_omlx_models", "list_local_models_omlx", "list_omlx_models"),
+    )
+    if method is None:
+        return _omlx_payload(False, "Modelito does not expose oMLX local model listing.", models=[])
     try:
-        models = _clean_model_names(list(getattr(modelito, "list_local_omlx_models")()))
+        models = _clean_model_names(list(method()))
     except Exception as exc:
         return _omlx_payload(False, f"Unable to list local oMLX models: {exc}", models=[])
     return _omlx_payload(True, f"Loaded {len(models)} local oMLX model(s).", models=models)
@@ -481,8 +511,14 @@ def omlx_running_models() -> dict[str, Any]:
 def omlx_remote_models() -> dict[str, Any]:
     """List available models from oMLX registry or library."""
     modelito = _modelito_module()
+    method = _first_callable(
+        modelito,
+        ("list_remote_omlx_models", "list_omlx_remote_models", "list_available_omlx_models"),
+    )
+    if method is None:
+        return _omlx_payload(False, "Modelito does not expose oMLX remote model listing.", models=[])
     try:
-        models = _clean_model_names(list(getattr(modelito, "list_remote_omlx_models")()))
+        models = _clean_model_names(list(method()))
     except Exception as exc:
         return _omlx_payload(False, f"Unable to list available oMLX models: {exc}", models=[])
     return _omlx_payload(True, f"Loaded {len(models)} available oMLX model(s).", models=models)
@@ -491,8 +527,11 @@ def omlx_remote_models() -> dict[str, Any]:
 def omlx_start() -> dict[str, Any]:
     """Start the oMLX service."""
     modelito = _modelito_module()
+    method = _first_callable(modelito, ("start_omlx", "start_omlx_service"))
+    if method is None:
+        return _omlx_payload(False, "Modelito does not expose oMLX start operation.")
     try:
-        ok = bool(getattr(modelito, "start_omlx")())
+        ok = bool(method())
     except Exception as exc:
         return _omlx_payload(False, f"Unable to start oMLX: {exc}")
     return _omlx_payload(ok, "oMLX started." if ok else "oMLX did not start.")
@@ -501,8 +540,14 @@ def omlx_start() -> dict[str, Any]:
 def omlx_stop() -> dict[str, Any]:
     """Stop the oMLX service."""
     modelito = _modelito_module()
+    method = _first_callable(modelito, ("stop_omlx", "stop_omlx_service"))
+    if method is None:
+        return _omlx_payload(False, "Modelito does not expose oMLX stop operation.")
     try:
-        ok = bool(getattr(modelito, "stop_omlx")(force=True))
+        try:
+            ok = bool(method(force=True))
+        except TypeError:
+            ok = bool(method())
     except Exception as exc:
         return _omlx_payload(False, f"Unable to stop oMLX: {exc}")
     return _omlx_payload(ok, "oMLX stopped." if ok else "oMLX did not stop.")
@@ -511,8 +556,14 @@ def omlx_stop() -> dict[str, Any]:
 def omlx_install() -> dict[str, Any]:
     """Install oMLX runtime."""
     modelito = _modelito_module()
+    method = _first_callable(modelito, ("install_omlx", "install_omlx_runtime"))
+    if method is None:
+        return _omlx_payload(False, "Modelito does not expose oMLX install operation.")
     try:
-        ok = bool(getattr(modelito, "install_omlx")(allow_install=True))
+        try:
+            ok = bool(method(allow_install=True))
+        except TypeError:
+            ok = bool(method())
     except Exception as exc:
         return _omlx_payload(False, f"Unable to install oMLX: {exc}")
     return _omlx_payload(ok, "oMLX is installed." if ok else "oMLX install did not complete.")
@@ -524,8 +575,11 @@ def omlx_download(model: str) -> dict[str, Any]:
     name = model.strip()
     if not name:
         return _omlx_payload(False, "Choose a model to download.")
+    method = _first_callable(modelito, ("download_omlx_model", "download_model_omlx"))
+    if method is None:
+        return _omlx_payload(False, "Modelito does not expose oMLX download operation.", model=name)
     try:
-        ok = bool(getattr(modelito, "download_omlx_model")(name))
+        ok = bool(method(name))
     except Exception as exc:
         return _omlx_payload(False, f"Unable to download {name}: {exc}", model=name)
     return _omlx_payload(ok, f"Downloaded {name}." if ok else f"Download failed for {name}.", model=name)
@@ -537,8 +591,11 @@ def omlx_delete(model: str) -> dict[str, Any]:
     name = model.strip()
     if not name:
         return _omlx_payload(False, "Choose a local model to delete.")
+    method = _first_callable(modelito, ("delete_omlx_model", "delete_model_omlx"))
+    if method is None:
+        return _omlx_payload(False, "Modelito does not expose oMLX delete operation.", model=name)
     try:
-        ok = bool(getattr(modelito, "delete_omlx_model")(name))
+        ok = bool(method(name))
     except Exception as exc:
         return _omlx_payload(False, f"Unable to delete {name}: {exc}", model=name)
     return _omlx_payload(ok, f"Deleted {name}." if ok else f"Delete failed for {name}.", model=name)
@@ -550,8 +607,11 @@ def omlx_serve(model: str) -> dict[str, Any]:
     name = model.strip()
     if not name:
         return _omlx_payload(False, "Choose a local model to serve.")
+    method = _first_callable(modelito, ("serve_omlx_model", "serve_model_omlx"))
+    if method is None:
+        return _omlx_payload(False, "Modelito does not expose oMLX serve operation.", model=name)
     try:
-        ok = bool(getattr(modelito, "serve_omlx_model")(name))
+        ok = bool(method(name))
     except Exception as exc:
         return _omlx_payload(False, f"Unable to serve {name}: {exc}", model=name)
     return _omlx_payload(ok, f"Serving {name}." if ok else f"Could not serve {name}.", model=name)

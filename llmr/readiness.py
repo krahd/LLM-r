@@ -9,7 +9,15 @@ of the Device Bridge endpoint.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
+
+from llmr.modelito_adapter import (
+    ollama_local_models,
+    ollama_status,
+    omlx_local_models,
+    omlx_status,
+)
 
 if TYPE_CHECKING:
     from llmr.config import Settings
@@ -180,9 +188,63 @@ def compute_readiness(
     }
 
     # ── Readiness flags ───────────────────────────────────────────────────────
-    ready_to_plan: bool = model_ok
-    ready_to_dry_run: bool = model_ok  # preview does not require Ableton
-    ready_to_execute: bool = model_ok and osc_configured
+    local_runtime_warnings: list[str] = []
+    local_runtime_errors: list[str] = []
+    credential_errors: list[str] = []
+
+    provider_api_env = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "google": "GOOGLE_API_KEY",
+        "cohere": "COHERE_API_KEY",
+        "mistral": "MISTRAL_API_KEY",
+    }
+    if model_ok and provider in provider_api_env:
+        key_name = provider_api_env[provider]
+        if not (os.getenv(key_name) or "").strip():
+            credential_errors.append(
+                f"Missing API key for {provider}. Set {key_name} or configure it in Advanced Settings."
+            )
+
+    if model_ok and provider == "ollama":
+        status_payload = ollama_status()
+        local_payload = ollama_local_models()
+        if not bool(status_payload.get("ok", False)):
+            local_runtime_errors.append(
+                f"Ollama runtime check failed: {status_payload.get('message', 'unknown error')}"
+            )
+        elif not bool(status_payload.get("running", False)):
+            local_runtime_errors.append(
+                "Start Ollama service. Open Advanced Settings \u2192 Ollama."
+            )
+        local_models = local_payload.get("models", []) or []
+        if not local_models:
+            local_runtime_warnings.append(
+                "Download or select an Ollama model. Open Advanced Settings \u2192 Ollama."
+            )
+
+    if model_ok and provider == "omlx":
+        status_payload = omlx_status()
+        local_payload = omlx_local_models()
+        if not bool(status_payload.get("ok", False)):
+            local_runtime_errors.append(
+                f"oMLX runtime check failed: {status_payload.get('message', 'unknown error')}"
+            )
+        elif not bool(status_payload.get("running", False)):
+            local_runtime_errors.append(
+                "Start oMLX service. Open Advanced Settings \u2192 oMLX."
+            )
+        local_models = local_payload.get("models", []) or []
+        if not local_models:
+            local_runtime_warnings.append(
+                "Download or select an oMLX model. Open Advanced Settings \u2192 oMLX."
+            )
+
+    ready_to_plan: bool = model_ok and not local_runtime_errors and not credential_errors
+    ready_to_dry_run: bool = model_ok and not local_runtime_errors and not credential_errors
+    ready_to_execute: bool = (
+        model_ok and osc_configured and not local_runtime_errors and not credential_errors
+    )
 
     # ── Warnings and errors ───────────────────────────────────────────────────
     warnings: list[str] = []
@@ -193,6 +255,9 @@ def compute_readiness(
             "No model configured. Planning and execution will fail. "
             "Open Settings and choose a provider and model."
         )
+    errors.extend(credential_errors)
+    errors.extend(local_runtime_errors)
+    warnings.extend(local_runtime_warnings)
     if not osc_configured:
         warnings.append(
             "AbletonOSC host/port is not configured. Live execution will fail."

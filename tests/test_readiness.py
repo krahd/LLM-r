@@ -189,6 +189,63 @@ class TestComputeReadiness:
         }
         assert required <= set(r.keys())
 
+    def test_cloud_provider_missing_api_key_not_ready_to_plan(self, default_settings, monkeypatch):
+        from llmr.readiness import compute_readiness
+
+        default_settings.modelito_provider = "openai"
+        default_settings.modelito_model = "gpt-4.1-mini"
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        with patch("llmr.device_bridge.health", return_value={"ok": True}):
+            r = compute_readiness(default_settings)
+
+        assert r["ready_to_plan"] is False
+        assert any("Missing API key for openai" in msg for msg in r["errors"])
+        assert r["model"]["provider"] == "openai"
+
+    def test_omlx_runtime_down_is_actionable(self, default_settings):
+        from llmr.readiness import compute_readiness
+
+        default_settings.modelito_provider = "omlx"
+        default_settings.modelito_model = "mlx-community/Qwen2.5-7B"
+        with (
+            patch("llmr.device_bridge.health", return_value={"ok": True}),
+            patch("llmr.readiness.omlx_status", return_value={"ok": True, "running": False}),
+            patch("llmr.readiness.omlx_local_models", return_value={"ok": True, "models": []}),
+        ):
+            r = compute_readiness(default_settings)
+
+        assert r["ready_to_plan"] is False
+        assert any("Start oMLX service" in msg for msg in r["errors"])
+        assert any("Download or select an oMLX model" in msg for msg in r["warnings"])
+        assert any("Advanced Settings \u2192 oMLX" in msg for msg in r["warnings"] + r["errors"])
+
+    def test_ollama_runtime_down_is_actionable(self, default_settings):
+        from llmr.readiness import compute_readiness
+
+        default_settings.modelito_provider = "ollama"
+        default_settings.modelito_model = "llama3.2:latest"
+        with (
+            patch("llmr.device_bridge.health", return_value={"ok": True}),
+            patch("llmr.readiness.ollama_status", return_value={"ok": True, "running": False}),
+            patch("llmr.readiness.ollama_local_models", return_value={"ok": True, "models": []}),
+        ):
+            r = compute_readiness(default_settings)
+
+        assert r["ready_to_plan"] is False
+        assert any("Start Ollama service" in msg for msg in r["errors"])
+        assert any("Download or select an Ollama model" in msg for msg in r["warnings"])
+
+    def test_mock_provider_ready_without_local_runtime_checks(self, default_settings):
+        from llmr.readiness import compute_readiness
+
+        default_settings.modelito_provider = "mock"
+        default_settings.modelito_model = "mock-model"
+        with patch("llmr.device_bridge.health", return_value={"ok": True}):
+            r = compute_readiness(default_settings)
+
+        assert r["ready_to_plan"] is True
+        assert r["ready_to_dry_run"] is True
+
     def test_model_subkeys(self, default_settings):
         from llmr.readiness import compute_readiness
 

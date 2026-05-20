@@ -172,6 +172,20 @@ def test_ollama_download_empty_model_returns_422(monkeypatch):
     assert resp.status_code == 422
 
 
+def test_ollama_download_blank_model_returns_422(monkeypatch):
+    monkeypatch.setattr(app_module, "ollama_download", lambda model: {"ok": True})
+    with TestClient(app_module.app) as client:
+        resp = client.post("/api/ollama/download", json={"model": "   "})
+    assert resp.status_code == 422
+
+
+def test_ollama_write_routes_require_auth_when_token_set(monkeypatch):
+    monkeypatch.setattr(app_module.settings, "api_token", "secret-token")
+    with TestClient(app_module.app) as client:
+        resp = client.post("/api/ollama/start")
+    assert resp.status_code == 401
+
+
 # ---------------------------------------------------------------------------
 # Settings persistence — ollama provider and model
 # ---------------------------------------------------------------------------

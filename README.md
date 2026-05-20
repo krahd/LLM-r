@@ -148,6 +148,27 @@ Use this sequence on a new install:
 5. Review the plan before executing.
 6. Execute only after the plan looks correct and any destructive steps are intentional.
 
+### Try these first
+
+Safe first prompts for novice users:
+
+- `Set tempo to 120 BPM and turn metronome on.`
+- `Create one MIDI track named Drums.`
+- `Create an audio track named Vox In and arm it.`
+- `Create a 4-bar clip on track 0 and rename it Beat Sketch.`
+- `Dry-run deleting clip 0 on track 0.`
+
+More advanced prompts for professional users:
+
+- `Set tempo to 126 BPM, set global quantization to 1 bar, and continue playback.`
+- `Create a drums sketch: make a MIDI track, create a 4-bar clip, and add a basic kick/snare pattern.`
+- `Duplicate clip 0 to clip 1 on track 1 and launch clip 1.`
+- `Load Drum Rack on track 2.` *(requires Device Bridge)*
+- `Load EQ Eight on track 1 and set a conservative gain staging level.` *(requires Device Bridge for loading)*
+
+For live performance, keep Dry run on until the set is saved and tested. Avoid
+Auto-approve with Dry run off during performance.
+
 ### Local models
 
 LLM-r does not talk to Ollama or oMLX directly from planner code. **Modelito
@@ -162,6 +183,9 @@ Ollama and oMLX are still separate local runtimes:
 
 See [docs/MODELITO.md](docs/MODELITO.md) for the ordinary-user provider guide,
 runtime differences, and model-ID notes.
+
+Real Ollama/oMLX runtime validation is manual by default in this repository
+unless you add dedicated integration tests for your target machine/runtime.
 
 ### 3. Send a prompt
 
@@ -338,6 +362,22 @@ current runtime contract.
 
 Macros are named sequences of Ableton actions. LLM-r ships with built-in static macros (`idea_sketch`, `performance_prep`) and supports runtime macros persisted to disk.
 
+When to use macros:
+
+- reuse a setup pattern you trust
+- get a quick starter plan before refining with normal prompts
+- standardize repetitive prep steps across sessions
+
+Built-in macro names in this release:
+
+- `idea_sketch`
+- `performance_prep`
+
+Macro discoverability in shipped surfaces:
+
+- Web UI: built-in and runtime macro names can be listed and planned from the Macros panel.
+- API/headless: use `/api/macros` and `/api/plan_macro`.
+
 **List macros:**
 
 ```bash
@@ -383,6 +423,7 @@ require the desktop GUI or FastAPI server for normal use. The plug-in stores its
 own runtime settings in macOS user defaults and can:
 
 - choose provider/model/endpoint and API key
+- provider picker includes `openai`, `anthropic`, `google`, `ollama`, `omlx`, and `custom`
 - switch between Plan and Details response tabs
 - copy/select text from the response panel
 - keep provider/model on the basic settings screen while API keys, AbletonOSC,
@@ -401,6 +442,9 @@ The shipped VST3 currently does **not** provide:
 - the PyQt/web readiness strip backed by `GET /api/readiness`
 - an oMLX runtime-management tab
 - the PyQt onboarding wizard
+
+For full readiness checks and local runtime management (including oMLX), use the
+PyQt GUI companion.
 
 ## Desktop GUI
 
@@ -423,6 +467,15 @@ A **Settings** dialog (accessible from the toolbar) lets you configure everythin
 - Response tabs: Plan for action cards, Action Table for parsed tool calls, Run Log for execution reports, and Details for the complete payload plus parsed `llm_raw` when available
 - Open Help opens the GitHub user manual from the toolbar
 
+PyQt also includes a first-run onboarding wizard focused on safe initial setup:
+
+- choose cloud or local provider/runtime (or configure later)
+- for local runtimes, run real Install / Start Service / Refresh actions in-wizard
+- pick a discovered local model or type an exact model ID manually
+- keep safe defaults (Dry run on, Auto-approve off, destructive execution off)
+
+Advanced Settings remains the full local-runtime management surface.
+
 ## Web UI
 
 The web UI is a lightweight browser companion rather than the primary product
@@ -433,9 +486,12 @@ It currently provides:
 
 - provider/model summary pulled from runtime settings
 - readiness chips backed by `GET /api/readiness`
-- prompt entry, Plan, Execute, Dry run, Auto-approve, and destructive approval controls
-- Plan Board, Run Log, and Details tabs
-- execution warnings when Dry run is off or destructive approval is missing
+- plain-language prompt workflow: Create a plan -> preview only -> run in Ableton
+- quick-start prompt templates grouped for novice, production, sound design, and safety tasks
+- macro launcher using `/api/macros` and `/api/plan_macro` when available
+- read-only capabilities browser using `/api/capabilities`
+- Plan Board, Run Log, and Details tabs with copy-plan-json/copy-summary actions
+- stronger live/destructive safety messaging and readiness-driven control disable states
 
 GUI connection settings are persisted to `~/.llmr/gui.json`. Runtime settings are
 pushed to the server via `PATCH /api/settings` when connected to HTTP mode, or

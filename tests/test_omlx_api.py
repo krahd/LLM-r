@@ -172,6 +172,20 @@ def test_omlx_download_empty_model_returns_422(monkeypatch):
     assert resp.status_code == 422
 
 
+def test_omlx_download_blank_model_returns_422(monkeypatch):
+    monkeypatch.setattr(app_module, "omlx_download", lambda model: {"ok": True})
+    with TestClient(app_module.app) as client:
+        resp = client.post("/api/omlx/download", json={"model": "   "})
+    assert resp.status_code == 422
+
+
+def test_omlx_write_routes_require_auth_when_token_set(monkeypatch):
+    monkeypatch.setattr(app_module.settings, "api_token", "secret-token")
+    with TestClient(app_module.app) as client:
+        resp = client.post("/api/omlx/start")
+    assert resp.status_code == 401
+
+
 # ---------------------------------------------------------------------------
 # Settings persistence — omlx provider and model
 # ---------------------------------------------------------------------------

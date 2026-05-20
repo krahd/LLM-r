@@ -38,11 +38,11 @@ LLM-r currently provides:
   supported song/track/device/clip data.
 - Device Bridge status, candidate browsing, and exact resolve endpoints for
   `device_load` preflight.
-- Self-contained native VST3 editor with readiness chips, Plan/Details tabs,
-  provider-specific model pickers, Save/Cancel settings, Advanced Settings for
-  provider keys, Device Bridge checks, Ollama status/model control, prompt
-  entry, plan review, dry-run, Auto-approve, destructive-action approval, and
-  direct AbletonOSC plus Device Bridge execution.
+- Self-contained native VST3 editor with Plan/Details tabs, provider-specific
+  model pickers, Save/Cancel settings, Advanced Settings for provider keys,
+  AbletonOSC and Device Bridge status checks, Ollama status/model control,
+  prompt entry, plan review, dry-run, Auto-approve, destructive-action approval,
+  and direct AbletonOSC plus Device Bridge execution.
 - PyQt desktop GUI that can connect to a running server or operate in embedded
   mode, with settings for provider, model, prompt guidance, AbletonOSC, server
   URL, and API token; Advanced Settings includes local runtime controls for both

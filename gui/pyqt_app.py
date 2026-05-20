@@ -2128,6 +2128,7 @@ class FirstRunDialog(QDialog):
         super().__init__(parent)
         self._backend = backend
         self._settings = dict(cached)
+        self._workers: list[_ActionWorker] = []
         self._current_step = 0
         self._choices = {
             "model_type": None,  # "cloud_openai", "cloud_anthropic", "cloud_google", "local_ollama", "local_omlx", "later"
@@ -2138,6 +2139,13 @@ class FirstRunDialog(QDialog):
             "auto_approve": False,
             "allow_destructive": False,
         }
+        self._local_provider: str = ""
+        self._local_status_lbl: QLabel | None = None
+        self._local_model_combo: QComboBox | None = None
+        self._local_install_btn: QPushButton | None = None
+        self._local_start_btn: QPushButton | None = None
+        self._local_refresh_btn: QPushButton | None = None
+        self._local_open_advanced_after_setup: QCheckBox | None = None
 
         self.setWindowTitle("LLM-r Setup")
         self.setMinimumSize(640, 480)
@@ -2146,6 +2154,133 @@ class FirstRunDialog(QDialog):
 
         self._build_ui()
         self._show_step(0)
+
+    def _run_async(self, fn, on_success, *, on_error=None, lock=()) -> None:
+        worker = _ActionWorker(fn)
+        self._workers.append(worker)
+        locked = tuple(lock)
+        for control in locked:
+            control.setEnabled(False)
+
+        def cleanup() -> None:
+            if worker in self._workers:
+                self._workers.remove(worker)
+            for control in locked:
+                control.setEnabled(True)
+            worker.deleteLater()
+
+        worker.finished.connect(on_success)
+        worker.finished.connect(lambda *_: cleanup())
+        worker.error.connect(on_error or (lambda m: self._set_local_status(f"Error: {m}", "error")))
+        worker.error.connect(lambda *_: cleanup())
+        worker.start()
+
+    def _set_local_status(self, text: str, tone: str = "neutral") -> None:
+        if self._local_status_lbl is None:
+            return
+        colors = {
+            "neutral": "#aeb7c6",
+            "ok": "#7de2a0",
+            "warn": "#ffd28a",
+            "error": "#ff6b7a",
+        }
+        self._local_status_lbl.setText(text)
+        self._local_status_lbl.setStyleSheet(
+            f"font-size: 11px; color: {colors.get(tone, colors['neutral'])};"
+        )
+
+    def _update_local_model_choices(self, models: list[str]) -> None:
+        if self._local_model_combo is None:
+            return
+        current = _combo_text(self._local_model_combo)
+        values = _unique(models + _MODEL_FALLBACKS.get(self._local_provider, []))
+        _set_combo_items(self._local_model_combo, values, current)
+        self._choices["model"] = _combo_text(self._local_model_combo)
+
+    def _on_local_model_changed(self, _text: str) -> None:
+        if self._local_model_combo is not None:
+            self._choices["model"] = _combo_text(self._local_model_combo)
+
+    def _run_local_runtime_action(self, action: str) -> None:
+        if not self._local_provider:
+            return
+        runtime_fn = self._backend.ollama if self._local_provider == "ollama" else self._backend.omlx
+        label = "Ollama" if self._local_provider == "ollama" else "oMLX"
+        self._set_local_status(f"Running {label} {action}…", "neutral")
+
+        def on_done(payload: dict) -> None:
+            msg = str(payload.get("message") or payload.get("status") or "ok")
+            self._set_local_status(f"{label} {action} complete: {msg}", "ok")
+            if action in {"start", "install"}:
+                QTimer.singleShot(0, self._refresh_local_runtime)
+
+        def on_error(message: str) -> None:
+            self._set_local_status(f"{label} {action} failed: {message}", "error")
+
+        self._run_async(
+            lambda: runtime_fn(action),
+            on_done,
+            on_error=on_error,
+            lock=tuple(
+                btn for btn in (
+                    self._local_install_btn,
+                    self._local_start_btn,
+                    self._local_refresh_btn,
+                ) if btn is not None
+            ),
+        )
+
+    def _refresh_local_runtime(self) -> None:
+        if not self._local_provider:
+            return
+        runtime_fn = self._backend.ollama if self._local_provider == "ollama" else self._backend.omlx
+        label = "Ollama" if self._local_provider == "ollama" else "oMLX"
+        self._set_local_status(f"Refreshing {label} status and models…", "neutral")
+
+        def fetch_payload() -> dict:
+            payload: dict[str, dict] = {
+                "status": runtime_fn("status"),
+                "local_models": runtime_fn("local_models"),
+            }
+            try:
+                payload["remote_models"] = runtime_fn("remote_models")
+            except Exception:
+                payload["remote_models"] = {"models": []}
+            return payload
+
+        def on_done(payload: dict) -> None:
+            local_models = [
+                str(model).strip()
+                for model in payload.get("local_models", {}).get("models", [])
+                if str(model).strip()
+            ]
+            self._update_local_model_choices(local_models)
+            if local_models:
+                self._set_local_status(
+                    f"{label} ready. Found {len(local_models)} local model(s).",
+                    "ok",
+                )
+            else:
+                self._set_local_status(
+                    "No local models found. Open Advanced Settings after setup to download one.",
+                    "warn",
+                )
+
+        def on_error(message: str) -> None:
+            self._set_local_status(f"Could not refresh {label}: {message}", "error")
+
+        self._run_async(
+            fetch_payload,
+            on_done,
+            on_error=on_error,
+            lock=tuple(
+                btn for btn in (
+                    self._local_install_btn,
+                    self._local_start_btn,
+                    self._local_refresh_btn,
+                ) if btn is not None
+            ),
+        )
 
     def _build_ui(self) -> None:
         root = QVBoxLayout()
@@ -2252,7 +2387,7 @@ class FirstRunDialog(QDialog):
         group_layout = QVBoxLayout()
         group_layout.setSpacing(12)
 
-        self._model_type_var = None
+        self._model_type_buttons = {}
         options = [
             ("cloud_openai", "☁ Cloud Model: OpenAI (GPT-4o, etc.)"),
             ("cloud_anthropic", "☁ Cloud Model: Anthropic (Claude, etc.)"),
@@ -2270,8 +2405,7 @@ class FirstRunDialog(QDialog):
                 "text-align: left; padding-left: 12px; border: 1px solid #5c6b7d; "
                 "border-radius: 4px; background: transparent; color: #d9e0ea;"
             )
-            btn.clicked.connect(lambda checked=False, opt=opt_id: self._select_model_type(opt, btn))
-            self._model_type_buttons = getattr(self, "_model_type_buttons", {})
+            btn.clicked.connect(lambda checked=False, opt=opt_id, b=btn: self._select_model_type(opt, b))
             self._model_type_buttons[opt_id] = btn
             group_layout.addWidget(btn)
 
@@ -2332,42 +2466,70 @@ class FirstRunDialog(QDialog):
 
             self._config_model_combo = QComboBox()
             self._config_model_combo.setEditable(True)
-            self._config_model_combo.addItems(_MODEL_FALLBACKS.get(provider, []))
+            fallback_models = list(_MODEL_FALLBACKS.get(provider, []))
+            if not fallback_models:
+                fallback_models = ["model-id"]
+            self._config_model_combo.addItems(fallback_models)
+            self._config_model_combo.currentTextChanged.connect(
+                lambda text: self._choices.__setitem__("model", text.strip())
+            )
             form.addRow("Model", self._config_model_combo)
 
             self._config_api_key_edit = QLineEdit()
             self._config_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
             self._config_api_key_edit.setPlaceholderText(
-                "Paste your API key (will be stored locally)")
+                "Paste your provider API key (optional)")
             form.addRow("API Key", self._config_api_key_edit)
 
             info = QLabel(
-                f"Get your API key from {provider}.com, then paste it above. "
-                "The key is stored locally on your machine."
+                "Paste your provider API key. It is stored locally for this GUI process/settings. "
+                "Planning will fail until a valid key is configured for cloud providers."
             )
             info.setWordWrap(True)
             info.setStyleSheet("font-size: 11px; color: #aeb7c6;")
             form.addRow("", info)
+
+            self._choices["model"] = _combo_text(self._config_model_combo)
 
         else:
             # Local runtime setup
             is_ollama = model_type == "local_ollama"
             provider = "ollama" if is_ollama else "omlx"
             self._choices["provider"] = provider
+            self._local_provider = provider
 
-            status_lbl = QLabel("Checking service status...")
-            status_lbl.setStyleSheet("font-size: 11px; color: #aeb7c6;")
-            form.addRow("Status", status_lbl)
+            self._local_status_lbl = QLabel("Waiting to refresh local runtime state.")
+            self._local_status_lbl.setWordWrap(True)
+            self._local_status_lbl.setStyleSheet("font-size: 11px; color: #aeb7c6;")
+            form.addRow("Status", self._local_status_lbl)
 
             btn_row = QHBoxLayout()
-            install_btn = QPushButton("Install")
-            start_btn = QPushButton("Start Service")
-            refresh_btn = QPushButton("Refresh")
-            btn_row.addWidget(install_btn)
-            btn_row.addWidget(start_btn)
-            btn_row.addWidget(refresh_btn)
+            self._local_install_btn = QPushButton("Install")
+            self._local_start_btn = QPushButton("Start Service")
+            self._local_refresh_btn = QPushButton("Refresh")
+            self._local_install_btn.clicked.connect(lambda: self._run_local_runtime_action("install"))
+            self._local_start_btn.clicked.connect(lambda: self._run_local_runtime_action("start"))
+            self._local_refresh_btn.clicked.connect(self._refresh_local_runtime)
+            btn_row.addWidget(self._local_install_btn)
+            btn_row.addWidget(self._local_start_btn)
+            btn_row.addWidget(self._local_refresh_btn)
             btn_row.addStretch()
             form.addRow("", btn_row)
+
+            self._local_model_combo = QComboBox()
+            self._local_model_combo.setEditable(True)
+            self._local_model_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+            if self._local_model_combo.lineEdit():
+                self._local_model_combo.lineEdit().setPlaceholderText(
+                    "Type an exact model ID if auto-discovery is empty"
+                )
+            self._local_model_combo.currentTextChanged.connect(self._on_local_model_changed)
+            _set_combo_items(self._local_model_combo, _MODEL_FALLBACKS.get(provider, []), "")
+            form.addRow("Local model", self._local_model_combo)
+
+            self._local_open_advanced_after_setup = QCheckBox("Open Advanced Settings after setup")
+            self._local_open_advanced_after_setup.setChecked(False)
+            form.addRow("", self._local_open_advanced_after_setup)
 
             info = QLabel(
                 "A local model runs on your machine and doesn't require an API key. "
@@ -2382,6 +2544,8 @@ class FirstRunDialog(QDialog):
         self._content_layout.addWidget(grp)
         self._content_layout.addStretch()
         self._next_btn.setText("Next")
+        if model_type in {"local_ollama", "local_omlx"}:
+            QTimer.singleShot(0, self._refresh_local_runtime)
 
     def _show_ableton_connection(self) -> None:
         self._step_title.setText("Ableton Connection")
@@ -2475,6 +2639,18 @@ class FirstRunDialog(QDialog):
                 if not self._choices.get("model_type"):
                     QMessageBox.warning(self, "Selection Required", "Please select a model type.")
                     return
+            if self._current_step == 2:
+                model_type = self._choices.get("model_type")
+                if model_type != "later" and (
+                    not self._choices.get("provider")
+                    or not (self._choices.get("model") or "").strip()
+                ):
+                    QMessageBox.warning(
+                        self,
+                        "Model Required",
+                        "Choose a provider and model before continuing.",
+                    )
+                    return
             self._show_step(self._current_step + 1)
         else:
             # Finish: save settings
@@ -2519,8 +2695,39 @@ class FirstRunDialog(QDialog):
                 if api_key:
                     self._choices["api_key"] = api_key
 
-        if not self._choices.get("provider"):
-            QMessageBox.warning(self, "Provider Required", "Please select a provider.")
+        if self._local_model_combo is not None:
+            model = _combo_text(self._local_model_combo)
+            if model:
+                self._choices["model"] = model
+
+        if self._local_open_advanced_after_setup is not None:
+            self._choices["open_advanced_after_setup"] = self._local_open_advanced_after_setup.isChecked()
+
+        model_type = self._choices.get("model_type")
+        if model_type == "later":
+            confirm = QMessageBox.question(
+                self,
+                "Finish Without Model?",
+                "You chose to configure the model later. LLM planning will stay unavailable until you set a provider and model in Settings.\n\n"
+                "Mark first-run setup as complete anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if confirm != QMessageBox.StandardButton.Yes:
+                return
+
+            self._settings.update({
+                "dry_run": self._choices.get("dry_run", True),
+                "auto_approve": self._choices.get("auto_approve", False),
+                "allow_destructive": self._choices.get("allow_destructive", False),
+                "first_run_complete": True,
+            })
+            _save_gui_settings(self._settings)
+            self.accept()
+            return
+
+        if not self._choices.get("provider") or not (self._choices.get("model") or "").strip():
+            QMessageBox.warning(self, "Provider and Model Required", "Please select both provider and model.")
             return
 
         # Save to settings
@@ -2530,6 +2737,7 @@ class FirstRunDialog(QDialog):
             "dry_run": self._choices.get("dry_run", True),
             "auto_approve": self._choices.get("auto_approve", False),
             "allow_destructive": self._choices.get("allow_destructive", False),
+            "open_advanced_after_setup": bool(self._choices.get("open_advanced_after_setup", False)),
             "first_run_complete": True,
         })
 
@@ -2540,6 +2748,15 @@ class FirstRunDialog(QDialog):
                     self._choices.get("provider"): self._choices.get("api_key")
                 }
             })
+
+        try:
+            self._backend.patch_settings({
+                "modelito_provider": self._choices.get("provider", "openai"),
+                "modelito_model": self._choices.get("model", ""),
+            })
+        except Exception:
+            # Keep onboarding non-blocking even if runtime patch fails in this step.
+            pass
 
         _save_gui_settings(self._settings)
         self.accept()
@@ -3606,7 +3823,7 @@ class MainWindow(QMainWindow):
         label = f"{provider} / {model}" if provider and model else ""
         self._current_model_lbl.setText(label)
         _set_chip(self._model_chip,
-                  f"Model {label}" if label else "Model not set", "ok" if label else "warn")
+                  f"Model {label}" if label else "Model not configured", "ok" if label else "warn")
         ableton_host = self._gui_cfg.get("ableton_host", "127.0.0.1")
         ableton_port = self._gui_cfg.get("ableton_port", 11000)
         _set_chip(self._osc_chip, f"OSC {ableton_host}:{ableton_port}", "neutral")
@@ -3646,9 +3863,18 @@ class MainWindow(QMainWindow):
             "ok" if r.get("ready_to_execute") else "warn",
         )
         issues: list[str] = r.get("errors", []) + r.get("warnings", [])
+        provider = str(self._gui_cfg.get("provider", "")).strip()
+        model = str(self._gui_cfg.get("model", "")).strip()
+        if not provider or not model:
+            self._rdy_msg_lbl.setText("Model not configured. Open Settings to choose provider and model.")
+            return
         if issues:
             # Show the most important message only; keep the bar compact.
             self._rdy_msg_lbl.setText(issues[0])
+        elif provider in {"ollama", "omlx"} and not r.get("ready_to_execute"):
+            self._rdy_msg_lbl.setText(
+                "Local runtime selected. Use Advanced Settings to start the service and load/serve a model."
+            )
         else:
             self._rdy_msg_lbl.setText("")
 
@@ -3953,6 +4179,14 @@ class MainWindow(QMainWindow):
             _apply_provider_api_keys(self._gui_cfg)
             self._update_model_badge()
             self._refresh_readiness()
+            if not self._gui_cfg.get("provider") or not self._gui_cfg.get("model"):
+                self._status_bar.showMessage(
+                    "Model not configured. Open Settings to choose provider and model.",
+                    9000,
+                )
+            if self._gui_cfg.pop("open_advanced_after_setup", False):
+                _save_gui_settings(self._gui_cfg)
+                QTimer.singleShot(0, self.on_settings)
 
     def on_settings(self) -> None:
         dlg = SettingsDialog(self._backend, self._gui_cfg, parent=self)

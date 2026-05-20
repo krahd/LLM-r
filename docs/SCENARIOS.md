@@ -1,66 +1,92 @@
 # Scenarios
 
-These recipes describe workflows the current capability set can execute. They do
-not imply audio rendering, plug-in chains, rich browser browsing, warp marker
-editing, or semantic mix/master processing.
+These are tested or expected workflows for the current release. They are aimed
+at practical set setup and safe execution, not full production automation.
 
-## Sketch Starter
+Each scenario includes a suggested prompt, expected plan shape, safety notes,
+required dependencies, and dry-run behaviour.
 
-1. Set tempo and time signature.
-2. Create and rename MIDI/audio tracks.
-3. Create and rename a scene.
-4. Create empty clips.
-5. Add MIDI notes when the user gives or requests concrete notes/rhythms.
-6. Arm tracks and enable metronome/count-in when recording is implied.
-7. Fire the scene or clip only when the user asks to start playback.
+## 1. Tempo and transport setup
 
-## MIDI Clip Editing
+- User prompt: "Set tempo to 124 BPM, set 4/4, turn metronome on, and continue playback."
+- Expected plan shape:
+   - `set_tempo`
+   - `song_set_time_signature`
+   - `song_metronome`
+   - `song_continue` or `song_play`
+- Safety notes: non-destructive, but changes global song state.
+- Required dependencies: AbletonOSC only.
+- Dry-run without mutation: yes.
 
-1. Use `midi_notes_get` when a client is listening for AbletonOSC replies or
-   when inspecting an already known LLM-r state cache.
-2. Add notes with explicit pitch, start time, duration, velocity, and optional
-   mute state.
-3. Edit timing, pitch, or velocity by removing notes in a known pitch/time range
-   and adding replacement notes.
-4. Use destructive approval for remove or clear operations.
+## 2. Create MIDI and audio tracks
 
-## Audio Clip Prep
+- User prompt: "Create one MIDI track called Drums and one audio track called Vox In."
+- Expected plan shape:
+   - `create_midi_track`
+   - `track_rename`
+   - `create_audio_track`
+   - `track_rename`
+- Safety notes: non-destructive; appends tracks unless prompt targets an index.
+- Required dependencies: AbletonOSC only.
+- Dry-run without mutation: yes.
 
-1. Adjust non-destructive audio clip properties: gain, transpose/detune, warping,
-   warp mode, RAM mode, clip start/end markers, and loop settings.
-2. Keep destructive sample-file editing, resampling, exporting, and rendering out
-   of executable plans until a dedicated audio processing pipeline exists.
+## 3. Load a device with Device Bridge
 
-## Performance Prep
+- User prompt: "Load Drum Rack on track 2."
+- Expected plan shape:
+   - optional `track_rename` or context setup step
+   - `device_load` with `query="Drum Rack"` and a suitable `device_type`
+- Safety notes: loading can change track device chain; ambiguous matches should
+   stay unresolved until user confirms a specific candidate/path.
+- Required dependencies: AbletonOSC + Device Bridge.
+- Dry-run without mutation: yes.
 
-1. Set tempo, time signature, global quantization, and count-in.
-2. Create or rename scenes.
-3. Arm requested tracks.
-4. Clear unintended mute/solo states when explicitly requested.
-5. Start, continue, stop, or record only when requested.
+## 4. Create a simple drum sketch
 
-## Mix Prep
+- User prompt: "Create a 4-bar drum sketch at 122 BPM with a kick on beats 1 and 3."
+- Expected plan shape:
+   - `set_tempo`
+   - `create_midi_track`
+   - `track_rename`
+   - `clip_create`
+   - `midi_notes_add`
+- Safety notes: non-destructive if writing into a new or empty clip slot.
+- Required dependencies: AbletonOSC only.
+- Dry-run without mutation: yes.
 
-1. Adjust track volume, pan, mute, solo, and sends.
-2. Set known device parameters by track/device/parameter index.
-3. Avoid mastering claims unless future capabilities add export/render, loudness,
-   EQ, compression, and limiting operations.
+## 5. Duplicate and launch clips
 
-## Device Loading
+- User prompt: "Duplicate clip 0 on track 1 to clip 1 and launch the new clip."
+- Expected plan shape:
+   - `clip_duplicate_to`
+   - `fire_clip`
+- Safety notes: duplicate is usually reversible with undo; launch affects
+   playback state.
+- Required dependencies: AbletonOSC only.
+- Dry-run without mutation: yes.
 
-1. Use `device_load` when the user names a Live browser device, preset, or plug-in.
-2. Set `device_type` to `instrument`, `audio_effect`, `midi_effect`, `plugin`,
-   `drum`, or `all` to narrow the browser search.
-3. Use `preset_query` for named presets. Use `browser_path` only from Device
-   Bridge candidate results. Set `allow_ambiguous` only after explicit user
-   confirmation.
-4. Keep multi-device chain construction out of executable plans until richer
-   browser selection exists.
+## 6. Dry-run a destructive operation
 
-## Unsupported Today
+- User prompt: "Dry-run deleting clip 2 on track 0 so I can inspect the plan first."
+- Expected plan shape:
+   - `clip_delete` (destructive=true)
+- Safety notes: destructive tool; execute path requires explicit destructive
+   approval and dry-run off.
+- Required dependencies: AbletonOSC only.
+- Dry-run without mutation: yes.
 
-- Fully automatic humanize, quantize, transpose, or velocity shaping of unknown
-  existing MIDI clips without note readback.
-- Sample loading and plug-in chain construction.
-- Edit warp markers, arrangement clips, or automation lanes.
-- Export, render, resample, or loudness-analyze a Live set.
+## 7. Macro usage
+
+- User prompt: "Run the performance_prep macro."
+- Expected plan shape:
+   - via `POST /api/plan_macro` -> expanded calls from macro definition
+   - built-in examples: `idea_sketch`, `performance_prep`
+- Safety notes: macro safety depends on contained calls; review plan before run.
+- Required dependencies: AbletonOSC only for current built-ins.
+- Dry-run without mutation: yes.
+
+## Not covered by these scenarios
+
+- Rich audio editing and warp marker editing.
+- Full arrangement composition across many tracks/scenes.
+- Automatic plug-in chain construction and mastering/loudness/export workflows.

@@ -98,12 +98,26 @@ curl -s -X POST http://127.0.0.1:8787/api/omlx/serve -H 'Content-Type: applicati
 
 The PyQt Advanced Settings dialog includes local runtime controls for both Ollama and oMLX (status, install/start/stop, local/remote/running lists, download/delete/serve/stop-serving, and set-active-model workflow).
 
+What PyQt oMLX controls can do:
+
+- inspect service status
+- start/stop/install runtime
+- list local/remote/running models
+- download/delete/serve/stop-serving selected models
+
+What PyQt oMLX controls cannot guarantee:
+
+- they cannot guarantee that a model is compatible with your machine resources
+- they cannot guarantee deterministic startup latency for every model
+- they do not replace real end-to-end Ableton runtime validation
+
 ## Runtime and Model ID Notes
 
 - oMLX support in LLM-r is mediated by Modelito and the Modelito oMLX runtime helpers.
 - Do not assume that models pulled in Ollama are automatically available to oMLX.
 - A model ID is only usable in oMLX if the Modelito/oMLX layer exposes that same ID.
 - In the GUI, oMLX model choices should normally come from runtime-discovered local and remote model lists.
+- Real runtime validation remains manual by default in LLM-r unless you add dedicated integration tests in your environment.
 - See [USER_MANUAL.md](USER_MANUAL.md) for the first-run flow and [../README.md](../README.md) for the product-surface overview.
 
 ## Troubleshooting

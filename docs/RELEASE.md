@@ -114,8 +114,8 @@ Local install helpers:
 - The default local VST3 smoke bundle is named `LLM-r.vst3` and reports
   `Tomas Laurenzo` as its VST3 factory vendor. It is advertised as a minimal
   VST3 instrument with a native Cocoa editor view. The editor is self-contained:
-  it exposes provider/model settings, readiness chips for AbletonOSC and
-  LLMRDeviceBridge status checks, Plan and Details response tabs, explicit
+  it exposes provider/model settings (including `omlx` selection),
+  AbletonOSC and LLMRDeviceBridge status checks, Plan and Details response tabs, explicit
   Save/Cancel settings, Advanced Settings for API keys and Ollama
   status/model control, prompt entry, plan review, dry-run, auto-approve,
   destructive-action approval, and direct AbletonOSC plus Device Bridge

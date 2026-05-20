@@ -835,7 +835,7 @@ private:
 
     static NSArray *providers()
     {
-        return @[@"openai", @"anthropic", @"google", @"ollama", @"custom"];
+        return @[@"openai", @"anthropic", @"google", @"ollama", @"omlx", @"custom"];
     }
 
     static NSString *canonicalProvider(NSString *provider)
@@ -865,6 +865,9 @@ private:
             return @[@"gemini-2.5-flash", @"gemini-2.5-pro", @"gemini-1.5-flash", @"gemini-1.5-pro"];
         }
         if ([p isEqualToString:@"ollama"]) {
+            return @[];
+        }
+        if ([p isEqualToString:@"omlx"]) {
             return @[];
         }
         if ([p isEqualToString:@"custom"]) {
@@ -1292,6 +1295,10 @@ private:
         labelIn(settingsMainView_, @"For Ollama, use Advanced Settings to refresh installed models, serve a model, or stop a served model.",
                 NSMakeRect(kPad + kLblW + kGap, y - 32.0, mainFldW, 32.0),
                 [NSFont systemFontOfSize:11.0], cSec());
+        y -= 40.0;
+        labelIn(settingsMainView_, @"For full readiness checks and local runtime management (including oMLX), use the PyQt GUI companion.",
+            NSMakeRect(kPad + kLblW + kGap, y - 32.0, mainFldW, 32.0),
+            [NSFont systemFontOfSize:11.0], cSec());
         y -= 56.0;
         settingsDryRunButton_ = checkIn(settingsMainView_,
             NSMakeRect(kPad + kLblW + kGap, y - 24.0, 160, 24), @"Dry run default", true);

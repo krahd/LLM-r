@@ -117,7 +117,7 @@ class SettingsPatch(BaseModel):
 
 
 class LocalModelRequest(BaseModel):
-    model: str = Field(min_length=1, max_length=256)
+    model: str = Field(min_length=1, max_length=256, pattern=r".*\S.*")
 
 
 class LiveRefreshRequest(BaseModel):

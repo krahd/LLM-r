@@ -25,17 +25,43 @@ You configure the provider and model in LLM-r; Modelito handles the connection t
 
 ## First Run
 
+### VST3 first run (primary surface)
+
 1. Open Ableton Live.
 2. Add the LLM-r VST3 plug-in to any track.
 3. Open the plug-in window.
 4. Click **Settings**.
 5. Choose a provider and model.
+  - Provider picker options in VST3: `openai`, `anthropic`, `google`, `ollama`, `omlx`, `custom`.
+  - For `omlx`, select the provider/model in VST3 and use the PyQt companion for local runtime management tasks.
 6. For cloud providers, open **Advanced Settings** and enter the API key.
 7. Confirm the AbletonOSC host and port. The default is `127.0.0.1:11000`.
 8. If you want device loading, accept the LLMRDeviceBridge install prompt, restart Live, and enable it in a Control Surface slot.
 9. Keep **Dry run** enabled.
 10. Run one safe prompt and review the plan before you execute anything live.
 11. Click **Save**.
+
+### PyQt first-run wizard (companion surface)
+
+When you open the PyQt GUI for the first time, LLM-r shows a guided wizard.
+
+1. Choose a source: cloud (`openai`, `anthropic`, `google`), local (`ollama`, `omlx`), or configure later.
+2. For cloud providers:
+  - choose or type a model ID
+  - optionally paste an API key
+  - note that planning will fail until a valid API key is configured
+3. For local providers:
+  - **Install**, **Start Service**, and **Refresh** call the real local runtime actions
+  - **Refresh** reads runtime status and local models
+  - choose a discovered model, or type an exact model ID manually
+  - if no local models are found, the wizard tells you to use Advanced Settings to download one
+4. Review safety defaults on the finish step:
+  - **Dry run** stays on by default
+  - **Auto-approve** stays off by default
+  - destructive execution stays off by default
+5. If you pick **I'll configure this later**, the wizard asks for confirmation before marking first run complete.
+
+Advanced Settings remains the full runtime-management surface for local runtimes.
 
 Use **Advanced Settings** to check Device Bridge reachability before executing
 plans that include `device_load`. Execution also resolves each device-load
@@ -59,6 +85,8 @@ Use it for:
 
 The shipped VST3 currently includes prompt entry, Plan and Details tabs, dry run, Auto-approve, destructive approval, Device Bridge checks, and Ollama controls. It does not currently show the same readiness strip or oMLX management tab that the companion surfaces show.
 
+Use the PyQt companion when you need readiness-strip checks or full local runtime management.
+
 ### PyQt GUI
 
 This is the best setup, control, and debugging companion.
@@ -78,9 +106,18 @@ This is the best lightweight browser companion.
 Use it for:
 
 - quick prompt tests in a browser
-- checking readiness without opening the PyQt app
+- checking readiness and "what to fix next" guidance without opening the PyQt app
+- using Quick Starts (novice, production, sound design, safety) to fill prompts quickly
+- launching saved macros from the browser companion when macro endpoints are available
+- browsing read-only capabilities grouped by domain
 - reviewing the Plan Board, Run Log, and Details tabs from a browser
 - simple remote/local access while the FastAPI server is running
+
+The web companion keeps safety defaults visible and explicit:
+
+- preview mode should stay on during setup and experimentation
+- live execution warnings are persistent when preview is off
+- destructive live plans require explicit approval and confirmation
 
 ## Main Screen
 
@@ -130,11 +167,14 @@ action schema. For common drum-loop requests, it can also fall back to a local
 
 Keep **Dry run** enabled when testing. A dry run shows what would be sent to Ableton without changing the Live set.
 
+For live performance, keep Dry run on until the set is saved and tested.
+
 Click **Execute** only after reviewing the plan. Destructive actions, such as deleting tracks or clips, require **Allow destructive actions** in Settings and dry run must be off.
 
 Enable **Auto-approve** only when you want LLM-r to run the plan immediately
 after planning. If Dry run is enabled, Auto-approve runs a preview. If Dry run is
 off, Auto-approve sends the actions to Ableton after the same preflight checks.
+Avoid Auto-approve with Dry run off during performance.
 
 ## Safety Controls
 
@@ -283,6 +323,9 @@ Use this order for local runtimes:
 7. Keep Dry run on and test a safe prompt first.
 
 Ollama and oMLX do not share a model store. Download the model separately in the runtime you plan to use.
+
+Real runtime validation for local runtimes is manual by default in this project.
+Use the local controls as operational helpers, then verify behaviour in your real environment.
 
 ## Choosing Models
 
