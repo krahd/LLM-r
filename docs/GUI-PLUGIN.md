@@ -2,7 +2,8 @@
 
 The VST3 plug-in is the **primary and recommended interface** for LLM-r.
 Load it in Ableton Live like any instrument or effect and control your session
-entirely from within the host — no terminal, no server, no extra windows required.
+entirely from within the host for the core plan/review/execute workflow, without
+opening a separate terminal or companion window.
 
 ## Features
 
@@ -13,8 +14,8 @@ entirely from within the host — no terminal, no server, no extra windows requi
 - **Resizable window** — drag the plug-in editor to the size you want.
 - **Separate Settings panel** — click ⚙ Settings to open a dedicated screen.
   Basic provider/model choices stay on the first settings screen. API keys,
-  endpoint, AbletonOSC, Device Bridge, and Ollama service/model controls are in Advanced
-  Settings so the normal workflow stays clean.
+  endpoint, AbletonOSC, Device Bridge, and Ollama service/model controls are in
+  Advanced Settings so the normal workflow stays clean.
 - **Explicit settings commit** — Save applies changes; Cancel discards edits.
 - **Persistent settings** — API keys, ports, model names, and checkboxes are
   saved to macOS `NSUserDefaults` and restored across sessions.
@@ -112,10 +113,11 @@ pip install PyQt6
 python gui/pyqt_app.py
 ```
 
-Desktop Advanced Settings includes an Ollama screen for status refresh,
-install/start/stop, local model selection, serving a model, stopping a served
-model, deleting a local model, and downloading from a downloadable-model
-pull-down. The toolbar Open Help button opens the user manual on GitHub.
+Desktop Advanced Settings includes both an Ollama screen and an oMLX screen
+for status refresh, install/start/stop, local model selection, serving and
+stopping served models, deleting local models, and downloading from a
+downloadable-model pull-down. The toolbar Open Help button opens the user
+manual on GitHub.
 
 ### HTTP API (headless / scripting)
 
