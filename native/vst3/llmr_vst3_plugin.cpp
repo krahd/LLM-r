@@ -1464,6 +1464,11 @@ private:
             NSMakeRect(kPad, ay - 42.0, width - 2*kPad, 42.0),
             [NSFont systemFontOfSize:11.0], cSec());
         ay -= 54.0;
+        noteIn(cv,
+            @"Runtime checks are manual in this VST3: click Recheck Bridge or Refresh Status. Opening Settings does not probe services.",
+            NSMakeRect(kPad, ay - 30.0, width - 2*kPad, 30.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        ay -= 40.0;
 
         SECT(@"Provider credentials")
         ROW_LBL(@"API key:",
@@ -1819,13 +1824,7 @@ private:
         if (settingsAdvancedButton_) [settingsAdvancedButton_ setHidden:YES];
         if (settingsBasicButton_) [settingsBasicButton_ setHidden:NO];
         refreshSettingsScreenAfterModeToggle(settingsApiKeyField_);
-        refreshBridgeLibraryCandidates();
         refreshBridgePathUI();
-        checkDeviceBridgeStatus();
-        ollamaListModels();
-        if (!ollamaOnlineModelsLoaded_) {
-            ollamaRefreshOnlineModels(false);
-        }
     }
 
     void showResponseTab(bool raw)
@@ -1961,7 +1960,7 @@ private:
         }
     }
 
-    void setBridgeUserLibraryPath(NSString *path, bool persist)
+    void setBridgeUserLibraryPath(NSString *path, bool persist, bool refreshCandidates = false)
     {
         NSString *normalized = normalizedPath(path);
         [bridgeUserLibraryPath_ release];
@@ -1975,7 +1974,9 @@ private:
             }
             [d synchronize];
         }
-        refreshBridgeLibraryCandidates();
+        if (refreshCandidates) {
+            refreshBridgeLibraryCandidates();
+        }
         refreshBridgePathUI();
     }
 
@@ -1986,7 +1987,7 @@ private:
             setStatus(@"No detected User Library selected.");
             return;
         }
-        setBridgeUserLibraryPath(selected, true);
+        setBridgeUserLibraryPath(selected, true, false);
         setStatus([NSString stringWithFormat:@"Selected Ableton User Library: %@", selected]);
     }
 
@@ -2009,7 +2010,7 @@ private:
         if (response != NSModalResponseOK) return;
         NSString *selected = normalizedPath([[panel URL] path]);
         if ([selected length] == 0) return;
-        setBridgeUserLibraryPath(selected, true);
+        setBridgeUserLibraryPath(selected, true, true);
         setStatus([NSString stringWithFormat:@"Selected Ableton User Library: %@", selected]);
     }
 
@@ -2171,7 +2172,7 @@ private:
         [settingsOscPortField_  setStringValue:[NSString stringWithFormat:@"%ld", (long)port]];
         [settingsBridgeHostField_ setStringValue:bridgeHost];
         [settingsBridgePortField_ setStringValue:[NSString stringWithFormat:@"%ld", (long)bridgePort]];
-        setBridgeUserLibraryPath(bridgeUserLibrary, false);
+        setBridgeUserLibraryPath(bridgeUserLibrary, false, false);
         bool extraOn = [d objectForKey:@"llmr.vst3.extra_prompt_enabled"]
                        ? [d boolForKey:@"llmr.vst3.extra_prompt_enabled"] : true;
         bool dryOn   = [d objectForKey:@"llmr.vst3.dry_run"]
@@ -2353,6 +2354,11 @@ private:
                           NSDictionary *headers, NSTimeInterval timeout,
                           NSInteger *statusCode, NSString **error)
     {
+        if ([NSThread isMainThread]) {
+            if (statusCode) *statusCode = 0;
+            if (error) *error = @"Internal error: blocking HTTP request attempted on the UI thread.";
+            return nil;
+        }
         NSURL *url = [NSURL URLWithString:urlString];
         if (!url) {
             if (error) *error = @"Invalid URL.";
@@ -2521,6 +2527,12 @@ private:
 
     void ollamaListModels()
     {
+        if (ollamaListInFlight_) {
+            if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Ollama: already checking status..."];
+            setStatus(@"Already checking Ollama status...");
+            return;
+        }
+        ollamaListInFlight_ = true;
         if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Ollama: checking local service..."];
         addRef();
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
@@ -2551,6 +2563,7 @@ private:
                 __block NSArray *rm = [installed retain];
                 __block NSString *rs = [status retain];
                 dispatch_async(dispatch_get_main_queue(), ^{
+                    ollamaListInFlight_ = false;
                     NSString *preferred = ollamaModelsCombo_ ? controlString(ollamaModelsCombo_) : @"";
                     setComboItems(ollamaModelsCombo_, rm, preferred);
                     if (settingsProviderCombo_ &&
@@ -3046,6 +3059,14 @@ private:
 
     void checkDeviceBridgeStatus()
     {
+        if (deviceBridgeCheckInFlight_) {
+            if (deviceBridgeStatusLabel_) {
+                [deviceBridgeStatusLabel_ setStringValue:@"Device Bridge: already checking..."];
+            }
+            setStatus(@"Already checking Device Bridge...");
+            return;
+        }
+        deviceBridgeCheckInFlight_ = true;
         if (deviceBridgeStatusLabel_) {
             [deviceBridgeStatusLabel_ setStringValue:@"Device Bridge: checking local Remote Script..."];
         }
@@ -3091,12 +3112,19 @@ private:
                 __block NSString *rs = [status retain];
                 __block BOOL rok = ok;
                 dispatch_async(dispatch_get_main_queue(), ^{
+                    deviceBridgeCheckInFlight_ = false;
                     deviceBridgeChecked_ = true;
                     deviceBridgeReachable_ = rok;
                     if (deviceBridgeStatusLabel_) [deviceBridgeStatusLabel_ setStringValue:rs];
                     refreshBridgePathUI();
                     refreshReadinessGuidance();
-                    setStatus(rs);
+                    if ([library length] == 0) {
+                        setStatus(@"Choose Ableton User Library before installing the bridge.");
+                    } else if (rok) {
+                        setStatus(@"Device Bridge reachable.");
+                    } else {
+                        setStatus(@"Device Bridge not reachable. See Advanced Settings.");
+                    }
                     [rs release];
                     this->release();
                 });
@@ -4587,6 +4615,8 @@ private:
     NSPopUpButton *ollamaModelsCombo_{nullptr};
     bool ollamaOnlineModelsLoaded_{false};
     bool ollamaOnlineLoadInFlight_{false};
+    bool ollamaListInFlight_{false};
+    bool deviceBridgeCheckInFlight_{false};
     bool deviceBridgeChecked_{false};
     bool deviceBridgeReachable_{false};
     NSString *bridgeUserLibraryPath_{nullptr};
