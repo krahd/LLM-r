@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from pathlib import Path
 
 from llmr import __version__
-from llmr.ableton_osc import AbletonOSCClient, capabilities
+from llmr.ableton_osc import AbletonAction, AbletonOSCClient, capabilities
 from llmr.config import settings
 from llmr.device_bridge import (
     DeviceBridgeError,
@@ -781,37 +781,43 @@ async def generic_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=payload)
 
 
-def _serialize_plan(plan) -> dict:
-    planned_actions = []
-    for action in plan.actions:
-        raw_action = {
-            "tool": action.tool.value,
-            "address": action.address,
-            "args": action.args,
-            "description": action.description,
-            "destructive": action.destructive,
-            "transport": getattr(action, "transport", "osc"),
-        }
-        transport = infer_transport(raw_action)
-        if transport == "osc":
-            transport_label = "AbletonOSC"
-            transport_plain_label = "Ableton command"
-        elif transport == "device_bridge":
-            transport_label = "Device Bridge"
-            transport_plain_label = "Browser/device loading"
-        else:
-            transport_label = transport or "Other"
-            transport_plain_label = "Advanced route"
+def _serialize_action(action: AbletonAction) -> dict:
+    """Serialise a single AbletonAction to a UI-facing dict with display metadata."""
+    semantic = getattr(action, "semantic_args", {}) or {}
+    transport = getattr(action, "transport", "osc")
+    raw_for_transport = {"tool": action.tool.value,
+                         "transport": transport, "address": action.address}
+    actual_transport = infer_transport(raw_for_transport)
+    if actual_transport == "osc":
+        transport_label = "AbletonOSC"
+        transport_plain_label = "Ableton command"
+    elif actual_transport == "device_bridge":
+        transport_label = "Device Bridge"
+        transport_plain_label = "Browser/device loading"
+    else:
+        transport_label = actual_transport or "Other"
+        transport_plain_label = "Advanced route"
 
-        planned_actions.append(
-            {
-                **raw_action,
-                "target_label": infer_target_label(action.args or {}),
-                "transport_label": transport_label,
-                "transport_plain_label": transport_plain_label,
-                "safety_label": "Destructive" if action.destructive else "Safe",
-            }
-        )
+    # Prefer semantic args for target label; fall back to positional args.
+    target_label = infer_target_label(semantic if semantic else (action.args or {}))
+
+    return {
+        "tool": action.tool.value,
+        "address": action.address,
+        "args": action.args,
+        "semantic_args": semantic,
+        "description": action.description,
+        "destructive": action.destructive,
+        "transport": transport,
+        "target_label": target_label,
+        "transport_label": transport_label,
+        "transport_plain_label": transport_plain_label,
+        "safety_label": "Destructive" if action.destructive else "Safe",
+    }
+
+
+def _serialize_plan(plan) -> dict:
+    planned_actions = [_serialize_action(action) for action in plan.actions]
 
     return {
         "plan_id": plan.id,
@@ -1426,16 +1432,7 @@ def execute_plan(req: ExecuteRequest) -> dict:
         "requires_approval": plan.requires_approval,
         "dry_run": req.dry_run,
         "executed_at": plan.executed_at,
-        "executed_actions": [
-            {
-                "tool": a.tool.value,
-                "address": a.address,
-                "args": a.args,
-                "description": a.description,
-                "transport": getattr(a, "transport", "osc"),
-            }
-            for a in plan.actions
-        ],
+        "executed_actions": [_serialize_action(a) for a in plan.actions],
         "execution_report": execution_report,
     }
 

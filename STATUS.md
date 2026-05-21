@@ -1,6 +1,6 @@
 # STATUS — LLM-r 0.6.9 release candidate
 
-Last updated: 2026-05-20 23:09
+Last updated: 2026-05-20 23:31
 
 ## Snapshot
 - Version: `0.6.9`
@@ -43,6 +43,10 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 - Main route groups: health, settings, capabilities, planning, execution, macros, live state, sessions/history, readiness, local runtimes (Ollama/oMLX), Device Bridge, stream.
 - Readiness output now treats provider/model status as blocking when credentials, local runtime availability, or configured local-model presence are missing.
 - Plan responses now include canonical backend summary metadata (`summary`, `target_label`, transport labels, safety labels) so UI surfaces can share one display contract.
+- `AbletonAction` carries a `semantic_args` dict (preserved from the planner's original named-arg dict) so `_serialize_action()` can produce correct `target_label` values without reinterpreting positional OSC args.
+- `_serialize_action()` is the single serialisation helper for both `/api/plan` and `/api/execute`, ensuring parity between plan-review display and post-run metadata.
+- `AbletonAction` carries a `semantic_args` dict (preserved from the planner's original named-arg dict) so `_serialize_action()` can produce correct `target_label` values without reinterpreting positional OSC args.
+- `_serialize_action()` is the single serialisation helper for both `/api/plan` and `/api/execute`, ensuring parity between plan-review display and post-run metadata.
 - Web UI now exposes a compact Basic Settings editor for provider/model changes only; PyQt remains the full setup surface for API keys, local-runtime management, and AbletonOSC configuration.
 - Safety model: dry-run path, destructive approval gating, one-time plan execution, bounded/expiring plan store, Device Bridge preflight.
 - Auth model: optional bearer token (`LLMR_API_TOKEN`) on write routes.
@@ -83,18 +87,21 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 
 ## Test status
 - Automated unit/API tests: present and broad across planning/execution/settings/runtime routes.
-  - Last verified in Prompt 11: `python -m pytest -q` -> `147 passed, 4 warnings`.
+  - Last verified in Prompt 12: `python -m pytest -q` -> `151 passed, 4 warnings`.
 - Web UI static smoke tests: present (`tests/test_web_ui_static.py`) for critical IDs, API endpoint strings, fallback functions, and safety copy in `web/index.html`.
-  - Included in Prompt 11 full-suite run above.
+  - Last verified in Prompt 12: included in `python -m pytest -q` run above.
 - Ollama API route tests: present (`tests/test_ollama_api.py`) with mocked adapter/runtime boundaries.
-  - Last verified in Prompt 11: included in `python -m pytest -q` run above.
+  - Last verified in Prompt 12: included in `python -m pytest -q` run above.
 - oMLX route tests: present (`tests/test_omlx_api.py`) with mocked runtime adapter behaviour.
-  - Last verified in Prompt 11: included in `python -m pytest -q` run above.
+  - Last verified in Prompt 12: included in `python -m pytest -q` run above.
 - Plan summary tests: present (`tests/test_plan_summary.py`).
-  - Last verified in Prompt 11: included in `python -m pytest -q` run above.
+  - Prompt 12 additions: semantic-label tests for `fire_clip`/`device_load` with `semantic_args`, positional-fallback test, `PlanStore` roundtrip preservation test.
+  - Last verified in Prompt 12: included in `python -m pytest -q` run above.
+- Execute parity tests: new test in `tests/test_api.py` (`test_execute_plan_response_includes_action_metadata`) verifies `/api/execute` `executed_actions` contain the same display fields (`target_label`, `transport_label`, `safety_label`, `semantic_args`) as plan serialisation.
+  - Last verified in Prompt 12: included in `python -m pytest -q` run above.
 - Release workflow checks:
-  - Last verified in Prompt 11: `ruff check .` passed.
-  - Last verified in Prompt 11: `git diff --check` passed.
+  - Last verified in Prompt 12: `ruff check .` passed.
+  - Last verified in Prompt 12: `git diff --check` passed.
   - Last verified in Prompt 11: `./scripts/build_vst3.sh` passed.
   - Last verified in Prompt 11: `bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"` passed.
   - Expected command: `python3 -m build`.
@@ -135,4 +142,4 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 7. Readiness/oMLX parity decision for VST3.
 8. Packaging/signing/notarisation if needed.
 
-Last updated: 2026-05-20 23:09
+Last updated: 2026-05-20 23:31

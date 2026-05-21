@@ -256,9 +256,12 @@ def compute_readiness(
         if not (os.getenv(key_name) or "").strip():
             final_model_ok = False
             model_error = (
-                f"Missing API key for {provider}. Set {key_name} or configure it in Advanced Settings."
+                f"Missing API key for {provider}. Set the {key_name} environment variable,"
+                " or use PyQt Advanced Settings to save and apply it."
             )
-            model_next_step = "Set your API key in Advanced Settings and retry readiness."
+            model_next_step = (
+                "Set the environment variable, or open PyQt Advanced Settings → API Keys and save."
+            )
     elif provider == "ollama":
         status_payload = ollama_status()
         if not bool(status_payload.get("ok", False)):

@@ -404,7 +404,41 @@ def test_execute_plan_dry_run(monkeypatch):
     assert execute["execution_report"][0]["status"] == "dry_run"
 
 
-def test_auth_dependency(monkeypatch):
+def test_execute_plan_response_includes_action_metadata(monkeypatch):
+    """executed_actions must carry the same display metadata fields as plan serialisation."""
+    semantic = {"track_index": 1, "clip_index": 0}
+    plan = StoredPlan(
+        id="plan-meta",
+        prompt="fire clip",
+        explanation="Test metadata parity",
+        confidence=0.9,
+        actions=[
+            AbletonAction(
+                tool=ToolName.fire_clip,
+                address="/live/clip_slot/fire",
+                args=[1, 0],
+                description="Fire clip",
+                destructive=False,
+                transport="osc",
+                semantic_args=semantic,
+            )
+        ],
+        llm_raw="{}",
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    app_module.store.put(plan)
+
+    execute = app_module.execute_plan(app_module.ExecuteRequest(
+        plan_id="plan-meta", dry_run=True))
+
+    action = execute["executed_actions"][0]
+    assert action["semantic_args"] == semantic
+    assert action["target_label"] == "Track 1 · Clip 0"
+    assert action["transport_label"] == "AbletonOSC"
+    assert action["safety_label"] == "Safe"
+
+
+
     monkeypatch.setattr(app_module.settings, "api_token", "secret")
     try:
         app_module._require_auth("Bearer secret")
