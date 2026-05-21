@@ -13,9 +13,15 @@ opening a separate terminal or companion window.
   Details for the exact provider response/debug payload.
 - **Resizable window** — drag the plug-in editor to the size you want.
 - **Separate Settings panel** — click ⚙ Settings to open a dedicated screen.
-  Basic provider/model choices stay on the first settings screen. API keys,
-  endpoint, AbletonOSC, Device Bridge, and Ollama service/model controls are in
-  Advanced Settings so the normal workflow stays clean.
+  Basic provider/model choices, optional Custom model, Server/API base URL,
+  Dry run, Auto-approve, and Test readiness stay on the first settings screen.
+  API keys, AbletonOSC, Device Bridge setup, Ollama controls, oMLX notes,
+  destructive approval, and diagnostics are in Advanced Settings.
+- **Normal selector behaviour** — provider, model, installed-model, and
+  downloadable-model controls are non-editable selectors that open when clicked
+  anywhere on the visible field.
+- **First-use guidance** — Help opens an in-plug-in text guide for a safe
+  first dry-run path. Screenshots are not bundled yet.
 - **Explicit settings commit** — Save applies changes; Cancel discards edits.
 - **Persistent settings** — API keys, ports, model names, and checkboxes are
   saved to macOS `NSUserDefaults` and restored across sessions.
@@ -29,28 +35,32 @@ opening a separate terminal or companion window.
 ## Command workflow
 
 1. Load **LLM-r** as a VST3 instrument in any Ableton Live track.
-2. Open ⚙ Settings and configure your LLM provider (API key, model, endpoint).
-3. Type a request — e.g. *"Create a 4-bar bass line at 90 BPM on a new MIDI
+2. Open Settings, choose Provider and Model, keep Dry run on, and click Test readiness.
+3. For cloud providers, open Advanced Settings and add the API key.
+4. For `device_load`, use Advanced Settings -> Device Bridge -> Recheck.
+5. Type a request — e.g. *"Create a 4-bar bass line at 90 BPM on a new MIDI
    track"* — and press **Plan**.
-4. LLM-r calls the configured LLM and returns a Plan Board.
-5. Review the plan, then click **▶ Execute** (or enable Dry run to preview).
+6. LLM-r calls the configured LLM and returns a Plan Board.
+7. Review the plan, then click **Execute** while Dry run is still enabled for the first smoke path.
 
 ## Settings panel
 
 Open with the ⚙ Settings button. Use Save to apply changes, or Cancel to leave
 the current runtime settings unchanged.
-Use Advanced for provider keys, endpoint, AbletonOSC, Device Bridge, and Ollama management.
+Use Basic Settings for provider/model, optional Custom model, Server/API base URL,
+Dry run, Auto-approve, and Test readiness. Use Advanced Settings for provider
+keys, AbletonOSC, Device Bridge, Ollama, oMLX notes, destructive approval, and diagnostics.
 
 ### LLM Provider
 
 | Field | Description |
 | --- | --- |
 | Provider | openai / anthropic / google / ollama / custom |
-| Model | Provider-specific pull-down; Ollama uses installed local models |
-| Endpoint | Leave blank for provider default |
+| Model | Non-editable provider-specific selector; Ollama uses installed local models |
+| Custom model | Explicit text field for unlisted model IDs or custom provider use |
+| Server | Leave blank/provider default, or set an API base URL |
 | API Key | Securely stored; used for cloud providers |
 | LLM-r guidance prompt | Adds extra planning context (recommended on) |
-| Allow destructive actions | Enables execution of destructive tools |
 
 ### AbletonOSC
 
@@ -67,6 +77,11 @@ Advanced Settings includes a **Check Bridge** control that verifies the local
 LLMRDeviceBridge Remote Script on `127.0.0.1:8788` before executing plans that
 include `device_load`. Non-dry-run execution also asks the bridge to resolve
 each selected device, preset, or browser path before any OSC mutation is sent.
+
+When Bridge is unreachable, the VST3 shows the likely cause, the Remote Scripts
+install path, and recovery actions: **Install Bridge**, **Copy install path**,
+**Open setup help**, and **Recheck**. Device Bridge is optional for normal
+AbletonOSC plans and required for browser/device loading.
 
 ### Advanced Ollama (local models)
 

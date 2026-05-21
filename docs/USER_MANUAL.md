@@ -33,13 +33,15 @@ You configure the provider and model in LLM-r; Modelito handles the connection t
 4. Click **Settings**.
 5. Choose a provider and model.
   - Provider picker options in VST3: `openai`, `anthropic`, `google`, `ollama`, `omlx`, `custom`.
+  - Provider and model controls are selectors, not editable text fields.
+  - Use **Custom model** only for unlisted model IDs or the `custom` provider.
   - For `omlx`, select the provider/model in VST3 and use the PyQt companion for local runtime management tasks.
-6. For cloud providers, open **Advanced Settings** and enter the API key.
-7. Confirm the AbletonOSC host and port. The default is `127.0.0.1:11000`.
-8. If you want device loading, accept the LLMRDeviceBridge install prompt, restart Live, and enable it in a Control Surface slot.
-9. Keep **Dry run** enabled.
-10. Run one safe prompt and review the plan before you execute anything live.
-11. Click **Save**.
+6. Keep **Dry run** enabled and click **Test readiness**.
+7. For cloud providers, open **Advanced Settings** and enter the API key.
+8. Confirm the AbletonOSC host and port. The default is `127.0.0.1:11000`.
+9. If you want device loading, use **Install Bridge** if needed, restart Live, enable `LLMRDeviceBridge` in a Control Surface slot, then click **Recheck**.
+10. Click **Save**.
+11. Run one safe prompt, click **Plan**, review **Plan** and **Details**, then click **Execute** while Dry run is still enabled.
 
 ### PyQt first-run wizard (companion surface)
 
@@ -83,9 +85,9 @@ Use it for:
 - dry-running and executing from the plug-in window
 - cloud-provider setup and Ollama setup that fits inside the plug-in's Advanced Settings
 
-The shipped VST3 currently includes prompt entry, Plan and Details tabs, dry run, Auto-approve, destructive approval, Device Bridge checks, and Ollama controls. It does not currently show the same readiness strip or oMLX management tab that the companion surfaces show.
+The shipped VST3 currently includes prompt entry, Plan and Details tabs, dry run, Auto-approve, destructive approval, Device Bridge checks/recovery actions, a minimal readiness strip, in-plug-in Help, and Ollama controls. It does not show the same full readiness strip or oMLX management tab that the companion surfaces show.
 
-Use the PyQt companion when you need readiness-strip checks or full local runtime management.
+Use the PyQt companion when you need full readiness checks or full local runtime management.
 
 ### PyQt GUI
 
@@ -124,6 +126,12 @@ The web companion keeps safety defaults visible and explicit:
 The main screen is a command surface with readiness chips, a prompt field, a
 Plan Board, execution controls, and an **Auto-approve** checkbox.
 Press **Return** in the prompt field to create a plan, or click **Plan**.
+
+The VST3 **Help** button opens an in-plug-in guide called "First dry-run in 60
+seconds". It covers keeping Dry run enabled, choosing provider/model, entering a
+safe prompt, planning, reviewing Details, and clicking Execute while Dry run is
+still on. It also explains AbletonOSC versus Device Bridge. Screenshots are
+future work; the current Help is text-only.
 
 ### Plan Tab
 
@@ -199,10 +207,12 @@ LLM-r marks destructive steps separately. Deleting tracks, clips, scenes, notes,
 The basic Settings screen is intentionally short:
 
 - **Provider**: `openai`, `anthropic`, `google`, `ollama`, `omlx`, or `custom`
-- **Model**: a provider-specific pull-down
-- **Dry run default**: whether the main screen starts in dry-run mode
-- **Auto-approve plans**: whether plans run immediately after planning
-- **Allow destructive actions**: permits destructive actions when dry run is off
+- **Model**: a non-editable provider-specific selector
+- **Custom model**: explicit text field for unlisted model IDs or the `custom` provider
+- **Server**: provider default or API base URL
+- **Dry run**: whether **Execute** previews instead of mutating Live
+- **Auto-approve**: whether plans run immediately after planning
+- **Test readiness**: updates the minimal VST3 readiness guidance
 
 Use **Save** to apply changes. Use **Cancel** to discard changes.
 
@@ -210,12 +220,14 @@ Use **Save** to apply changes. Use **Cancel** to discard changes.
 
 Advanced Settings contains fields that are not needed for every request:
 
-- provider endpoint
 - provider API key
 - LLM-r guidance prompt toggle
 - AbletonOSC host and port
+- Device Bridge host/port, install, setup help, copy install path, and recheck actions
 - Ollama service and model controls
-- oMLX service and model controls
+- oMLX release note/status; full oMLX runtime controls remain in PyQt
+- destructive-action approval
+- diagnostics notes
 
 ## Readiness
 
@@ -225,7 +237,7 @@ Readiness answers three separate questions:
 - can LLM-r dry-run that plan safely?
 - can LLM-r execute that plan live?
 
-The PyQt GUI and web UI expose readiness directly. In headless mode, call `GET /api/readiness`. The current shipped VST3 does not expose the same readiness strip, so for plug-in-only use you should keep Dry run on first and verify your settings manually.
+The PyQt GUI and web UI expose full readiness directly. In headless mode, call `GET /api/readiness`. The VST3 exposes a smaller first-use strip: model configured/missing, AbletonOSC configured/not checked, Device Bridge reachable/unreachable/optional, and Dry run on/off. Keep Dry run on first and treat PyQt/web as the source for full readiness diagnostics.
 
 ### Provider API Keys
 
@@ -276,7 +288,7 @@ Click **Download** to pull the selected model through Ollama. Large models can t
 
 ## oMLX
 
-oMLX controls live in **Advanced Settings → oMLX**.
+Full oMLX controls live in the PyQt companion **Advanced Settings -> oMLX** screen. The VST3 can select `omlx` as a provider and shows an Advanced Settings note, but it does not manage the oMLX runtime in this release.
 
 The flow from LLM-r through to oMLX is: LLM-r → Modelito → oMLX runtime.
 
@@ -363,6 +375,22 @@ Start Ollama first. Then click **Refresh Online**, choose a model, and click **D
 ### Ableton does not change
 
 Check that AbletonOSC is installed, active, and listening on the host/port shown in Advanced Settings. If the failed step is `device_load`, also check that LLMRDeviceBridge is enabled in a Control Surface slot after restarting Live. A `409` or ambiguous-candidate error means the browser query needs a more specific device name, preset query, or candidate path. Keep **Dry run** off when you actually want to execute.
+
+### Device Bridge not reachable
+
+The VST3 Advanced Settings Bridge area shows this status when the local Remote
+Script HTTP server does not answer. Likely causes are that `LLMRDeviceBridge` is
+not installed, Ableton has not been restarted, or the script has not been
+selected in a Control Surface slot.
+
+Use the VST3 actions:
+
+- **Install Bridge**: copies the bundled `LLMRDeviceBridge` folder into Ableton Remote Scripts candidates.
+- **Copy install path**: copies the primary Remote Scripts folder path.
+- **Open setup help**: shows the setup steps inside the plug-in.
+- **Recheck**: tests the configured Bridge host/port again.
+
+The default install location is `~/Music/Ableton/User Library/Remote Scripts/LLMRDeviceBridge`. After copying, restart Ableton Live, open Preferences -> Link/Tempo/MIDI, set an empty Control Surface slot to `LLMRDeviceBridge`, and rescan/restart if Live still does not start the bridge.
 
 ### I still see an older UI
 

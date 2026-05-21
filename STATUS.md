@@ -1,6 +1,6 @@
 # STATUS — LLM-r 0.6.9 release candidate
 
-Last updated: 2026-05-21 01:15
+Last updated: 2026-05-21 01:07
 
 ## Snapshot
 - Version: `0.6.9`
@@ -22,6 +22,7 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 ## Shipped surfaces
 ### VST3 plug-in
 - Supports provider/model selection (`openai`, `anthropic`, `google`, `ollama`, `omlx`, `custom`), prompt input, Plan/Details tabs, dry-run, auto-approve, destructive approval, Device Bridge checks, Save/Cancel settings, and Ollama controls in Advanced Settings.
+- Prompt 15 follow-up fixes: main-screen readiness labels now show a green/red icon plus plain white text without chip backgrounds/borders; Advanced Settings horizontal scrolling is further suppressed (elastic horizontal scroll disabled) and minimum editor width is increased to avoid horizontal squeeze; Basic/Advanced toggle now refreshes layout/focus immediately so controls in the newly shown panel respond without requiring mouse movement.
 - Deliberately does not yet include the PyQt/web readiness strip (`GET /api/readiness`) or a full oMLX management tab.
 - Manual validation still needed before tag: real AbletonOSC smoke pass, Device Bridge candidate-resolution pass, and local-runtime smoke checks.
 
@@ -110,8 +111,8 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 - Not automated: browser-level web end-to-end automation, real Ableton Live mutation correctness, real Device Bridge browser behaviour, and real Ollama/oMLX runtime behaviour on release target machines.
 
 ## Manual validation required before tag
-- VST3 build on macOS.
-- VST3 install and Ableton scan.
+- VST3 build on macOS. -> Works.
+- VST3 install and Ableton scan. -> 
 - AbletonOSC real session smoke test.
 - Device Bridge install/load/resolve test.
 - Ollama runtime smoke test.
@@ -144,4 +145,4 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 7. Readiness/oMLX parity decision for VST3.
 8. Packaging/signing/notarisation if needed.
 
-Last updated: 2026-05-21 01:15
+Last updated: 2026-05-21 01:07

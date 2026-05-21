@@ -98,11 +98,13 @@ bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
 Open the `LLM-r` plug-in window in Ableton Live. The plug-in GUI is the main
 user-facing workflow: provider/model settings, prompt entry, plan review,
 dry-run, Auto-approve, destructive-action approval, Plan/Details tabs, and
-Advanced Settings for cloud API keys, Device Bridge checks, and Ollama runtime
-controls.
+Advanced Settings for cloud API keys, AbletonOSC, Device Bridge checks, and
+Ollama runtime controls.
 
-The shipped VST3 does **not** currently expose the PyQt/web readiness strip or
-an oMLX runtime-management UI. Use the companion surfaces for those tasks.
+The VST3 now includes a minimal first-use readiness strip for model, AbletonOSC,
+Device Bridge, and Dry run state. It is not full `GET /api/readiness` parity and
+does not include an oMLX runtime-management UI. Use the companion surfaces for
+full readiness checks and local runtime management.
 
 #### Option B — Desktop GUI (optional)
 
@@ -144,14 +146,16 @@ model download/serve/delete, and AbletonOSC configuration.
 
 Use this sequence on a new install:
 
-1. Choose a provider and model.
+1. Open **Settings** and choose a provider/model.
 2. Keep **Dry run** enabled.
-3. Check readiness before trusting live execution.
+3. Use **Test readiness** in Basic Settings.
+4. For cloud providers, add the API key in Advanced Settings.
+5. For `device_load`, use Advanced Settings -> Device Bridge -> Recheck.
 
 Readiness checks:
 In PyQt or web UI, read the readiness status directly.
 In headless mode, call `GET /api/readiness`.
-In the VST3, confirm your provider/API key settings and run a dry run first; the plug-in does not yet show the same readiness strip as the companion surfaces.
+In the VST3, use the minimal readiness strip and run a dry run first; the plug-in does not claim the same readiness parity as the companion surfaces.
 
 1. Try a safe prompt such as `Set the tempo to 120 BPM` or `Create one MIDI track named Ideas`.
 2. Review the plan before executing.
@@ -433,12 +437,18 @@ own runtime settings in macOS user defaults and can:
 
 - choose provider/model/endpoint and API key
 - provider picker includes `openai`, `anthropic`, `google`, `ollama`, `omlx`, and `custom`
+- use non-editable provider/model selectors plus an explicit Custom model field
 - switch between Plan and Details response tabs
 - copy/select text from the response panel
-- keep provider/model on the basic settings screen while API keys, AbletonOSC,
-  Device Bridge checks, and Ollama controls live under Advanced Settings
+- keep provider/model, optional Custom model, Server/API base URL, Dry run, and
+  Test readiness on the Basic Settings screen
+- keep API keys, AbletonOSC, Device Bridge host/port, Bridge setup actions,
+  Ollama controls, oMLX notes, destructive approval, and diagnostics in
+  Advanced Settings
+- show a minimal readiness strip for model, AbletonOSC, Device Bridge, and Dry run state
 - show transport/device status checks and Ollama model/runtime state
 - load the downloadable-model pull-down from the Ollama online model library
+- open an in-plug-in Help dialog with the first dry-run path and Bridge setup notes
 - save or cancel settings changes explicitly
 - send the built-in LLM-r tool catalog and optional guidance to the LLM
 - parse the returned JSON plan
@@ -448,9 +458,10 @@ own runtime settings in macOS user defaults and can:
 
 The shipped VST3 currently does **not** provide:
 
-- the PyQt/web readiness strip backed by `GET /api/readiness`
+- full PyQt/web readiness parity backed by `GET /api/readiness`
 - an oMLX runtime-management tab
 - the PyQt onboarding wizard
+- bundled screenshots in the VST3 Help dialog
 
 For full readiness checks and local runtime management (including oMLX), use the
 PyQt GUI companion.
@@ -569,7 +580,7 @@ See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
 
 - Real Ableton Live validation (transport, OSC, device loading) is required for release confidence and is not automated.
 - Native VST3 build, install, and load should be verified on macOS before each release.
-- The shipped VST3 plug-in does not yet expose the same readiness strip or oMLX management controls that the PyQt and web companion surfaces expose.
+- The shipped VST3 plug-in exposes only a minimal first-use readiness strip; full readiness diagnostics and oMLX management remain in the companion surfaces.
 - Real oMLX runtime validation is manual; automated tests cover the FastAPI routes with monkeypatched adapters only.
 - Some advanced workflows (device loading, ambiguous browser resolution) require both AbletonOSC and the LLMRDeviceBridge Remote Script.
 - Local model access via Ollama and oMLX is mediated by Modelito. Models pulled through Ollama are not automatically available to oMLX unless both runtimes expose the same model identifier.
