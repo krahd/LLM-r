@@ -82,8 +82,12 @@ pip install -e .[gui]
 Install and enable the [AbletonOSC](https://github.com/ideoforms/AbletonOSC) MIDI Remote Script in Ableton Live. By default it listens on `127.0.0.1:11000`.
 
 For instrument/effect/plug-in loading, also install and enable the bundled
-`LLMRDeviceBridge` Remote Script. The VST3 can install it into Ableton's User
-Library Remote Scripts folder and will prompt you on first use.
+`LLMR_Bridge` Remote Script. The VST3 now asks you to choose or confirm the
+actual Ableton User Library folder first, then installs into:
+
+`<User Library>/Remote Scripts/LLMR_Bridge`
+
+This supports relocated User Libraries, including external SSD locations.
 
 ### 2. Launch
 
@@ -150,7 +154,15 @@ Use this sequence on a new install:
 2. Keep **Dry run** enabled.
 3. Use **Test readiness** in Basic Settings.
 4. For cloud providers, add the API key in Advanced Settings.
-5. For `device_load`, use Advanced Settings -> Device Bridge -> Recheck.
+5. For `device_load`, open Advanced Settings -> Device Bridge and:
+  - click **Choose Ableton User Library...**
+  - in Live, right-click **User Library** in the Browser and choose **Show in Finder** to locate the folder
+  - click **Install / Reinstall Bridge**
+  - restart Live
+  - in Live Settings -> Link, Tempo & MIDI -> Control Surface, choose `LLMR_Bridge` if it appears
+  - click **Recheck** in LLM-r
+
+If `LLMR_Bridge` does not appear in Live, check Live `Log.txt` for `LLMR`, `Bridge`, `RemoteScriptError`, `Traceback`, or `ImportError`.
 
 Readiness checks:
 In PyQt or web UI, read the readiness status directly.

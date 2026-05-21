@@ -40,6 +40,9 @@ enum LlmrEditorAction : NSInteger {
     kLlmrEditorActionCopyBridgeInstallPath = 26,
     kLlmrEditorActionInstallBridge = 27,
     kLlmrEditorActionTestReadiness = 28,
+    kLlmrEditorActionChooseBridgeUserLibrary = 29,
+    kLlmrEditorActionRevealInstalledBridge = 30,
+    kLlmrEditorActionUseDetectedBridgeLibrary = 31,
 };
 
 static void llmrEditorHandleAction(void *owner, NSInteger action);
@@ -698,10 +701,17 @@ public:
         settingsModelStatusLabel_ = nullptr;
         settingsBridgeHostField_ = nullptr;
         settingsBridgePortField_ = nullptr;
+        settingsBridgeLibraryCandidatesCombo_ = nullptr;
+        settingsBridgeLibraryLabel_ = nullptr;
+        settingsBridgeInstallTargetLabel_ = nullptr;
+        settingsBridgeInstallButton_ = nullptr;
+        settingsBridgeRevealButton_ = nullptr;
         ollamaStatusLabel_ = nullptr;
         deviceBridgeStatusLabel_ = nullptr;
         ollamaModelField_ = nullptr;
         ollamaModelsCombo_ = nullptr;
+        [bridgeUserLibraryPath_ release];
+        bridgeUserLibraryPath_ = nullptr;
 #endif
         return kResultOk;
     }
@@ -810,6 +820,9 @@ public:
         case kLlmrEditorActionCopyBridgeInstallPath: copyBridgeInstallPath(); break;
         case kLlmrEditorActionInstallBridge: installDeviceBridgeFromSettings(); break;
         case kLlmrEditorActionTestReadiness: testReadiness(); break;
+        case kLlmrEditorActionChooseBridgeUserLibrary: chooseBridgeUserLibrary(); break;
+        case kLlmrEditorActionRevealInstalledBridge: revealInstalledBridge(); break;
+        case kLlmrEditorActionUseDetectedBridgeLibrary: useDetectedBridgeLibrary(); break;
         default: break;
         }
     }
@@ -1416,7 +1429,7 @@ private:
         [settingsAdvancedView_ setHidden:YES];
         [settingsView_ addSubview:settingsAdvancedView_]; [settingsAdvancedView_ release];
 
-        static const CGFloat kContentH = 860.0;
+        static const CGFloat kContentH = 980.0;
         NSScrollView *sc = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
         [sc setHasVerticalScroller:YES]; [sc setBorderType:NSNoBorder];
         [sc setHasHorizontalScroller:NO];
@@ -1490,17 +1503,44 @@ private:
                 [NSFont systemFontOfSize:12.0], cSec());
         settingsBridgePortField_ = fieldIn(cv,
             NSMakeRect(kPad + kLblW + kGap + 232, ay - 28.0, 90, 28.0), @"8788", NO);
-        ay -= 42.0;
-        deviceBridgeStatusLabel_ = noteIn(cv,
-            @"Device Bridge optional. Click Recheck before running device_load plans.",
-            NSMakeRect(kPad, ay - 74.0, width - 2*kPad, 74.0),
+        ay -= 40.0;
+
+        labelIn(cv, @"Detected", NSMakeRect(kPad, ay - 28.0, kLblW, 28.0),
+                [NSFont systemFontOfSize:12.0], cSec());
+        settingsBridgeLibraryCandidatesCombo_ = comboIn(cv,
+            NSMakeRect(kPad + kLblW + kGap, ay - 28.0, fldW - 150.0, 28.0), @[]);
+        LlmrEditorTarget *detectedLibraryTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionUseDetectedBridgeLibrary];
+        [targets_ addObject:detectedLibraryTarget];
+        [settingsBridgeLibraryCandidatesCombo_ setTarget:detectedLibraryTarget];
+        [settingsBridgeLibraryCandidatesCombo_ setAction:@selector(performAction:)];
+        [detectedLibraryTarget release];
+        btnIn(cv, NSMakeRect(kPad + kLblW + kGap + fldW - 142.0, ay - 28.0, 142, 28),
+              @"Choose Ableton User Library…", kLlmrEditorActionChooseBridgeUserLibrary);
+        ay -= 38.0;
+
+        settingsBridgeLibraryLabel_ = noteIn(cv,
+            @"Selected Ableton User Library: Not selected",
+            NSMakeRect(kPad, ay - 34.0, width - 2*kPad, 34.0),
             [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 88.0;
+        ay -= 38.0;
+        settingsBridgeInstallTargetLabel_ = noteIn(cv,
+            @"Bridge install target: Not selected",
+            NSMakeRect(kPad, ay - 34.0, width - 2*kPad, 34.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        ay -= 38.0;
+        deviceBridgeStatusLabel_ = noteIn(cv,
+            @"Bridge status: Not installed",
+            NSMakeRect(kPad, ay - 108.0, width - 2*kPad, 108.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        ay -= 118.0;
+
         btnIn(cv, NSMakeRect(kPad, ay - 28.0, 84, 28), @"Recheck", kLlmrEditorActionDeviceBridgeStatus);
-        btnIn(cv, NSMakeRect(kPad + 94, ay - 28.0, 112, 28), @"Install Bridge", kLlmrEditorActionInstallBridge);
-        btnIn(cv, NSMakeRect(kPad + 216, ay - 28.0, 126, 28), @"Open setup help", kLlmrEditorActionOpenBridgeHelp);
-        btnIn(cv, NSMakeRect(kPad + 352, ay - 28.0, 128, 28), @"Copy install path", kLlmrEditorActionCopyBridgeInstallPath);
-        ay -= 44.0;
+        settingsBridgeInstallButton_ = btnIn(cv, NSMakeRect(kPad + 94, ay - 28.0, 132, 28), @"Install / Reinstall Bridge", kLlmrEditorActionInstallBridge);
+        settingsBridgeRevealButton_ = btnIn(cv, NSMakeRect(kPad + 236, ay - 28.0, 138, 28), @"Reveal Installed Bridge", kLlmrEditorActionRevealInstalledBridge);
+        btnIn(cv, NSMakeRect(kPad + 384, ay - 28.0, 124, 28), @"Copy Install Path", kLlmrEditorActionCopyBridgeInstallPath);
+        ay -= 36.0;
+        btnIn(cv, NSMakeRect(kPad, ay - 28.0, 136, 28), @"Open Bridge Setup Help", kLlmrEditorActionOpenBridgeHelp);
+        ay -= 40.0;
 
         SECT(@"Ollama")
         ollamaStatusLabel_ = noteIn(cv,
@@ -1559,6 +1599,8 @@ private:
             [NSFont systemFontOfSize:11.0], cSec());
 
         (void)ay;
+        refreshBridgeLibraryCandidates();
+        refreshBridgePathUI();
 #undef SECT
 #undef ROW_LBL
     }
@@ -1777,6 +1819,8 @@ private:
         if (settingsAdvancedButton_) [settingsAdvancedButton_ setHidden:YES];
         if (settingsBasicButton_) [settingsBasicButton_ setHidden:NO];
         refreshSettingsScreenAfterModeToggle(settingsApiKeyField_);
+        refreshBridgeLibraryCandidates();
+        refreshBridgePathUI();
         checkDeviceBridgeStatus();
         ollamaListModels();
         if (!ollamaOnlineModelsLoaded_) {
@@ -1835,20 +1879,157 @@ private:
 
     NSString *bridgeSetupText()
     {
-        NSString *installPath = userRemoteScriptsPath() ?: @"~/Music/Ableton/User Library/Remote Scripts";
+        NSString *library = bridgeUserLibraryPath_ ? bridgeUserLibraryPath_ : @"";
+        NSString *target = bridgeInstallTargetForUserLibrary(library);
+        if ([target length] == 0) {
+            target = @"Not selected";
+        }
         return [NSString stringWithFormat:
             @"Device Bridge setup\n\n"
-            @"Status: Device Bridge not reachable means the Ableton Remote Script may not be installed, enabled, or running.\n\n"
-            @"Install path:\n%@/LLMRDeviceBridge\n\n"
+            @"How to find your Ableton User Library:\n"
+            @"1. In Live's Browser, right-click User Library.\n"
+            @"2. Choose Show in Finder.\n"
+            @"3. In LLM-r, click Choose Ableton User Library… and select that folder.\n\n"
+            @"Selected User Library:\n%@\n"
+            @"Bridge install target:\n%@\n\n"
             @"Setup steps:\n"
-            @"1. Copy the LLMRDeviceBridge folder into the Remote Scripts folder above.\n"
+            @"1. Click Install / Reinstall Bridge in LLM-r.\n"
             @"2. Restart Ableton Live.\n"
-            @"3. Open Preferences -> Link/Tempo/MIDI.\n"
-            @"4. Set an empty Control Surface slot to LLMRDeviceBridge.\n"
-            @"5. Reopen LLM-r and click Recheck.\n\n"
-            @"Ableton may need a restart, plug-in rescan, or control-surface rescan before the bridge HTTP server appears on 127.0.0.1:8788.\n\n"
-            @"Device Bridge is optional for core AbletonOSC plans. It is required for device_load and browser/device loading.",
-            installPath];
+            @"3. Open Settings -> Link, Tempo & MIDI.\n"
+            @"4. In a Control Surface slot, choose LLMR_Bridge if it appears.\n"
+            @"5. If it does not appear, check Live Log.txt for LLMR, Bridge, RemoteScriptError, Traceback, or ImportError.\n\n"
+            @"The User Library may be on an external SSD. This is supported as long as the drive is mounted before launching Live.\n\n"
+            @"Fallback (documented only, not preferred):\n"
+            @"/Applications/Ableton Live 12 Suite.app/Contents/App-Resources/MIDI Remote Scripts/\n"
+            @"This may require admin permissions and may be overwritten by Ableton updates.\n\n"
+            @"Device Bridge is optional for core AbletonOSC plans and required for device_load/browser loading.",
+            [library length] > 0 ? library : @"Not selected",
+            target];
+    }
+
+    void refreshBridgeLibraryCandidates()
+    {
+        if (!settingsBridgeLibraryCandidatesCombo_) return;
+        NSArray<NSString *> *candidates = detectedUserLibraryCandidates();
+        NSString *preferred = bridgeUserLibraryPath_ ?: @"";
+        setComboItems(settingsBridgeLibraryCandidatesCombo_, candidates, preferred, @"No detected libraries");
+    }
+
+    void refreshBridgePathUI()
+    {
+        NSString *library = bridgeUserLibraryPath_ ? bridgeUserLibraryPath_ : @"";
+        NSString *target = bridgeInstallTargetForUserLibrary(library);
+
+        if (settingsBridgeLibraryLabel_) {
+            [settingsBridgeLibraryLabel_ setStringValue:[NSString stringWithFormat:@"Selected Ableton User Library: %@",
+                [library length] > 0 ? library : @"Not selected"]];
+        }
+        if (settingsBridgeInstallTargetLabel_) {
+            [settingsBridgeInstallTargetLabel_ setStringValue:[NSString stringWithFormat:@"Bridge install target: %@",
+                [target length] > 0 ? target : @"Not selected"]];
+        }
+
+        BOOL hasSelection = [library length] > 0;
+        if (settingsBridgeInstallButton_) [settingsBridgeInstallButton_ setEnabled:hasSelection];
+        if (settingsBridgeRevealButton_) [settingsBridgeRevealButton_ setEnabled:hasSelection];
+
+        NSString *status = bridgeInstallStatusForUserLibrary(library);
+        if (deviceBridgeChecked_ && !deviceBridgeReachable_) {
+            NSString *runtimeState = bridgeInitFileExistsForUserLibrary(library)
+                ? @"Bridge status: Installed but not reachable"
+                : @"Bridge status: Not installed";
+            NSString *reachability =
+                [NSString stringWithFormat:@"\n\n%@\n"
+                @"Device Bridge not reachable.\n"
+                @"Likely causes:\n"
+                @"- The LLM-r Remote Script is not installed in Ableton's active User Library.\n"
+                @"- Live has not been restarted after installation.\n"
+                @"- The Remote Script has not been selected in Live Settings -> Link, Tempo & MIDI.\n"
+                @"- Ableton blocked the script because of an import/runtime error.\n"
+                @"Next actions:\n"
+                @"1. Reveal Installed Bridge\n"
+                @"2. Copy Install Path\n"
+                @"3. Reinstall Bridge\n"
+                @"4. Open Bridge Setup Help\n"
+                @"5. Recheck Bridge", runtimeState];
+            status = [status stringByAppendingString:reachability];
+        } else if (deviceBridgeReachable_) {
+            status = [status stringByAppendingString:@"\n\nBridge status: Reachable"];
+        }
+        if (deviceBridgeStatusLabel_) {
+            [deviceBridgeStatusLabel_ setStringValue:status];
+        }
+    }
+
+    void setBridgeUserLibraryPath(NSString *path, bool persist)
+    {
+        NSString *normalized = normalizedPath(path);
+        [bridgeUserLibraryPath_ release];
+        bridgeUserLibraryPath_ = ([normalized length] > 0) ? [normalized retain] : nil;
+        if (persist) {
+            NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+            if (bridgeUserLibraryPath_) {
+                [d setObject:bridgeUserLibraryPath_ forKey:bridgeUserLibrarySettingsKey()];
+            } else {
+                [d removeObjectForKey:bridgeUserLibrarySettingsKey()];
+            }
+            [d synchronize];
+        }
+        refreshBridgeLibraryCandidates();
+        refreshBridgePathUI();
+    }
+
+    void useDetectedBridgeLibrary()
+    {
+        NSString *selected = controlString(settingsBridgeLibraryCandidatesCombo_);
+        if ([selected length] == 0) {
+            setStatus(@"No detected User Library selected.");
+            return;
+        }
+        setBridgeUserLibraryPath(selected, true);
+        setStatus([NSString stringWithFormat:@"Selected Ableton User Library: %@", selected]);
+    }
+
+    void chooseBridgeUserLibrary()
+    {
+        NSOpenPanel *panel = [NSOpenPanel openPanel];
+        [panel setCanChooseFiles:NO];
+        [panel setCanChooseDirectories:YES];
+        [panel setAllowsMultipleSelection:NO];
+        [panel setCanCreateDirectories:NO];
+        [panel setMessage:@"Select Ableton User Library folder (not Remote Scripts)."];
+        NSString *start = bridgeUserLibraryPath_;
+        if ([start length] == 0) {
+            start = [detectedUserLibraryCandidates() firstObject] ?: @"";
+        }
+        if ([start length] > 0) {
+            [panel setDirectoryURL:[NSURL fileURLWithPath:start]];
+        }
+        NSModalResponse response = [panel runModal];
+        if (response != NSModalResponseOK) return;
+        NSString *selected = normalizedPath([[panel URL] path]);
+        if ([selected length] == 0) return;
+        setBridgeUserLibraryPath(selected, true);
+        setStatus([NSString stringWithFormat:@"Selected Ableton User Library: %@", selected]);
+    }
+
+    void revealInstalledBridge()
+    {
+        NSString *target = bridgeInstallTargetForUserLibrary(bridgeUserLibraryPath_);
+        if ([target length] == 0) {
+            setStatus(@"Choose Ableton User Library first, then reveal install path.");
+            return;
+        }
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *toReveal = [fm fileExistsAtPath:target]
+            ? target
+            : remoteScriptsPathForUserLibrary(bridgeUserLibraryPath_);
+        if (![fm fileExistsAtPath:toReveal]) {
+            setStatus(@"Install target does not exist yet. Choose User Library and install bridge first.");
+            return;
+        }
+        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[[NSURL fileURLWithPath:toReveal]]];
+        setStatus([NSString stringWithFormat:@"Revealed bridge path: %@", toReveal]);
     }
 
     void openHelp()
@@ -1868,7 +2049,17 @@ private:
             @"Safety\n\n"
             @"Dry run does not mutate the Live set. Live execution requires Dry run off. Destructive actions require explicit approval in Advanced Settings.\n\n"
             @"Bridge\n\n"
-            @"AbletonOSC handles core commands. Device Bridge handles browser/device loading. Device Bridge requires its Remote Script to be installed, enabled in Ableton preferences, and reachable.");
+                @"AbletonOSC handles core commands. Device Bridge handles browser/device loading.\n\n"
+                @"How to find your Ableton User Library:\n"
+                @"1. In Live's Browser, right-click User Library.\n"
+                @"2. Choose Show in Finder.\n"
+                @"3. In LLM-r, click Choose Ableton User Library… and select that folder.\n\n"
+                @"After installing the bridge:\n"
+                @"1. Restart Ableton Live.\n"
+                @"2. Open Live Settings -> Link, Tempo & MIDI.\n"
+                @"3. In a Control Surface slot, choose LLMR_Bridge if it appears.\n"
+                @"4. If it does not appear, check Live Log.txt for LLMR, Bridge, RemoteScriptError, Traceback, or ImportError.\n\n"
+                @"The User Library may be on an external SSD. This is supported as long as the drive is mounted before launching Live.");
     }
 
     void openBridgeSetupHelp()
@@ -1878,7 +2069,11 @@ private:
 
     void copyBridgeInstallPath()
     {
-        NSString *path = userRemoteScriptsPath() ?: @"~/Music/Ableton/User Library/Remote Scripts";
+        NSString *path = bridgeInstallTargetForUserLibrary(bridgeUserLibraryPath_);
+        if ([path length] == 0) {
+            setStatus(@"Choose Ableton User Library first, then copy install path.");
+            return;
+        }
         NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
         [pasteboard clearContents];
         [pasteboard setString:path forType:NSPasteboardTypeString];
@@ -1887,21 +2082,37 @@ private:
 
     void installDeviceBridgeFromSettings()
     {
+        NSString *library = bridgeUserLibraryPath_ ? bridgeUserLibraryPath_ : @"";
+        if ([library length] == 0) {
+            setStatus(@"Choose your Ableton User Library first. In Live, right-click User Library in the Browser and choose Show in Finder.");
+            refreshBridgePathUI();
+            return;
+        }
+
+        if (bridgeDoubleNestedForUserLibrary(library)) {
+            NSAlert *warning = [[NSAlert alloc] init];
+            [warning setMessageText:@"Bridge install structure warning"];
+            [warning setInformativeText:@"Bridge appears to be double-nested. Reinstalling will replace it with the correct folder structure."];
+            [warning runModal];
+            [warning release];
+        }
+
         NSString *error = nil;
-        bool ok = installLLMRDeviceBridge(&error);
+        bool ok = installLLMRBridgeToUserLibrary(library, &error);
         NSAlert *done = [[NSAlert alloc] init];
         if (ok) {
             [done setMessageText:@"LLM-r Device Bridge Installed"];
             [done setInformativeText:
-                @"Restart Ableton Live, then open Preferences -> Link/Tempo/MIDI and set a Control Surface slot to LLMRDeviceBridge."];
-            setStatus(@"Device Bridge installed - restart Ableton Live and enable it.");
+                @"Bridge files are installed. Restart Ableton Live and select LLMR_Bridge in Live Settings if it appears."];
+            setStatus(@"Bridge files installed on disk. Restart Live and select LLMR_Bridge in Settings -> Link, Tempo & MIDI.");
         } else {
             [done setMessageText:@"Device Bridge Installation Failed"];
-            [done setInformativeText:error ?: @"Could not install LLMRDeviceBridge."];
+            [done setInformativeText:error ?: @"Could not install LLMR_Bridge."];
             setStatus(@"Device Bridge installation failed.");
         }
         [done runModal];
         [done release];
+        refreshBridgePathUI();
     }
 
     void appendToChat(NSString *role, NSString *text)
@@ -1949,6 +2160,7 @@ private:
         if (port <= 0) port = 11000;
         NSString *bridgeHost = [d stringForKey:@"llmr.vst3.bridge_host"] ?: @"127.0.0.1";
         NSInteger bridgePort = [d integerForKey:@"llmr.vst3.bridge_port"];
+        NSString *bridgeUserLibrary = normalizedPath([d stringForKey:bridgeUserLibrarySettingsKey()] ?: @"");
         if (bridgePort <= 0) bridgePort = 8788;
         deviceBridgePort_ = static_cast<int>(bridgePort);
         selectComboValue(settingsProviderCombo_, prov);
@@ -1959,6 +2171,7 @@ private:
         [settingsOscPortField_  setStringValue:[NSString stringWithFormat:@"%ld", (long)port]];
         [settingsBridgeHostField_ setStringValue:bridgeHost];
         [settingsBridgePortField_ setStringValue:[NSString stringWithFormat:@"%ld", (long)bridgePort]];
+        setBridgeUserLibraryPath(bridgeUserLibrary, false);
         bool extraOn = [d objectForKey:@"llmr.vst3.extra_prompt_enabled"]
                        ? [d boolForKey:@"llmr.vst3.extra_prompt_enabled"] : true;
         bool dryOn   = [d objectForKey:@"llmr.vst3.dry_run"]
@@ -2097,6 +2310,11 @@ private:
         [d setInteger:[controlString(settingsOscPortField_) integerValue] forKey:@"llmr.vst3.osc_port"];
         [d setObject:controlString(settingsBridgeHostField_) forKey:@"llmr.vst3.bridge_host"];
         [d setInteger:[controlString(settingsBridgePortField_) integerValue] forKey:@"llmr.vst3.bridge_port"];
+        if (bridgeUserLibraryPath_ && [bridgeUserLibraryPath_ length] > 0) {
+            [d setObject:bridgeUserLibraryPath_ forKey:bridgeUserLibrarySettingsKey()];
+        } else {
+            [d removeObjectForKey:bridgeUserLibrarySettingsKey()];
+        }
         [d setBool:buttonOn(settingsExtraPromptButton_) forKey:@"llmr.vst3.extra_prompt_enabled"];
         [d setBool:buttonOn(settingsDestructiveButton_) forKey:@"llmr.vst3.allow_destructive"];
         [d setBool:buttonOn(settingsDryRunButton_)      forKey:@"llmr.vst3.dry_run"];
@@ -2843,16 +3061,32 @@ private:
                 BOOL ok = (code >= 200 && code < 300 && !error);
                 NSString *host = deviceBridgeHost();
                 int port = deviceBridgePort();
-                NSString *installPath = userRemoteScriptsPath() ?: @"~/Music/Ableton/User Library/Remote Scripts";
+                NSString *library = bridgeUserLibraryPath_ ? bridgeUserLibraryPath_ : @"";
+                NSString *target = bridgeInstallTargetForUserLibrary(library);
+                NSString *diskState = bridgeInstallStatusForUserLibrary(library);
                 NSString *status = ok
                     ? [NSString stringWithFormat:@"Device Bridge reachable on %@:%d%@%@.",
                        host, port, [bridge length] ? @" - " : @"", bridge ?: @""]
                     : [NSString stringWithFormat:
                        @"Device Bridge not reachable\n"
-                       @"Likely cause: The Ableton Remote Script may not be installed, enabled, or running.\n"
-                       @"Install path: %@\n"
-                       @"Enable in Ableton Preferences -> Link/Tempo/MIDI -> Control Surface: LLMRDeviceBridge, then restart/rescan if needed. %@",
-                       installPath,
+                       @"Likely causes:\n"
+                       @"- The LLM-r Remote Script is not installed in Ableton's active User Library.\n"
+                       @"- Live has not been restarted after installation.\n"
+                       @"- The Remote Script has not been selected in Live Settings -> Link, Tempo & MIDI.\n"
+                       @"- Ableton blocked the script because of an import/runtime error.\n"
+                       @"Selected User Library: %@\n"
+                       @"Install target: %@\n"
+                       @"%@\n"
+                       @"Next actions:\n"
+                       @"1. Reveal Installed Bridge\n"
+                       @"2. Copy Install Path\n"
+                       @"3. Reinstall Bridge\n"
+                       @"4. Open Bridge Setup Help\n"
+                       @"5. Recheck Bridge\n"
+                       @"Bridge files are installed only on disk; Live selection is a separate step. %@",
+                       [library length] > 0 ? library : @"Not selected",
+                       [target length] > 0 ? target : @"Not selected",
+                       diskState,
                        error ?: @""];
                 __block NSString *rs = [status retain];
                 __block BOOL rok = ok;
@@ -2860,6 +3094,7 @@ private:
                     deviceBridgeChecked_ = true;
                     deviceBridgeReachable_ = rok;
                     if (deviceBridgeStatusLabel_) [deviceBridgeStatusLabel_ setStringValue:rs];
+                    refreshBridgePathUI();
                     refreshReadinessGuidance();
                     setStatus(rs);
                     [rs release];
@@ -3060,7 +3295,7 @@ private:
                         if (code < 200 || code >= 300 || err) {
                             blocked = true;
                             [report appendFormat:@"BLOCKED Device Bridge preflight failed on %@:%d. %@\n",
-                                deviceBridgeHost(), deviceBridgePort(), err ?: @"Enable LLMRDeviceBridge in Ableton Live."];
+                                deviceBridgeHost(), deviceBridgePort(), err ?: @"Enable LLMR_Bridge in Ableton Live."];
                         }
                         if (!blocked) {
                             for (NSUInteger actionIndex = 0; actionIndex < [runtimeActions count]; ++actionIndex) {
@@ -3911,73 +4146,121 @@ private:
         }
     }
 
-    // Return all candidate paths where Live might scan for user Remote Scripts.
-    // Live 10/11/12 all accept ~/Music/Ableton/User Library/Remote Scripts/.
-    // Live 12 also scans the versioned Preferences folder when the User Library
-    // has been relocated.  We return every candidate so install/check can cover
-    // all of them.
-    static NSArray<NSString *> *userRemoteScriptsCandidates()
+    static NSString *bridgeFolderName()
     {
-        NSMutableArray *paths = [NSMutableArray array];
+        return @"LLMR_Bridge";
+    }
 
-        // 1. Standard User Library path (Live 10/11/12 default).
+    static NSString *legacyBridgeFolderName()
+    {
+        return @"LLMRDeviceBridge";
+    }
+
+    static NSString *bridgeUserLibrarySettingsKey()
+    {
+        return @"llmr.vst3.bridge_user_library_path";
+    }
+
+    static NSString *normalizedPath(NSString *path)
+    {
+        NSString *raw = path ?: @"";
+        NSString *trimmed = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([trimmed length] == 0) return @"";
+        return [trimmed stringByStandardizingPath];
+    }
+
+    static NSString *remoteScriptsPathForUserLibrary(NSString *userLibraryPath)
+    {
+        NSString *library = normalizedPath(userLibraryPath);
+        if ([library length] == 0) return @"";
+        return [library stringByAppendingPathComponent:@"Remote Scripts"];
+    }
+
+    static NSString *bridgeInstallTargetForUserLibrary(NSString *userLibraryPath)
+    {
+        NSString *scripts = remoteScriptsPathForUserLibrary(userLibraryPath);
+        if ([scripts length] == 0) return @"";
+        return [scripts stringByAppendingPathComponent:bridgeFolderName()];
+    }
+
+    static NSString *bridgeInitPathForUserLibrary(NSString *userLibraryPath)
+    {
+        NSString *target = bridgeInstallTargetForUserLibrary(userLibraryPath);
+        if ([target length] == 0) return @"";
+        return [target stringByAppendingPathComponent:@"__init__.py"];
+    }
+
+    static NSString *bridgeDoubleNestedInitPathForUserLibrary(NSString *userLibraryPath)
+    {
+        NSString *target = bridgeInstallTargetForUserLibrary(userLibraryPath);
+        if ([target length] == 0) return @"";
+        return [[target stringByAppendingPathComponent:bridgeFolderName()] stringByAppendingPathComponent:@"__init__.py"];
+    }
+
+    static void addDetectedLibraryCandidate(NSMutableArray<NSString *> *paths, NSString *candidate)
+    {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *normalized = normalizedPath(candidate);
+        if ([normalized length] == 0) return;
+        BOOL isDir = NO;
+        if (![fm fileExistsAtPath:normalized isDirectory:&isDir] || !isDir) return;
+        if (![paths containsObject:normalized]) {
+            [paths addObject:normalized];
+        }
+    }
+
+    static NSArray<NSString *> *detectedUserLibraryCandidates()
+    {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSMutableArray<NSString *> *paths = [NSMutableArray array];
+
         NSString *music = [NSSearchPathForDirectoriesInDomains(NSMusicDirectory, NSUserDomainMask, YES) firstObject];
         if ([music length] == 0) {
             music = [NSHomeDirectory() stringByAppendingPathComponent:@"Music"];
         }
-        NSString *userLibPath = [[music stringByAppendingPathComponent:@"Ableton/User Library"]
-            stringByAppendingPathComponent:@"Remote Scripts"];
-        [paths addObject:userLibPath];
+        addDetectedLibraryCandidate(paths, [music stringByAppendingPathComponent:@"Ableton/User Library"]);
 
-        // 2. Try to read Live's own preferences to find a relocated User Library.
-        NSString *prefsRoot = [NSHomeDirectory() stringByAppendingPathComponent:
-            @"Library/Preferences/Ableton"];
-        NSFileManager *fm = [NSFileManager defaultManager];
-        NSArray *liveVersionDirs = [fm contentsOfDirectoryAtPath:prefsRoot error:nil];
-        // Sort descending so the newest Live version is tried first.
-        liveVersionDirs = [liveVersionDirs sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
-            return [b compare:a options:NSNumericSearch];
-        }];
-        for (NSString *versionDir in liveVersionDirs) {
-            if (![versionDir hasPrefix:@"Live "]) continue;
-            NSString *prefFile = [prefsRoot stringByAppendingPathComponent:
-                [versionDir stringByAppendingPathComponent:@"Preferences.cfg"]];
-            NSString *prefContents = [NSString stringWithContentsOfFile:prefFile
-                encoding:NSUTF8StringEncoding error:nil];
-            // Look for a UserLibraryPath entry in the flat preferences file.
-            if (prefContents) {
-                for (NSString *line in [prefContents componentsSeparatedByString:@"\n"]) {
-                    NSString *trimmed = [line stringByTrimmingCharactersInSet:
-                        [NSCharacterSet whitespaceCharacterSet]];
-                    if ([trimmed hasPrefix:@"UserLibraryPath"]) {
-                        NSArray *parts = [trimmed componentsSeparatedByString:@" "];
-                        NSString *libPath = parts.count >= 2 ? parts.lastObject : nil;
-                        if ([libPath length] > 0) {
-                            NSString *candidate = [libPath
-                                stringByAppendingPathComponent:@"Remote Scripts"];
-                            if (![paths containsObject:candidate]) {
-                                [paths addObject:candidate];
-                            }
-                        }
-                        break;
+        NSString *volumesRoot = @"/Volumes";
+        NSArray<NSString *> *volumes = [fm contentsOfDirectoryAtPath:volumesRoot error:nil] ?: @[];
+        for (NSString *volume in volumes) {
+            NSString *root = [volumesRoot stringByAppendingPathComponent:volume];
+            BOOL isDir = NO;
+            if (![fm fileExistsAtPath:root isDirectory:&isDir] || !isDir) continue;
+
+            addDetectedLibraryCandidate(paths, [root stringByAppendingPathComponent:@"Ableton/User Library"]);
+
+            NSArray<NSString *> *firstLevel = [fm contentsOfDirectoryAtPath:root error:nil] ?: @[];
+            for (NSString *a in firstLevel) {
+                NSString *aPath = [root stringByAppendingPathComponent:a];
+                if (![fm fileExistsAtPath:aPath isDirectory:&isDir] || !isDir) continue;
+                NSArray<NSString *> *secondLevel = [fm contentsOfDirectoryAtPath:aPath error:nil] ?: @[];
+                for (NSString *b in secondLevel) {
+                    NSString *bPath = [aPath stringByAppendingPathComponent:b];
+                    if (![fm fileExistsAtPath:bPath isDirectory:&isDir] || !isDir) continue;
+                    NSString *lowerA = [a lowercaseString];
+                    NSString *lowerB = [b lowercaseString];
+                    if ([lowerA containsString:@"ableton"] && [lowerB containsString:@"user library"]) {
+                        addDetectedLibraryCandidate(paths, bPath);
                     }
                 }
             }
-            // Also add the versioned Preferences Remote Scripts folder as fallback.
-            NSString *prefScripts = [prefsRoot stringByAppendingPathComponent:
-                [versionDir stringByAppendingPathComponent:@"Remote Scripts"]];
-            if (![paths containsObject:prefScripts]) {
-                [paths addObject:prefScripts];
+
+            NSDirectoryEnumerator *enumerator = [fm enumeratorAtURL:[NSURL fileURLWithPath:root]
+                                          includingPropertiesForKeys:@[NSURLIsDirectoryKey, NSURLPathKey]
+                                                             options:NSDirectoryEnumerationSkipsHiddenFiles
+                                                        errorHandler:nil];
+            for (NSURL *entry in enumerator) {
+                NSNumber *isDirectory = nil;
+                [entry getResourceValue:&isDirectory forKey:NSURLIsDirectoryKey error:nil];
+                if (![isDirectory boolValue]) continue;
+                NSString *last = [[entry path] lastPathComponent];
+                if ([last isEqualToString:@"Remote Scripts"]) {
+                    addDetectedLibraryCandidate(paths, [[entry path] stringByDeletingLastPathComponent]);
+                }
             }
         }
 
         return paths;
-    }
-
-    static NSString *userRemoteScriptsPath()
-    {
-        // Primary path – the standard User Library location.
-        return [userRemoteScriptsCandidates() firstObject];
     }
 
     NSString *llmrDeviceBridgeInstallSource()
@@ -4000,54 +4283,94 @@ private:
         return nil;
     }
 
-    bool llmrDeviceBridgeInstalled()
+    bool bridgeFolderExistsAtPath(NSString *path)
     {
-        NSFileManager *fm = [NSFileManager defaultManager];
         BOOL isDir = NO;
-        for (NSString *scriptsPath in userRemoteScriptsCandidates()) {
-            NSString *dst = [scriptsPath stringByAppendingPathComponent:@"LLMRDeviceBridge"];
-            if ([fm fileExistsAtPath:dst isDirectory:&isDir] && isDir) {
-                return true;
-            }
-        }
-        return false;
+        return [[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&isDir] && isDir;
     }
 
-    bool installLLMRDeviceBridge(NSString **errorText)
+    bool bridgeInitFileExistsForUserLibrary(NSString *userLibraryPath)
     {
+        return [[NSFileManager defaultManager] fileExistsAtPath:bridgeInitPathForUserLibrary(userLibraryPath)];
+    }
+
+    bool bridgeDoubleNestedForUserLibrary(NSString *userLibraryPath)
+    {
+        return [[NSFileManager defaultManager] fileExistsAtPath:bridgeDoubleNestedInitPathForUserLibrary(userLibraryPath)];
+    }
+
+    NSString *bridgeInstallStatusForUserLibrary(NSString *userLibraryPath)
+    {
+        NSString *library = normalizedPath(userLibraryPath);
+        if ([library length] == 0) {
+            return @"Bridge status: Not installed\nChoose your Ableton User Library first. In Live, right-click User Library in the Browser and choose Show in Finder.";
+        }
+        if (bridgeInitFileExistsForUserLibrary(library)) {
+            return @"Bridge status: Installed";
+        }
+        if (bridgeDoubleNestedForUserLibrary(library)) {
+            return @"Bridge status: Installed but invalid structure\nBridge appears to be double-nested. Reinstalling will replace it with the correct folder structure.";
+        }
+        return @"Bridge status: Not installed";
+    }
+
+    bool installLLMRBridgeToUserLibrary(NSString *userLibraryPath, NSString **errorText)
+    {
+        NSString *library = normalizedPath(userLibraryPath);
+        if ([library length] == 0) {
+            if (errorText) *errorText = @"Choose your Ableton User Library first.";
+            return false;
+        }
+
         NSString *src = llmrDeviceBridgeInstallSource();
         if (!src) {
             if (errorText) *errorText = @"Bundled LLMRDeviceBridge Remote Script was not found.";
             return false;
         }
-        // Install to all candidate paths so the script appears regardless of
-        // which path the installed Live version actually scans.
+
         NSFileManager *fm = [NSFileManager defaultManager];
-        NSArray *candidates = userRemoteScriptsCandidates();
-        NSString *lastError = nil;
-        bool anyOk = false;
-        for (NSString *scriptsPath in candidates) {
-            NSString *dst = [scriptsPath stringByAppendingPathComponent:@"LLMRDeviceBridge"];
-            NSError *err = nil;
-            if ([fm fileExistsAtPath:dst]) {
-                anyOk = true;
-                continue;
-            }
-            if (![fm createDirectoryAtPath:scriptsPath withIntermediateDirectories:YES
-                    attributes:nil error:&err]) {
-                lastError = [err localizedDescription];
-                continue;
-            }
-            if ([fm copyItemAtPath:src toPath:dst error:&err]) {
-                anyOk = true;
-            } else {
-                lastError = [err localizedDescription];
+        NSString *scriptsPath = remoteScriptsPathForUserLibrary(library);
+        NSString *target = bridgeInstallTargetForUserLibrary(library);
+        NSString *legacy = [scriptsPath stringByAppendingPathComponent:legacyBridgeFolderName()];
+        NSError *err = nil;
+
+        if (![fm createDirectoryAtPath:scriptsPath withIntermediateDirectories:YES attributes:nil error:&err]) {
+            if (errorText) *errorText = [err localizedDescription] ?: @"Could not create Remote Scripts directory.";
+            return false;
+        }
+
+        if ([fm fileExistsAtPath:target]) {
+            if (![fm removeItemAtPath:target error:&err]) {
+                if (errorText) *errorText = [err localizedDescription] ?: @"Could not replace existing bridge install.";
+                return false;
             }
         }
-        if (!anyOk && errorText) {
-            *errorText = lastError ?: @"Could not install LLMRDeviceBridge to any Remote Scripts path.";
+        if (bridgeDoubleNestedForUserLibrary(library)) {
+            [fm removeItemAtPath:[target stringByAppendingPathComponent:bridgeFolderName()] error:nil];
         }
-        return anyOk;
+        if ([fm fileExistsAtPath:legacy]) {
+            [fm removeItemAtPath:legacy error:nil];
+        }
+
+        if (![fm copyItemAtPath:src toPath:target error:&err]) {
+            if (errorText) *errorText = [err localizedDescription] ?: @"Could not copy bridge files to selected User Library.";
+            return false;
+        }
+        if (!bridgeInitFileExistsForUserLibrary(library)) {
+            if (errorText) *errorText = @"Installed bridge folder is missing __init__.py.";
+            return false;
+        }
+        return true;
+    }
+
+    bool llmrBridgeInstalledAnywhere()
+    {
+        for (NSString *library in detectedUserLibraryCandidates()) {
+            if (bridgeInitFileExistsForUserLibrary(library)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     void checkLLMRDeviceBridgeOnFirstUse()
@@ -4055,8 +4378,14 @@ private:
         static bool s_checked = false;
         if (s_checked) return;
         s_checked = true;
-        if (llmrDeviceBridgeInstalled()) return;
+        if (llmrBridgeInstalledAnywhere()) return;
         if (!llmrDeviceBridgeInstallSource()) return;
+
+        NSString *selectedLibrary = normalizedPath([[NSUserDefaults standardUserDefaults] stringForKey:bridgeUserLibrarySettingsKey()]);
+        if ([selectedLibrary length] == 0) {
+            setStatus(@"Choose your Ableton User Library in Advanced Settings before installing Bridge.");
+            return;
+        }
 
         NSAlert *alert = [[NSAlert alloc] init];
         [alert setMessageText:@"LLM-r Device Bridge Not Found"];
@@ -4064,7 +4393,7 @@ private:
             @"Loading instruments, audio effects, MIDI effects, and plug-ins requires "
             @"the LLM-r Device Bridge Remote Script.\n\n"
             @"Install it now? After installing, restart Ableton Live and enable "
-            @"LLMRDeviceBridge in an empty Control Surface slot."];
+            @"LLMR_Bridge in an empty Control Surface slot."];
         [alert addButtonWithTitle:@"Install Device Bridge"];
         [alert addButtonWithTitle:@"Not Now"];
         [alert setAlertStyle:NSAlertStyleInformational];
@@ -4074,17 +4403,17 @@ private:
         if (resp != NSAlertFirstButtonReturn) return;
 
         NSString *error = nil;
-        bool ok = installLLMRDeviceBridge(&error);
+        bool ok = installLLMRBridgeToUserLibrary(selectedLibrary, &error);
         NSAlert *done = [[NSAlert alloc] init];
         if (ok) {
             [done setMessageText:@"LLM-r Device Bridge Installed"];
             [done setInformativeText:
                 @"Restart Ableton Live, then open Preferences -> Link/Tempo/MIDI "
-                @"and set a Control Surface slot to LLMRDeviceBridge."];
+                @"and set a Control Surface slot to LLMR_Bridge."];
             setStatus(@"Device Bridge installed - restart Ableton Live and enable it.");
         } else {
             [done setMessageText:@"Device Bridge Installation Failed"];
-            [done setInformativeText:error ?: @"Could not install LLMRDeviceBridge."];
+            [done setInformativeText:error ?: @"Could not install LLMR_Bridge."];
             setStatus(@"Device Bridge installation failed.");
         }
         [done runModal];
@@ -4237,6 +4566,11 @@ private:
     NSTextField *settingsOscPortField_{nullptr};
     NSTextField *settingsBridgeHostField_{nullptr};
     NSTextField *settingsBridgePortField_{nullptr};
+    NSPopUpButton *settingsBridgeLibraryCandidatesCombo_{nullptr};
+    NSTextField *settingsBridgeLibraryLabel_{nullptr};
+    NSTextField *settingsBridgeInstallTargetLabel_{nullptr};
+    NSButton *settingsBridgeInstallButton_{nullptr};
+    NSButton *settingsBridgeRevealButton_{nullptr};
     NSButton *settingsExtraPromptButton_{nullptr};
     NSButton *settingsDestructiveButton_{nullptr};
     NSButton *settingsDryRunButton_{nullptr};
@@ -4255,6 +4589,7 @@ private:
     bool ollamaOnlineLoadInFlight_{false};
     bool deviceBridgeChecked_{false};
     bool deviceBridgeReachable_{false};
+    NSString *bridgeUserLibraryPath_{nullptr};
 
     // Local Remote Script bridge for browser/device loading.
     int deviceBridgePort_{8788};

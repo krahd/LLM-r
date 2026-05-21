@@ -39,7 +39,14 @@ You configure the provider and model in LLM-r; Modelito handles the connection t
 6. Keep **Dry run** enabled and click **Test readiness**.
 7. For cloud providers, open **Advanced Settings** and enter the API key.
 8. Confirm the AbletonOSC host and port. The default is `127.0.0.1:11000`.
-9. If you want device loading, use **Install Bridge** if needed, restart Live, enable `LLMRDeviceBridge` in a Control Surface slot, then click **Recheck**.
+9. If you want device loading:
+  - in Live's Browser, right-click **User Library** and choose **Show in Finder**
+  - in LLM-r Advanced Settings -> Device Bridge, click **Choose Ableton User Library...** and select that folder
+  - click **Install / Reinstall Bridge**
+  - restart Live
+  - in Live Settings -> Link, Tempo & MIDI -> Control Surface, choose `LLMR_Bridge` if it appears
+  - click **Recheck**
+  - if it does not appear, check Live `Log.txt` for `LLMR`, `Bridge`, `RemoteScriptError`, `Traceback`, or `ImportError`
 10. Click **Save**.
 11. Run one safe prompt, click **Plan**, review **Plan** and **Details**, then click **Execute** while Dry run is still enabled.
 
@@ -223,7 +230,7 @@ Advanced Settings contains fields that are not needed for every request:
 - provider API key
 - LLM-r guidance prompt toggle
 - AbletonOSC host and port
-- Device Bridge host/port, install, setup help, copy install path, and recheck actions
+- Device Bridge host/port, User Library selection, install/reinstall, reveal/copy install path, setup help, and recheck actions
 - Ollama service and model controls
 - oMLX release note/status; full oMLX runtime controls remain in PyQt
 - destructive-action approval
@@ -374,23 +381,34 @@ Start Ollama first. Then click **Refresh Online**, choose a model, and click **D
 
 ### Ableton does not change
 
-Check that AbletonOSC is installed, active, and listening on the host/port shown in Advanced Settings. If the failed step is `device_load`, also check that LLMRDeviceBridge is enabled in a Control Surface slot after restarting Live. A `409` or ambiguous-candidate error means the browser query needs a more specific device name, preset query, or candidate path. Keep **Dry run** off when you actually want to execute.
+Check that AbletonOSC is installed, active, and listening on the host/port shown in Advanced Settings. If the failed step is `device_load`, also check that `LLMR_Bridge` is installed in the active User Library and enabled in a Control Surface slot after restarting Live. A `409` or ambiguous-candidate error means the browser query needs a more specific device name, preset query, or candidate path. Keep **Dry run** off when you actually want to execute.
 
 ### Device Bridge not reachable
 
 The VST3 Advanced Settings Bridge area shows this status when the local Remote
-Script HTTP server does not answer. Likely causes are that `LLMRDeviceBridge` is
-not installed, Ableton has not been restarted, or the script has not been
-selected in a Control Surface slot.
+Script HTTP server does not answer. It now distinguishes disk install status
+from runtime reachability and shows both the selected User Library path and the
+exact install target.
+
+Likely causes are that `LLMR_Bridge` is not installed in Ableton's active User
+Library, Live has not been restarted, the script is not selected in a Control
+Surface slot, or Live blocked the script due to an import/runtime error.
 
 Use the VST3 actions:
 
-- **Install Bridge**: copies the bundled `LLMRDeviceBridge` folder into Ableton Remote Scripts candidates.
-- **Copy install path**: copies the primary Remote Scripts folder path.
+- **Choose Ableton User Library...**: select the actual Ableton User Library folder (internal or external SSD).
+- **Install / Reinstall Bridge**: installs to `<User Library>/Remote Scripts/LLMR_Bridge`.
+- **Reveal Installed Bridge**: opens Finder at the installed bridge folder.
+- **Copy Install Path**: copies the exact bridge folder path.
 - **Open setup help**: shows the setup steps inside the plug-in.
 - **Recheck**: tests the configured Bridge host/port again.
 
-The default install location is `~/Music/Ableton/User Library/Remote Scripts/LLMRDeviceBridge`. After copying, restart Ableton Live, open Preferences -> Link/Tempo/MIDI, set an empty Control Surface slot to `LLMRDeviceBridge`, and rescan/restart if Live still does not start the bridge.
+The User Library may be on an external SSD. This is supported as long as the drive is mounted before launching Live.
+
+After installation, restart Ableton Live, open Settings -> Link, Tempo & MIDI,
+set an empty Control Surface slot to `LLMR_Bridge` if present, and rescan/restart
+if Live still does not start the bridge. If `LLMR_Bridge` does not appear,
+inspect Live `Log.txt` for `LLMR`, `Bridge`, `RemoteScriptError`, `Traceback`, or `ImportError`.
 
 ### I still see an older UI
 

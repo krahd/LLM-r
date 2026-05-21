@@ -78,10 +78,26 @@ LLMRDeviceBridge Remote Script on `127.0.0.1:8788` before executing plans that
 include `device_load`. Non-dry-run execution also asks the bridge to resolve
 each selected device, preset, or browser path before any OSC mutation is sent.
 
-When Bridge is unreachable, the VST3 shows the likely cause, the Remote Scripts
-install path, and recovery actions: **Install Bridge**, **Copy install path**,
-**Open setup help**, and **Recheck**. Device Bridge is optional for normal
-AbletonOSC plans and required for browser/device loading.
+Bridge install is now user-library-selected, not hard-coded. In Device Bridge:
+
+- click **Choose Ableton User Library...** and select the folder shown by Live
+  Browser -> right-click User Library -> Show in Finder
+- click **Install / Reinstall Bridge**
+- restart Live
+- set Control Surface to `LLMR_Bridge` in Settings -> Link, Tempo & MIDI
+- click **Recheck**
+
+The VST3 shows:
+
+- selected Ableton User Library path
+- bridge install target (`<User Library>/Remote Scripts/LLMR_Bridge`)
+- bridge status on disk vs runtime reachability
+
+Recovery actions include **Reveal Installed Bridge**, **Copy Install Path**,
+**Install / Reinstall Bridge**, **Open Bridge Setup Help**, and **Recheck**.
+External SSD User Libraries are supported when the drive is mounted before Live starts.
+If `LLMR_Bridge` does not appear in Live, check Live `Log.txt` for `LLMR`,
+`Bridge`, `RemoteScriptError`, `Traceback`, or `ImportError`.
 
 ### Advanced Ollama (local models)
 

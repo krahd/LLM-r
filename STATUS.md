@@ -1,6 +1,6 @@
 # STATUS — LLM-r 0.6.9 release candidate
 
-Last updated: 2026-05-21 01:07
+Last updated: 2026-05-21 01:42
 
 ## Snapshot
 - Version: `0.6.9`
@@ -23,8 +23,9 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 ### VST3 plug-in
 - Supports provider/model selection (`openai`, `anthropic`, `google`, `ollama`, `omlx`, `custom`), prompt input, Plan/Details tabs, dry-run, auto-approve, destructive approval, Device Bridge checks, Save/Cancel settings, and Ollama controls in Advanced Settings.
 - Prompt 15 follow-up fixes: main-screen readiness labels now show a green/red icon plus plain white text without chip backgrounds/borders; Advanced Settings horizontal scrolling is further suppressed (elastic horizontal scroll disabled) and minimum editor width is increased to avoid horizontal squeeze; Basic/Advanced toggle now refreshes layout/focus immediately so controls in the newly shown panel respond without requiring mouse movement.
+- Prompt 16 bridge installer repair: VST3 no longer treats `~/Music/Ableton/User Library` as install authority; Advanced Settings now requires selecting/confirming the actual Ableton User Library, persists that choice (`llmr.vst3.bridge_user_library_path`), installs bridge files to `<User Library>/Remote Scripts/LLMR_Bridge`, validates `__init__.py`, detects double-nesting, exposes Reveal/Copy/Recheck/Help recovery actions, and shows explicit selected/target/status lines with reachability guidance.
 - Deliberately does not yet include the PyQt/web readiness strip (`GET /api/readiness`) or a full oMLX management tab.
-- Manual validation still needed before tag: real AbletonOSC smoke pass, Device Bridge candidate-resolution pass, and local-runtime smoke checks.
+- Manual validation still needed before tag: real AbletonOSC smoke pass, Prompt 16 VST3 bridge path-selection/install/reachability retest in Ableton (including relocated/external User Library), Device Bridge candidate-resolution pass, and local-runtime smoke checks.
 
 ### PyQt GUI
 - Supports embedded mode and HTTP-attached mode.
@@ -130,7 +131,7 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 
 ## 0.6.9 release blockers
 - Complete real AbletonOSC smoke test on a disposable session and record outcomes.
-- Complete Device Bridge install/load/resolve validation in a real Ableton session.
+- Complete Device Bridge install/load/resolve validation in a real Ableton session, including Prompt 16 path picker flow (`Choose Ableton User Library...`, `Install / Reinstall Bridge`, `Reveal Installed Bridge`, `Copy Install Path`, `Recheck`) and `LLMR_Bridge` Control Surface selection after restart.
 - Complete real Ollama runtime smoke test on the release target machine.
 - Complete real oMLX runtime smoke test on the release target machine.
 - Complete manual web and PyQt smoke passes on the release candidate build.
@@ -145,4 +146,4 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 7. Readiness/oMLX parity decision for VST3.
 8. Packaging/signing/notarisation if needed.
 
-Last updated: 2026-05-21 01:07
+Last updated: 2026-05-21 01:42
