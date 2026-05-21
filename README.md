@@ -39,7 +39,7 @@ Natural language prompt in the VST3
 - **Session history** — plans, executions, and sessions are persisted to disk and survive restarts
 - **SSE streaming** — `POST /api/stream` for streaming LLM completions
 - **Desktop GUI** — optional PyQt6 companion app with embedded mode, onboarding, server attach/start controls, readiness display, and local-runtime management tabs
-- **Web UI** — optional browser companion with readiness chips, Plan Board, run log, and details view
+- **Web UI** — optional browser companion with readiness chips, Active Model display, a compact basic provider/model editor, Plan Board, run log, and details view
 - **Multi-provider LLM support** — use cloud or local models from the appropriate surface; local runtimes (Ollama and oMLX) are mediated by [Modelito](docs/MODELITO.md)
 
 ---
@@ -131,8 +131,14 @@ Configure via environment variables (see [Configuration](#configuration)) before
 
 When the FastAPI server is running, open `http://127.0.0.1:8787` for a compact
 browser companion. It is useful for remote/local browser access, readiness
-checks, prompt testing, plan review, and manual execution outside Ableton's
-plug-in window.
+checks, prompt testing, plan review, manual execution outside Ableton's
+plug-in window, and basic provider/model changes for ordinary local setup.
+
+The web UI intentionally stays narrow in scope: it can edit the active
+provider/model pair, and displays read-only local runtime status (Ollama and oMLX
+installation/running state, local model count, and currently served model count);
+PyQt remains the full setup surface for API keys, Ollama/oMLX service management,
+model download/serve/delete, and AbletonOSC configuration.
 
 ### First run
 
@@ -141,12 +147,15 @@ Use this sequence on a new install:
 1. Choose a provider and model.
 2. Keep **Dry run** enabled.
 3. Check readiness before trusting live execution.
-  - In PyQt or web UI, read the readiness status directly.
-  - In headless mode, call `GET /api/readiness`.
-  - In the VST3, confirm your provider/API key settings and run a dry run first; the plug-in does not yet show the same readiness strip as the companion surfaces.
-4. Try a safe prompt such as `Set the tempo to 120 BPM` or `Create one MIDI track named Ideas`.
-5. Review the plan before executing.
-6. Execute only after the plan looks correct and any destructive steps are intentional.
+
+Readiness checks:
+In PyQt or web UI, read the readiness status directly.
+In headless mode, call `GET /api/readiness`.
+In the VST3, confirm your provider/API key settings and run a dry run first; the plug-in does not yet show the same readiness strip as the companion surfaces.
+
+1. Try a safe prompt such as `Set the tempo to 120 BPM` or `Create one MIDI track named Ideas`.
+2. Review the plan before executing.
+3. Execute only after the plan looks correct and any destructive steps are intentional.
 
 ### Try these first
 

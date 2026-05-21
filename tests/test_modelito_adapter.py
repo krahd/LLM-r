@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from llmr import modelito_adapter
 from llmr.modelito_adapter import ModelitoClient, _clean_model_names
 
@@ -56,7 +58,88 @@ def test_omlx_missing_method_returns_clear_error(monkeypatch):
 
     payload = modelito_adapter.omlx_local_models()
     assert payload["ok"] is False
-    assert "Modelito does not expose" in payload["message"]
+    assert payload["runtime"] == "omlx"
+    assert payload["operation"] == "list-local-models"
+    assert "LLM-r tried:" in payload["message"]
+    assert "Modelito version" in payload["message"]
+    assert payload["models"] == []
+
+
+@pytest.mark.parametrize(
+    ("operation", "candidates", "call"),
+    [
+        (
+            "list-local-models",
+            ["list_local_omlx_models", "list_local_models_omlx", "list_omlx_models"],
+            lambda: modelito_adapter.omlx_local_models(),
+        ),
+        (
+            "list-remote-models",
+            ["list_remote_omlx_models", "list_omlx_remote_models", "list_available_omlx_models"],
+            lambda: modelito_adapter.omlx_remote_models(),
+        ),
+        (
+            "start",
+            ["start_omlx", "start_omlx_service"],
+            lambda: modelito_adapter.omlx_start(),
+        ),
+        (
+            "stop",
+            ["stop_omlx", "stop_omlx_service"],
+            lambda: modelito_adapter.omlx_stop(),
+        ),
+        (
+            "install",
+            ["install_omlx", "install_omlx_runtime"],
+            lambda: modelito_adapter.omlx_install(),
+        ),
+        (
+            "download",
+            ["download_omlx_model", "download_model_omlx"],
+            lambda: modelito_adapter.omlx_download("mlx-community/Qwen2.5-7B"),
+        ),
+        (
+            "delete",
+            ["delete_omlx_model", "delete_model_omlx"],
+            lambda: modelito_adapter.omlx_delete("mlx-community/Qwen2.5-7B"),
+        ),
+        (
+            "serve",
+            ["serve_omlx_model", "serve_model_omlx"],
+            lambda: modelito_adapter.omlx_serve("mlx-community/Qwen2.5-7B"),
+        ),
+        (
+            "stop-serving",
+            ["stop_omlx_model", "stop_serving_omlx_model", "unserve_omlx_model"],
+            lambda: modelito_adapter.omlx_stop_serving("mlx-community/Qwen2.5-7B"),
+        ),
+    ],
+)
+def test_omlx_missing_capability_payload(monkeypatch, operation, candidates, call):
+    fake_modelito = SimpleNamespace()
+    monkeypatch.setattr(modelito_adapter, "_modelito_module", lambda: fake_modelito)
+
+    payload = call()
+
+    assert payload["ok"] is False
+    assert payload["runtime"] == "omlx"
+    assert payload["operation"] == operation
+    assert payload["candidates"] == candidates
+    assert "LLM-r tried:" in payload["message"]
+    assert payload["models"] == []
+
+
+def test_ollama_missing_capability_payload(monkeypatch):
+    fake_modelito = SimpleNamespace()
+    monkeypatch.setattr(modelito_adapter, "_modelito_module", lambda: fake_modelito)
+
+    payload = modelito_adapter.ollama_serve("llama3:latest")
+
+    assert payload["ok"] is False
+    assert payload["runtime"] == "ollama"
+    assert payload["operation"] == "serve"
+    assert payload["candidates"] == ["serve_model"]
+    assert "LLM-r tried:" in payload["message"]
     assert payload["models"] == []
 
 

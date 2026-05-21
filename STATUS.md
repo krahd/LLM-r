@@ -1,6 +1,6 @@
 # STATUS — LLM-r 0.6.9 release candidate
 
-Last updated: 2026-05-20 14:53
+Last updated: 2026-05-20 16:25
 
 ## Snapshot
 - Version: `0.6.9`
@@ -36,21 +36,27 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 - Browser companion for quick planning and review outside the plug-in window.
 - Exposes readiness chips and "what to fix next" guidance.
 - Exposes Plan Board, Run Log, and Details views.
+- Displays read-only local runtime status cards for Ollama and oMLX showing installation state, local model count, and currently served model count; marks active provider visually.
 - Limitations: companion surface only; not a replacement for full PyQt runtime management or full in-Live workflow.
 
 ### FastAPI server
 - Main route groups: health, settings, capabilities, planning, execution, macros, live state, sessions/history, readiness, local runtimes (Ollama/oMLX), Device Bridge, stream.
+- Readiness output now treats provider/model status as blocking when credentials, local runtime availability, or configured local-model presence are missing.
+- Plan responses now include canonical backend summary metadata (`summary`, `target_label`, transport labels, safety labels) so UI surfaces can share one display contract.
+- Web UI now exposes a compact Basic Settings editor for provider/model changes only; PyQt remains the full setup surface for API keys, local-runtime management, and AbletonOSC configuration.
 - Safety model: dry-run path, destructive approval gating, one-time plan execution, bounded/expiring plan store, Device Bridge preflight.
 - Auth model: optional bearer token (`LLMR_API_TOKEN`) on write routes.
 
 ## Local model runtimes
 ### Ollama
 - What works: status checks, local model list, download/serve/stop-serving helpers, planner routing through Modelito when provider is `ollama`.
+- Diagnostics: missing Modelito helper capabilities now return structured payloads (`runtime`, `operation`, `candidates`) that explain what LLM-r attempted and next user action; intentional CLI fallback for stop-serving is preserved.
 - Model-store note: Ollama models live in Ollama's store and are not automatically available to oMLX.
 - Validation status: route layer and UI wiring covered; real runtime behaviour still requires manual smoke validation on target machine.
 
 ### oMLX
 - What works: provider selection (`omlx`), API route layer, PyQt local runtime controls, planner routing through Modelito.
+- Diagnostics: all adapter operations that probe candidate Modelito helpers now return standardized missing-capability payloads when no helper exists.
 - Model-store note: oMLX models live in a separate store from Ollama.
 - Validation status: API route tests and adapter logic are covered; full runtime behaviour is still manually validated.
 - Important test boundary: current automated tests mainly mock the route/adapter layer; they are not a substitute for real oMLX runtime smoke tests.
@@ -77,17 +83,19 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 
 ## Test status
 - Automated unit/API tests: present and broad across planning/execution/settings/runtime routes.
-  - Last verified in this session: `python3 -m pytest -q` -> `122 passed, 4 warnings`.
+  - Last verified in this session: `python -m pytest -q` -> `132 passed, 4 warnings`.
+- Ollama API route tests: present (`tests/test_ollama_api.py`) with mocked adapter/runtime boundaries.
+  - Last verified in this session: included in `python -m pytest -q` run above.
 - oMLX route tests: present (`tests/test_omlx_api.py`) with mocked runtime adapter behaviour.
-  - Last verified in this session: included in `python3 -m pytest -q` run above.
+  - Last verified in this session: included in `python -m pytest -q` run above.
 - Plan summary tests: present (`tests/test_plan_summary.py`).
-  - Last verified in this session: included in `python3 -m pytest -q` run above.
+  - Last verified in this session: included in `python -m pytest -q` run above.
 - Release workflow checks:
   - Last verified in this session: `ruff check .` passed.
+  - Last verified in this session: `git diff --check` passed.
   - Last verified in this session: `./scripts/build_vst3.sh` passed.
   - Last verified in this session: `bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"` passed.
   - Expected command (not run in this session): `python3 -m build`.
-  - Expected command (not run in this session): `git diff --check`.
 - Not automated: real Ableton Live mutation correctness, real Device Bridge browser behaviour, real Ollama/oMLX runtime behaviour on release target machines.
 
 ## Manual validation required before tag
@@ -97,8 +105,7 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 - Device Bridge install/load/resolve test.
 - Ollama runtime smoke test.
 - oMLX runtime smoke test.
-- Web UI smoke test.
-- PyQt GUI smoke test.
+- Web UI smoke test (including local runtime status cards).
 
 ## Known limitations
 - No warp marker CRUD.
@@ -106,14 +113,14 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 - No full plugin-chain construction workflow.
 - No full arrangement composer workflow.
 - No full identity-preserving project sync.
-- VST3 is not yet at PyQt/web readiness-strip and oMLX-management parity.
-- Real DAW validation remains manual.
+- VST3 does not yet include the full PyQt/web readiness strip or full oMLX management controls.
+- Real Ableton Live, Device Bridge, Ollama, and oMLX runtime validation remains manual.
 
 ## 0.6.9 release blockers
-- Complete real AbletonOSC smoke test on disposable session and review outcomes.
-- Complete Device Bridge install/load/resolve validation in real Ableton session.
-- Complete real Ollama runtime smoke test on release target machine.
-- Complete real oMLX runtime smoke test on release target machine.
+- Complete real AbletonOSC smoke test on a disposable session and record outcomes.
+- Complete Device Bridge install/load/resolve validation in a real Ableton session.
+- Complete real Ollama runtime smoke test on the release target machine.
+- Complete real oMLX runtime smoke test on the release target machine.
 - Complete manual web and PyQt smoke passes on the release candidate build.
 
 ## Post-0.6.9 roadmap
@@ -126,4 +133,4 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 7. Readiness/oMLX parity decision for VST3.
 8. Packaging/signing/notarisation if needed.
 
-Last updated: 2026-05-20 14:53
+Last updated: 2026-05-20 16:25

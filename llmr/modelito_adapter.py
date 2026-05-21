@@ -262,8 +262,15 @@ def ollama_status() -> dict[str, Any]:
 
 def ollama_local_models() -> dict[str, Any]:
     modelito = _modelito_module()
+    method = _first_callable(modelito, ("list_local_models",))
+    if method is None:
+        return _missing_modelito_capability_payload(
+            runtime="ollama",
+            operation="list-local-models",
+            candidates=("list_local_models",),
+        )
     try:
-        models = _clean_model_names(list(getattr(modelito, "list_local_models")()))
+        models = _clean_model_names(list(method()))
     except Exception as exc:
         return _ollama_payload(False, f"Unable to list local Ollama models: {exc}", models=[])
     return _ollama_payload(True, f"Loaded {len(models)} local model(s).", models=models)
@@ -318,8 +325,15 @@ def ollama_running_models() -> dict[str, Any]:
 
 def ollama_remote_models() -> dict[str, Any]:
     modelito = _modelito_module()
+    method = _first_callable(modelito, ("list_remote_models",))
+    if method is None:
+        return _missing_modelito_capability_payload(
+            runtime="ollama",
+            operation="list-remote-models",
+            candidates=("list_remote_models",),
+        )
     try:
-        models = _clean_model_names(list(getattr(modelito, "list_remote_models")()))
+        models = _clean_model_names(list(method()))
         if not models:
             models = _ollama_library_models()
     except Exception as exc:
@@ -332,8 +346,15 @@ def ollama_remote_models() -> dict[str, Any]:
 
 def ollama_start() -> dict[str, Any]:
     modelito = _modelito_module()
+    method = _first_callable(modelito, ("start_ollama",))
+    if method is None:
+        return _missing_modelito_capability_payload(
+            runtime="ollama",
+            operation="start",
+            candidates=("start_ollama",),
+        )
     try:
-        ok = bool(getattr(modelito, "start_ollama")())
+        ok = bool(method())
     except Exception as exc:
         return _ollama_payload(False, f"Unable to start Ollama: {exc}")
     return _ollama_payload(ok, "Ollama started." if ok else "Ollama did not start.")
@@ -341,8 +362,15 @@ def ollama_start() -> dict[str, Any]:
 
 def ollama_stop() -> dict[str, Any]:
     modelito = _modelito_module()
+    method = _first_callable(modelito, ("stop_ollama",))
+    if method is None:
+        return _missing_modelito_capability_payload(
+            runtime="ollama",
+            operation="stop",
+            candidates=("stop_ollama",),
+        )
     try:
-        ok = bool(getattr(modelito, "stop_ollama")(force=True))
+        ok = bool(method(force=True))
     except Exception as exc:
         return _ollama_payload(False, f"Unable to stop Ollama: {exc}")
     return _ollama_payload(ok, "Ollama stopped." if ok else "Ollama did not stop.")
@@ -350,8 +378,15 @@ def ollama_stop() -> dict[str, Any]:
 
 def ollama_install() -> dict[str, Any]:
     modelito = _modelito_module()
+    method = _first_callable(modelito, ("install_ollama",))
+    if method is None:
+        return _missing_modelito_capability_payload(
+            runtime="ollama",
+            operation="install",
+            candidates=("install_ollama",),
+        )
     try:
-        ok = bool(getattr(modelito, "install_ollama")(allow_install=True))
+        ok = bool(method(allow_install=True))
     except Exception as exc:
         return _ollama_payload(False, f"Unable to install Ollama: {exc}")
     return _ollama_payload(ok, "Ollama is installed." if ok else "Ollama install did not complete.")
@@ -362,8 +397,15 @@ def ollama_download(model: str) -> dict[str, Any]:
     name = model.strip()
     if not name:
         return _ollama_payload(False, "Choose a model to download.")
+    method = _first_callable(modelito, ("download_model",))
+    if method is None:
+        return _missing_modelito_capability_payload(
+            runtime="ollama",
+            operation="download",
+            candidates=("download_model",),
+        )
     try:
-        ok = bool(getattr(modelito, "download_model")(name))
+        ok = bool(method(name))
     except Exception as exc:
         return _ollama_payload(False, f"Unable to download {name}: {exc}", model=name)
     return _ollama_payload(ok, f"Downloaded {name}." if ok else f"Download failed for {name}.", model=name)
@@ -374,8 +416,15 @@ def ollama_delete(model: str) -> dict[str, Any]:
     name = model.strip()
     if not name:
         return _ollama_payload(False, "Choose a local model to delete.")
+    method = _first_callable(modelito, ("delete_model",))
+    if method is None:
+        return _missing_modelito_capability_payload(
+            runtime="ollama",
+            operation="delete",
+            candidates=("delete_model",),
+        )
     try:
-        ok = bool(getattr(modelito, "delete_model")(name))
+        ok = bool(method(name))
     except Exception as exc:
         return _ollama_payload(False, f"Unable to delete {name}: {exc}", model=name)
     return _ollama_payload(ok, f"Deleted {name}." if ok else f"Delete failed for {name}.", model=name)
@@ -386,8 +435,15 @@ def ollama_serve(model: str) -> dict[str, Any]:
     name = model.strip()
     if not name:
         return _ollama_payload(False, "Choose a local model to serve.")
+    method = _first_callable(modelito, ("serve_model",))
+    if method is None:
+        return _missing_modelito_capability_payload(
+            runtime="ollama",
+            operation="serve",
+            candidates=("serve_model",),
+        )
     try:
-        ok = bool(getattr(modelito, "serve_model")(name))
+        ok = bool(method(name))
     except Exception as exc:
         return _ollama_payload(False, f"Unable to serve {name}: {exc}", model=name)
     return _ollama_payload(ok, f"Serving {name}." if ok else f"Could not serve {name}.", model=name)
@@ -451,6 +507,27 @@ def _first_callable(module: Any, candidates: tuple[str, ...]) -> Callable[..., A
     return None
 
 
+def _missing_modelito_capability_payload(
+    runtime: str,
+    operation: str,
+    candidates: tuple[str, ...],
+) -> dict[str, Any]:
+    tried = ", ".join(candidates)
+    return {
+        "ok": False,
+        "message": (
+            f"Missing Modelito capability for {runtime} {operation}. "
+            f"LLM-r tried: {tried}. "
+            "Your installed Modelito version may not support this capability. "
+            "Update Modelito or switch to a version that includes this runtime helper."
+        ),
+        "runtime": runtime,
+        "operation": operation,
+        "candidates": list(candidates),
+        "models": [],
+    }
+
+
 def omlx_status() -> dict[str, Any]:
     """Inspect oMLX service state and availability."""
     modelito = _modelito_module()
@@ -476,7 +553,11 @@ def omlx_local_models() -> dict[str, Any]:
         ("list_local_omlx_models", "list_local_models_omlx", "list_omlx_models"),
     )
     if method is None:
-        return _omlx_payload(False, "Modelito does not expose oMLX local model listing.", models=[])
+        return _missing_modelito_capability_payload(
+            runtime="omlx",
+            operation="list-local-models",
+            candidates=("list_local_omlx_models", "list_local_models_omlx", "list_omlx_models"),
+        )
     try:
         models = _clean_model_names(list(method()))
     except Exception as exc:
@@ -486,26 +567,25 @@ def omlx_local_models() -> dict[str, Any]:
 
 def omlx_running_models() -> dict[str, Any]:
     """Return models currently loaded by oMLX."""
-    models: list[str] = []
+    modelito = _modelito_module()
+    candidates = ("list_running_omlx_models", "list_loaded_omlx_models", "running_omlx_models")
+    method = _first_callable(modelito, candidates)
+    if method is None:
+        return _missing_modelito_capability_payload(
+            runtime="omlx",
+            operation="list-running-models",
+            candidates=candidates,
+        )
     try:
-        modelito = _modelito_module()
-    except RuntimeError:
-        modelito = None
+        models = _clean_model_names(list(method()))
+    except Exception as exc:
+        return _omlx_payload(False, f"Unable to determine running oMLX models: {exc}", models=[])
 
-    for method_name in ("list_running_omlx_models", "list_loaded_omlx_models", "running_omlx_models"):
-        method = getattr(modelito, method_name, None) if modelito else None
-        if callable(method):
-            try:
-                models = _clean_model_names(list(method()))
-                return _omlx_payload(
-                    True,
-                    f"{len(models)} oMLX model(s) currently served.",
-                    models=models,
-                )
-            except Exception:
-                break
-
-    return _omlx_payload(False, "Unable to determine running oMLX models.", models=[])
+    return _omlx_payload(
+        True,
+        f"{len(models)} oMLX model(s) currently served.",
+        models=models,
+    )
 
 
 def omlx_remote_models() -> dict[str, Any]:
@@ -516,7 +596,15 @@ def omlx_remote_models() -> dict[str, Any]:
         ("list_remote_omlx_models", "list_omlx_remote_models", "list_available_omlx_models"),
     )
     if method is None:
-        return _omlx_payload(False, "Modelito does not expose oMLX remote model listing.", models=[])
+        return _missing_modelito_capability_payload(
+            runtime="omlx",
+            operation="list-remote-models",
+            candidates=(
+                "list_remote_omlx_models",
+                "list_omlx_remote_models",
+                "list_available_omlx_models",
+            ),
+        )
     try:
         models = _clean_model_names(list(method()))
     except Exception as exc:
@@ -527,9 +615,14 @@ def omlx_remote_models() -> dict[str, Any]:
 def omlx_start() -> dict[str, Any]:
     """Start the oMLX service."""
     modelito = _modelito_module()
-    method = _first_callable(modelito, ("start_omlx", "start_omlx_service"))
+    candidates = ("start_omlx", "start_omlx_service")
+    method = _first_callable(modelito, candidates)
     if method is None:
-        return _omlx_payload(False, "Modelito does not expose oMLX start operation.")
+        return _missing_modelito_capability_payload(
+            runtime="omlx",
+            operation="start",
+            candidates=candidates,
+        )
     try:
         ok = bool(method())
     except Exception as exc:
@@ -540,9 +633,14 @@ def omlx_start() -> dict[str, Any]:
 def omlx_stop() -> dict[str, Any]:
     """Stop the oMLX service."""
     modelito = _modelito_module()
-    method = _first_callable(modelito, ("stop_omlx", "stop_omlx_service"))
+    candidates = ("stop_omlx", "stop_omlx_service")
+    method = _first_callable(modelito, candidates)
     if method is None:
-        return _omlx_payload(False, "Modelito does not expose oMLX stop operation.")
+        return _missing_modelito_capability_payload(
+            runtime="omlx",
+            operation="stop",
+            candidates=candidates,
+        )
     try:
         try:
             ok = bool(method(force=True))
@@ -556,9 +654,14 @@ def omlx_stop() -> dict[str, Any]:
 def omlx_install() -> dict[str, Any]:
     """Install oMLX runtime."""
     modelito = _modelito_module()
-    method = _first_callable(modelito, ("install_omlx", "install_omlx_runtime"))
+    candidates = ("install_omlx", "install_omlx_runtime")
+    method = _first_callable(modelito, candidates)
     if method is None:
-        return _omlx_payload(False, "Modelito does not expose oMLX install operation.")
+        return _missing_modelito_capability_payload(
+            runtime="omlx",
+            operation="install",
+            candidates=candidates,
+        )
     try:
         try:
             ok = bool(method(allow_install=True))
@@ -575,9 +678,14 @@ def omlx_download(model: str) -> dict[str, Any]:
     name = model.strip()
     if not name:
         return _omlx_payload(False, "Choose a model to download.")
-    method = _first_callable(modelito, ("download_omlx_model", "download_model_omlx"))
+    candidates = ("download_omlx_model", "download_model_omlx")
+    method = _first_callable(modelito, candidates)
     if method is None:
-        return _omlx_payload(False, "Modelito does not expose oMLX download operation.", model=name)
+        return _missing_modelito_capability_payload(
+            runtime="omlx",
+            operation="download",
+            candidates=candidates,
+        )
     try:
         ok = bool(method(name))
     except Exception as exc:
@@ -591,9 +699,14 @@ def omlx_delete(model: str) -> dict[str, Any]:
     name = model.strip()
     if not name:
         return _omlx_payload(False, "Choose a local model to delete.")
-    method = _first_callable(modelito, ("delete_omlx_model", "delete_model_omlx"))
+    candidates = ("delete_omlx_model", "delete_model_omlx")
+    method = _first_callable(modelito, candidates)
     if method is None:
-        return _omlx_payload(False, "Modelito does not expose oMLX delete operation.", model=name)
+        return _missing_modelito_capability_payload(
+            runtime="omlx",
+            operation="delete",
+            candidates=candidates,
+        )
     try:
         ok = bool(method(name))
     except Exception as exc:
@@ -607,9 +720,14 @@ def omlx_serve(model: str) -> dict[str, Any]:
     name = model.strip()
     if not name:
         return _omlx_payload(False, "Choose a local model to serve.")
-    method = _first_callable(modelito, ("serve_omlx_model", "serve_model_omlx"))
+    candidates = ("serve_omlx_model", "serve_model_omlx")
+    method = _first_callable(modelito, candidates)
     if method is None:
-        return _omlx_payload(False, "Modelito does not expose oMLX serve operation.", model=name)
+        return _missing_modelito_capability_payload(
+            runtime="omlx",
+            operation="serve",
+            candidates=candidates,
+        )
     try:
         ok = bool(method(name))
     except Exception as exc:
@@ -623,22 +741,22 @@ def omlx_stop_serving(model: str) -> dict[str, Any]:
     if not name:
         return _omlx_payload(False, "Choose a served model to stop.", model=name)
 
+    modelito = _modelito_module()
+    candidates = ("stop_omlx_model", "stop_serving_omlx_model", "unserve_omlx_model")
+    method = _first_callable(modelito, candidates)
+    if method is None:
+        return _missing_modelito_capability_payload(
+            runtime="omlx",
+            operation="stop-serving",
+            candidates=candidates,
+        )
     try:
-        modelito = _modelito_module()
-    except RuntimeError:
-        modelito = None
+        ok = bool(method(name))
+    except Exception as exc:
+        return _omlx_payload(False, f"Could not stop serving {name}: {exc}", model=name)
 
-    for method_name in ("stop_omlx_model", "stop_serving_omlx_model", "unserve_omlx_model"):
-        method = getattr(modelito, method_name, None) if modelito else None
-        if callable(method):
-            try:
-                ok = bool(method(name))
-                return _omlx_payload(
-                    ok,
-                    f"Stopped serving {name}." if ok else f"Could not stop serving {name}.",
-                    model=name,
-                )
-            except Exception:
-                break
-
-    return _omlx_payload(False, f"Could not stop serving {name}.", model=name)
+    return _omlx_payload(
+        ok,
+        f"Stopped serving {name}." if ok else f"Could not stop serving {name}.",
+        model=name,
+    )

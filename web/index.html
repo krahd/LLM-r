@@ -230,6 +230,48 @@
       display: block;
       width: 100%;
     }
+    .basic-settings-panel {
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #0d1016;
+      overflow: hidden;
+    }
+    .basic-settings-panel summary {
+      list-style: none;
+      padding: 10px 12px;
+      color: var(--text);
+      font-weight: 700;
+    }
+    .basic-settings-panel summary::-webkit-details-marker {
+      display: none;
+    }
+    .basic-settings-panel summary::after {
+      content: 'Expand';
+      float: right;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .basic-settings-panel[open] summary::after {
+      content: 'Collapse';
+    }
+    .basic-settings-body {
+      display: grid;
+      gap: 10px;
+      padding: 0 12px 12px;
+      border-top: 1px solid var(--border);
+    }
+    .basic-settings-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .basic-settings-status {
+      min-height: 18px;
+    }
     .safety-alert {
       background: rgba(255, 138, 160, 0.1);
       border: 1px solid var(--red);
@@ -292,6 +334,107 @@
       margin-top: 6px;
       min-height: 16px;
     }
+    .local-runtime-panel {
+      margin: 0;
+      border: none;
+      background: transparent;
+      padding: 0;
+    }
+    .local-runtime-panel summary {
+      list-style: none;
+      color: var(--text);
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      user-select: none;
+      padding: 0;
+    }
+    .local-runtime-panel summary::-webkit-details-marker {
+      display: none;
+    }
+    .local-runtime-body {
+      display: grid;
+      gap: 10px;
+    }
+    .runtime-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 10px;
+    }
+    .runtime-card {
+      background: #0d1016;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .runtime-card.active {
+      border-color: var(--blue);
+      background: rgba(98, 160, 255, 0.05);
+    }
+    .runtime-card.active .runtime-name {
+      color: var(--blue);
+    }
+    .runtime-card.error {
+      border-color: #6a2030;
+      background: rgba(255, 138, 160, 0.05);
+    }
+    .runtime-card.error .runtime-name {
+      color: var(--red);
+    }
+    .runtime-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .runtime-status {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .runtime-status-message {
+      color: var(--amber);
+      font-weight: 600;
+    }
+    .runtime-status.ok .runtime-status-message {
+      color: var(--green);
+    }
+    .runtime-status.error .runtime-status-message {
+      color: var(--red);
+    }
+    .runtime-stats {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    .runtime-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-top: 1px solid var(--border);
+    }
+    .runtime-stat-label {
+      color: var(--muted);
+    }
+    .runtime-stat-value {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .runtime-card-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .runtime-card-actions button {
+      flex: 1;
+      padding: 6px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
     @media (max-width: 1024px) {
       main { padding: 12px; }
       header { flex-wrap: wrap; }
@@ -336,6 +479,56 @@
             <div>Model: <strong id="settingsModel">—</strong></div>
           </div>
           <div class="helper-note">Safe path: Create a plan -> preview with Dry run -> run in Ableton.</div>
+          <details class="basic-settings-panel" id="basicSettingsPanel">
+            <summary>Basic Settings</summary>
+            <div class="basic-settings-body settings-form">
+              <div class="helper-note">Basic settings only. Use PyQt Advanced Settings for API keys, Ollama/oMLX service management, and AbletonOSC configuration.</div>
+              <div class="form-row">
+                <label for="basicProvider">Provider</label>
+                <select id="basicProvider" aria-label="Basic model provider">
+                  <option value="openai">openai</option>
+                  <option value="anthropic">anthropic</option>
+                  <option value="google">google</option>
+                  <option value="ollama">ollama</option>
+                  <option value="omlx">omlx</option>
+                  <option value="cohere">cohere</option>
+                  <option value="mistral">mistral</option>
+                  <option value="mock">mock</option>
+                  <option value="other">other</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="basicModel">Model</label>
+                <input id="basicModel" type="text" placeholder="Enter model ID" aria-label="Basic model name" />
+              </div>
+              <div class="form-row">
+                <label for="basicModelSuggestions">Model suggestions</label>
+                <select id="basicModelSuggestions" aria-label="Model suggestions">
+                  <option value="">Refresh models to load suggestions</option>
+                </select>
+                <span class="muted">Choosing a suggestion copies it into the model field. Refreshing suggestions does not overwrite typed text.</span>
+              </div>
+              <div class="basic-settings-actions">
+                <button id="saveBasicSettingsBtn" class="example" aria-label="Save basic provider and model settings">Save Settings</button>
+                <button id="refreshBasicModelsBtn" class="example" aria-label="Refresh model suggestions">Refresh Models</button>
+              </div>
+              <div id="basicSettingsStatus" class="muted basic-settings-status" aria-live="polite">Load settings to edit the active provider and model.</div>
+            </div>
+          </details>
+        </div>
+
+        <!-- Local Runtime Status -->
+        <div style="margin-top: 16px; padding: 12px; background: var(--panel-2); border-radius: 8px;">
+          <details class="local-runtime-panel" id="localRuntimePanel" open>
+            <summary style="cursor: pointer; color: var(--text); font-weight: 700; user-select: none;">📦 Local Runtime Status</summary>
+            <div class="local-runtime-body" style="margin-top: 10px;">
+              <div class="helper-note">Read-only status of installed local runtimes. Use PyQt Advanced Settings for Install, Start, Download, Serve, Stop Serving, and Delete.</div>
+              <div class="runtime-cards" id="localRuntimeCards" style="display: grid; gap: 10px; margin-top: 10px;">
+                <!-- Cards will be generated by JavaScript -->
+              </div>
+              <div id="localRuntimeError" class="muted" style="display: none; color: var(--red); margin-top: 8px;"></div>
+            </div>
+          </details>
         </div>
 
         <!-- Prompt -->
@@ -444,6 +637,11 @@
     let currentPlan = null;
     let currentSettings = {};
     let lastReadiness = null;
+    let basicSettingsDirty = false;
+    let basicModelDirty = false;
+    let basicSettingsLoading = false;
+
+    const PROVIDER_OPTIONS = ['openai', 'anthropic', 'google', 'ollama', 'omlx', 'cohere', 'mistral', 'mock', 'other'];
 
     const QUICK_STARTS = {
       'Novice': [
@@ -467,6 +665,21 @@
         'Stop all clips',
       ],
     };
+
+    const RUNTIMES = [
+      {
+        name: 'ollama',
+        statusEndpoint: '/api/ollama/status',
+        localModelsEndpoint: '/api/ollama/local_models',
+        runningModelsEndpoint: '/api/ollama/running_models',
+      },
+      {
+        name: 'omlx',
+        statusEndpoint: '/api/omlx/status',
+        localModelsEndpoint: '/api/omlx/local_models',
+        runningModelsEndpoint: '/api/omlx/running_models',
+      },
+    ];
 
     const promptEl = document.getElementById('prompt');
     const planBtn = document.getElementById('planBtn');
@@ -492,6 +705,13 @@
     const capsRefreshBtn = document.getElementById('capsRefreshBtn');
     const capsStatus = document.getElementById('capsStatus');
     const capsList = document.getElementById('capsList');
+
+    const basicProviderEl = document.getElementById('basicProvider');
+    const basicModelEl = document.getElementById('basicModel');
+    const basicModelSuggestionsEl = document.getElementById('basicModelSuggestions');
+    const saveBasicSettingsBtn = document.getElementById('saveBasicSettingsBtn');
+    const refreshBasicModelsBtn = document.getElementById('refreshBasicModelsBtn');
+    const basicSettingsStatusEl = document.getElementById('basicSettingsStatus');
 
     function setChip(id, text, tone = '') {
       const el = document.getElementById(id);
@@ -558,7 +778,7 @@
 
     function renderPlan(data) {
       const actions = data.planned_actions || [];
-      const summary = summariseActions(actions);
+      const summary = normalizeSummary(data.summary, actions);
       const confidence = confidencePercent(data.confidence);
       const requiresApproval = Boolean(data.requires_approval);
       setChip('planChip', actions.length ? `${actions.length} action(s)` : 'No actions', actions.length ? 'ok' : 'warn');
@@ -585,14 +805,17 @@
 
       const cardsHtml = actions.length ? actions.map((action, index) => {
         const destructive = action.destructive ? "<span class='chip warn'>destructive</span>" : "<span class='chip ok'>safe</span>";
-        const transport = inferTransport(action);
-        const route = renderRouteLabel(transport);
-        const safetyLabel = action.destructive ? 'Destructive' : 'Safe';
+        const transport = action.transport || inferTransport(action);
+        const route = {
+          technical: action.transport_label || renderRouteLabel(transport).technical,
+          plain: action.transport_plain_label || renderRouteLabel(transport).plain,
+        };
+        const safetyLabel = action.safety_label || (action.destructive ? 'Destructive' : 'Safe');
         const argsText = JSON.stringify(action.args || {}, null, 2);
         const compact = argsText.length <= 150 ? argsText : `${argsText.slice(0, 150)} ...`;
         return `<div class="action-card ${action.destructive ? 'destructive' : ''}">
           <header><span class="tool">${index + 1}. ${escapeHtml(action.tool || 'action')}</span>${destructive}<span class="chip info">${escapeHtml(route.technical)}</span></header>
-          <div class="target"><strong>Affects:</strong> ${escapeHtml(inferTargetLabel(action.args || {}))}</div>
+          <div class="target"><strong>Affects:</strong> ${escapeHtml(action.target_label || inferTargetLabel(action.args || {}))}</div>
           <div><strong>Safety:</strong> ${safetyLabel}</div>
           <div><strong>Route:</strong> ${escapeHtml(route.technical)} (${escapeHtml(route.plain)})</div>
           <div>${escapeHtml(action.description || 'No description provided.')}</div>
@@ -641,6 +864,23 @@
       if (!Number.isFinite(num)) return 0;
       const scaled = num <= 1 ? num * 100 : num;
       return Math.max(0, Math.min(100, Math.round(scaled)));
+    }
+
+    function normalizeSummary(summary, actions) {
+      if (!summary || typeof summary !== 'object') {
+        return summariseActions(actions);
+      }
+      const transportCounts = summary.transport_counts || summary.transportCounts || {};
+      return {
+        count: Number(summary.count ?? actions.length ?? 0),
+        safeCount: Number(summary.safe_count ?? summary.safeCount ?? 0),
+        destructiveCount: Number(summary.destructive_count ?? summary.destructiveCount ?? 0),
+        transportCounts: {
+          osc: Number(transportCounts.osc ?? 0),
+          device_bridge: Number(transportCounts.device_bridge ?? 0),
+          other: Number(transportCounts.other ?? 0),
+        },
+      };
     }
 
     function inferTransport(action) {
@@ -766,7 +1006,166 @@
       }
     }
 
-    async function refreshSettings() {
+    async function renderLocalRuntimeCard(runtime) {
+      const { name, statusEndpoint, localModelsEndpoint, runningModelsEndpoint } = runtime;
+      const cardEl = document.createElement('div');
+      cardEl.className = 'runtime-card';
+      cardEl.id = `runtime-${name}`;
+
+      try {
+        const [statusResult, localModelsResult, runningModelsResult] = await Promise.all([
+          apiFetch(statusEndpoint).catch(err => ({ ok: false, message: err.message, models: [] })),
+          apiFetch(localModelsEndpoint).catch(err => ({ ok: false, message: err.message, models: [] })),
+          apiFetch(runningModelsEndpoint).catch(err => ({ ok: false, message: err.message, models: [] })),
+        ]);
+
+        const statusOk = statusResult.ok !== false;
+        const statusMsg = statusResult.message || 'Unknown status';
+        const localCount = Array.isArray(statusResult.models) ? statusResult.models.length : (Array.isArray(localModelsResult.models) ? localModelsResult.models.length : 0);
+        const runningCount = Array.isArray(runningModelsResult.models) ? runningModelsResult.models.length : 0;
+
+        const isActive = currentSettings.modelito_provider === name;
+
+        cardEl.classList.toggle('active', isActive);
+        cardEl.classList.toggle('error', !statusOk);
+
+        const statusClass = statusOk ? 'ok' : 'error';
+        const statusMessageTone = statusOk ? 'var(--green)' : 'var(--red)';
+
+        cardEl.innerHTML = `
+          <div class="runtime-name">${escapeHtml(name)}${isActive ? ' (active provider)' : ''}</div>
+          <div class="runtime-status ${statusClass}">
+            <div class="runtime-status-message">${escapeHtml(statusMsg)}</div>
+          </div>
+          <div class="runtime-stats">
+            <div class="runtime-stat">
+              <span class="runtime-stat-label">Local models:</span>
+              <span class="runtime-stat-value">${localCount}</span>
+            </div>
+            <div class="runtime-stat">
+              <span class="runtime-stat-label">Currently served:</span>
+              <span class="runtime-stat-value">${runningCount}</span>
+            </div>
+          </div>
+          <div class="runtime-card-actions">
+            <button class="example" onclick="refreshLocalRuntimeCard('${name}')" aria-label="Refresh ${name} status">Refresh</button>
+          </div>
+        `;
+      } catch (err) {
+        cardEl.classList.add('error');
+        cardEl.innerHTML = `
+          <div class="runtime-name">${escapeHtml(name)}</div>
+          <div class="runtime-status error">
+            <div class="runtime-status-message">Failed to fetch status</div>
+          </div>
+          <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">${escapeHtml(err.message)}</div>
+          <div class="runtime-card-actions">
+            <button class="example" onclick="refreshLocalRuntimeCard('${name}')" aria-label="Retry ${name} status">Retry</button>
+          </div>
+        `;
+      }
+
+      return cardEl;
+    }
+
+    async function refreshLocalRuntimeCard(name) {
+      const runtime = RUNTIMES.find(r => r.name === name);
+      if (!runtime) return;
+      const cardEl = document.getElementById(`runtime-${name}`);
+      if (!cardEl) return;
+      const cardsContainer = document.getElementById('localRuntimeCards');
+      const tempCard = await renderLocalRuntimeCard(runtime);
+      cardsContainer.replaceChild(tempCard, cardEl);
+    }
+
+    async function refreshLocalRuntimeStatus() {
+      const cardsContainer = document.getElementById('localRuntimeCards');
+      const errorEl = document.getElementById('localRuntimeError');
+      errorEl.style.display = 'none';
+      cardsContainer.innerHTML = '';
+
+      try {
+        for (const runtime of RUNTIMES) {
+          const card = await renderLocalRuntimeCard(runtime);
+          cardsContainer.appendChild(card);
+        }
+      } catch (err) {
+        errorEl.style.display = 'block';
+        errorEl.textContent = `Error loading runtime status: ${err.message}`;
+      }
+    }
+
+    function markBasicSettingsDirty() {
+      if (basicSettingsLoading) return;
+      basicSettingsDirty = true;
+    }
+
+    function setBasicSettingsStatus(message, tone = 'muted') {
+      basicSettingsStatusEl.className = `${tone} basic-settings-status`;
+      basicSettingsStatusEl.textContent = message;
+    }
+
+    function setBasicSettingsControlsDisabled(disabled) {
+      basicProviderEl.disabled = disabled;
+      basicModelEl.disabled = disabled;
+      basicModelSuggestionsEl.disabled = disabled;
+      saveBasicSettingsBtn.disabled = disabled;
+      refreshBasicModelsBtn.disabled = disabled;
+    }
+
+    function populateModelSuggestions(models, selectedValue = '') {
+      const rows = Array.isArray(models) ? models : [];
+      const options = ['<option value="">Choose a suggested model</option>'];
+      for (const item of rows) {
+        const value = typeof item === 'string' ? item : String(item?.id || item?.name || '').trim();
+        if (!value) continue;
+        const provider = typeof item === 'string' ? '' : String(item?.provider || '').trim();
+        const label = provider ? `${value} (${provider})` : value;
+        options.push(`<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`);
+      }
+      if (options.length === 1) {
+        options.push('<option value="">No suggestions returned</option>');
+      }
+      basicModelSuggestionsEl.innerHTML = options.join('');
+      basicModelSuggestionsEl.value = selectedValue;
+    }
+
+    function syncBasicSettingsForm(settings, force = false) {
+      const provider = String(settings?.modelito_provider || 'openai').trim().toLowerCase() || 'openai';
+      const model = String(settings?.modelito_model || '').trim();
+      basicSettingsLoading = true;
+      basicProviderEl.value = PROVIDER_OPTIONS.includes(provider) ? provider : 'other';
+      if (force || !basicSettingsDirty) {
+        basicModelEl.value = model;
+        basicModelDirty = false;
+      }
+      basicSettingsLoading = false;
+      if (force || !basicSettingsDirty) {
+        basicSettingsDirty = false;
+      }
+    }
+
+    async function refreshModelSuggestions(statusMessage = 'Model suggestions refreshed.') {
+      const provider = (basicProviderEl.value || currentSettings.modelito_provider || 'openai').trim();
+      const model = (basicModelEl.value || currentSettings.modelito_model || '').trim();
+      refreshBasicModelsBtn.disabled = true;
+      basicModelSuggestionsEl.disabled = true;
+      setBasicSettingsStatus('Loading model suggestions...');
+      try {
+        const payload = await apiFetch(`/api/modelito/models?provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}`);
+        populateModelSuggestions(payload.models || []);
+        setBasicSettingsStatus(statusMessage);
+      } catch (err) {
+        populateModelSuggestions([]);
+        setBasicSettingsStatus(`Model suggestions unavailable: ${err.message}`, 'warning');
+      } finally {
+        refreshBasicModelsBtn.disabled = false;
+        basicModelSuggestionsEl.disabled = false;
+      }
+    }
+
+    async function refreshSettings(options = {}) {
+      const { forceFormSync = false, refreshModels = true } = options;
       try {
         const settings = await apiFetch('/api/settings');
         currentSettings = settings;
@@ -775,10 +1174,52 @@
         document.getElementById('settingsProvider').textContent = provider;
         document.getElementById('settingsModel').textContent = model;
         setChip('modelChip', `${provider} · ${model}`, provider !== '—' && model !== '—' ? 'info' : 'warn');
+        syncBasicSettingsForm(settings, forceFormSync);
+        if (!basicSettingsDirty || forceFormSync) {
+          setBasicSettingsStatus('Basic settings are ready. Save only updates provider/model.');
+        }
+        if (refreshModels) {
+          await refreshModelSuggestions('Model suggestions refreshed.');
+        }
       } catch (err) {
         document.getElementById('settingsProvider').textContent = '—';
         document.getElementById('settingsModel').textContent = '—';
         setChip('modelChip', 'Settings unavailable', 'warn');
+        setBasicSettingsStatus(`Settings unavailable: ${err.message}`, 'warning');
+      }
+    }
+
+    async function saveBasicSettings() {
+      const provider = (basicProviderEl.value || '').trim();
+      const model = (basicModelEl.value || '').trim();
+      if (!provider || !model) {
+        setBasicSettingsStatus('Provider and model are both required.', 'warning');
+        return;
+      }
+      setBasicSettingsControlsDisabled(true);
+      setBasicSettingsStatus('Saving provider/model...');
+      try {
+        await apiFetch('/api/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            modelito_provider: provider,
+            modelito_model: model,
+          }),
+        });
+        basicSettingsDirty = false;
+        basicModelDirty = false;
+        await refreshSettings({ forceFormSync: true, refreshModels: true });
+        await refreshReadiness();
+        setBasicSettingsStatus('Basic settings saved. Readiness refreshed.', 'success');
+      } catch (err) {
+        if (err.message.startsWith('401 ')) {
+          setBasicSettingsStatus('Settings are protected by API token. Use PyQt or run without LLMR_API_TOKEN for local setup.', 'warning');
+        } else {
+          setBasicSettingsStatus(`Save failed: ${err.message}`, 'warning');
+        }
+      } finally {
+        setBasicSettingsControlsDisabled(false);
       }
     }
 
@@ -1045,6 +1486,28 @@
       document.getElementById('charCount').textContent = promptEl.value.length;
       updateControlStates();
     });
+    basicProviderEl.addEventListener('change', async () => {
+      markBasicSettingsDirty();
+      await refreshModelSuggestions('Model suggestions refreshed for the selected provider.');
+    });
+    basicModelEl.addEventListener('input', () => {
+      if (basicSettingsLoading) return;
+      basicSettingsDirty = true;
+      basicModelDirty = true;
+      basicModelSuggestionsEl.value = '';
+    });
+    basicModelSuggestionsEl.addEventListener('change', () => {
+      const choice = (basicModelSuggestionsEl.value || '').trim();
+      if (!choice) return;
+      basicSettingsLoading = true;
+      basicModelEl.value = choice;
+      basicSettingsLoading = false;
+      basicSettingsDirty = true;
+      basicModelDirty = false;
+      setBasicSettingsStatus('Suggestion copied into the model field. Save to apply it.');
+    });
+    saveBasicSettingsBtn.addEventListener('click', saveBasicSettings);
+    refreshBasicModelsBtn.addEventListener('click', () => refreshModelSuggestions('Model suggestions refreshed.'));
     planBtn.addEventListener('click', plan);
     execBtn.addEventListener('click', execute);
     macroPlanBtn.addEventListener('click', planMacro);
@@ -1066,15 +1529,17 @@
     // Refresh on load and periodically
     renderQuickStarts();
     refreshHealth();
-    refreshSettings();
+    refreshSettings({ forceFormSync: true, refreshModels: true });
     refreshReadiness();
     refreshMacros();
     refreshCapabilities();
+    refreshLocalRuntimeStatus();
     updateLiveExecWarning();
     setInterval(refreshHealth, 10000);
-    setInterval(refreshSettings, 15000);
+    setInterval(() => refreshSettings({ forceFormSync: false, refreshModels: false }), 15000);
     setInterval(refreshReadiness, 8000);
     setInterval(refreshMacros, 20000);
+    setInterval(refreshLocalRuntimeStatus, 12000);
   </script>
 </body>
 </html>
