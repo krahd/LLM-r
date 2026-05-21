@@ -781,12 +781,15 @@ async def generic_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=payload)
 
 
-def _serialize_action(action: AbletonAction) -> dict:
+def _serialize_action(action: AbletonAction) -> dict[str, Any]:
     """Serialise a single AbletonAction to a UI-facing dict with display metadata."""
     semantic = getattr(action, "semantic_args", {}) or {}
     transport = getattr(action, "transport", "osc")
-    raw_for_transport = {"tool": action.tool.value,
-                         "transport": transport, "address": action.address}
+    raw_for_transport = {
+        "tool": action.tool.value,
+        "transport": transport,
+        "address": action.address,
+    }
     actual_transport = infer_transport(raw_for_transport)
     if actual_transport == "osc":
         transport_label = "AbletonOSC"
@@ -1455,6 +1458,7 @@ def execute_batch(req: ExecuteBatchRequest) -> dict:
         "dry_run": req.dry_run,
         "executed_at": executed_at,
         "execution_report": execution_report,
+        "executed_actions": [_serialize_action(a) for a in actions],
     }
 
 

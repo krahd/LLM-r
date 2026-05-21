@@ -415,7 +415,7 @@ def test_execute_plan_response_includes_action_metadata(monkeypatch):
         actions=[
             AbletonAction(
                 tool=ToolName.fire_clip,
-                address="/live/clip_slot/fire",
+                    address="/live/clip/fire",
                 args=[1, 0],
                 description="Fire clip",
                 destructive=False,
@@ -435,11 +435,17 @@ def test_execute_plan_response_includes_action_metadata(monkeypatch):
     assert action["semantic_args"] == semantic
     assert action["target_label"] == "Track 1 · Clip 0"
     assert action["transport_label"] == "AbletonOSC"
+    assert action["transport_plain_label"] == "Ableton command"
     assert action["safety_label"] == "Safe"
+    assert action["tool"] == ToolName.fire_clip.value
+    assert action["address"] == "/live/clip/fire"
+    assert action["args"] == [1, 0]
+    assert action["description"] == "Fire clip"
+    assert action["destructive"] is False
+    assert action["transport"] == "osc"
 
 
-
-    monkeypatch.setattr(app_module.settings, "api_token", "secret")
+def test_auth_dependency(monkeypatch):
     try:
         app_module._require_auth("Bearer secret")
     finally:
@@ -742,3 +748,28 @@ def test_execute_batch_dry_run_allows_destructive_preview():
     )
     assert payload["requires_approval"] is True
     assert payload["execution_report"][0]["status"] == "dry_run"
+
+
+def test_execute_batch_response_includes_executed_actions_metadata():
+    """execute_batch must include executed_actions with the same display metadata as execute."""
+    payload = app_module.execute_batch(
+        app_module.ExecuteBatchRequest(
+            dry_run=True,
+            calls=[
+                app_module.ToolCallInput(
+                    tool=ToolName.fire_clip,
+                    args={"track_index": 2, "clip_index": 3},
+                ),
+            ],
+        )
+    )
+
+    assert "executed_actions" in payload
+    assert "execution_report" in payload
+    action = payload["executed_actions"][0]
+    assert action["semantic_args"] == {"track_index": 2, "clip_index": 3}
+    assert action["args"] == [2, 3]
+    assert action["target_label"] == "Track 2 · Clip 3"
+    assert action["transport_label"] == "AbletonOSC"
+    assert action["transport_plain_label"] == "Ableton command"
+    assert action["safety_label"] == "Safe"
