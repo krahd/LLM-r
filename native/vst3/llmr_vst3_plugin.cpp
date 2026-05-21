@@ -43,6 +43,14 @@ enum LlmrEditorAction : NSInteger {
     kLlmrEditorActionChooseBridgeUserLibrary = 29,
     kLlmrEditorActionRevealInstalledBridge = 30,
     kLlmrEditorActionUseDetectedBridgeLibrary = 31,
+    kLlmrEditorActionOpenSystemPrompts = 32,
+    kLlmrEditorActionSaveSystemPrompt = 33,
+    kLlmrEditorActionCancelSystemPrompt = 34,
+    kLlmrEditorActionSaveSystemPromptAs = 35,
+    kLlmrEditorActionLoadSystemPrompt = 36,
+    kLlmrEditorActionResetSystemPrompt = 37,
+    kLlmrEditorActionSystemPromptPresetChanged = 38,
+    kLlmrEditorActionCancelOperation = 39,
 };
 
 static void llmrEditorHandleAction(void *owner, NSInteger action);
@@ -58,7 +66,11 @@ static void llmrEditorHandleAction(void *owner, NSInteger action);
 @interface LlmrCopyTextView : NSTextView
 @end
 
-@interface LlmrPromptField : NSTextField
+@interface LlmrPromptTextView : NSTextView {
+    NSTextField *_llmrPlaceholderLabel;
+}
+- (void)setLlmrPlaceholderLabel:(NSTextField *)label;
+- (void)updateLlmrPlaceholder;
 @end
 
 @interface LlmrTextField : NSTextField
@@ -670,13 +682,16 @@ public:
         settingsView_ = nullptr;
         chatHistoryView_ = nullptr;
         rawResponseView_ = nullptr;
-        chatInputField_ = nullptr;
+        chatInputView_ = nullptr;
+        chatInputScrollView_ = nullptr;
+        chatPromptPlaceholderLabel_ = nullptr;
         chatStatusLabel_ = nullptr;
         chatModelLabel_ = nullptr;
         chatOscLabel_ = nullptr;
         chatBridgeLabel_ = nullptr;
         chatDryRunLabel_ = nullptr;
         chatSendButton_ = nullptr;
+        chatCancelButton_ = nullptr;
         chatExecuteButton_ = nullptr;
         chatPreviewButton_ = nullptr;
         chatAutoApproveButton_ = nullptr;
@@ -695,8 +710,6 @@ public:
         settingsAutoApproveButton_ = nullptr;
         settingsMainView_ = nullptr;
         settingsAdvancedView_ = nullptr;
-        settingsAdvancedButton_ = nullptr;
-        settingsBasicButton_ = nullptr;
         settingsCustomModelField_ = nullptr;
         settingsModelStatusLabel_ = nullptr;
         settingsBridgeHostField_ = nullptr;
@@ -712,6 +725,24 @@ public:
         ollamaModelsCombo_ = nullptr;
         [bridgeUserLibraryPath_ release];
         bridgeUserLibraryPath_ = nullptr;
+        if (systemPromptsWindow_) {
+            [systemPromptsWindow_ close];
+            [systemPromptsWindow_ release];
+            systemPromptsWindow_ = nullptr;
+        }
+        if (settingsWindow_) {
+            NSWindow *parent = [settingsWindow_ sheetParent];
+            if (parent) {
+                [parent endSheet:settingsWindow_];
+            }
+            [settingsWindow_ close];
+            [settingsWindow_ release];
+            settingsWindow_ = nullptr;
+        }
+        systemPromptPresetCombo_ = nullptr;
+        systemPromptEditor_ = nullptr;
+        operationCancelRequested_.store(true);
+        operationBusy_.store(false);
 #endif
         return kResultOk;
     }
@@ -775,16 +806,16 @@ public:
         return kResultOk;
     }
 
-    tresult canResize() override { return kResultTrue; }
+    tresult canResize() override { return kResultFalse; }
 
     tresult checkSizeConstraint(ViewRect *rect) override
     {
         if (!rect) {
             return kInvalidArgument;
         }
-        constexpr int kMinW = 900, kMinH = 560;
-        if (rect->right - rect->left < kMinW) rect->right = rect->left + kMinW;
-        if (rect->bottom - rect->top < kMinH) rect->bottom = rect->top + kMinH;
+        constexpr int kFixedW = 960, kFixedH = 720;
+        rect->right = rect->left + kFixedW;
+        rect->bottom = rect->top + kFixedH;
         return kResultOk;
     }
 
@@ -793,7 +824,7 @@ public:
     {
         switch (action) {
         case kLlmrEditorActionPlan:          planFromPrompt(); break;
-        case kLlmrEditorActionExecute:       executeLastPlan(currentDryRunDefault()); break;
+        case kLlmrEditorActionExecute:       executeFromMainButton(); break;
         case kLlmrEditorActionPreview:       executeLastPlan(true); break;
         case kLlmrEditorActionSaveSettings:  saveSettings(); hideSettings(); break;
         case kLlmrEditorActionOpenSettings:  showSettings(); break;
@@ -805,8 +836,8 @@ public:
         case kLlmrEditorActionOllamaDownloadModel: ollamaDownloadModel(); break;
         case kLlmrEditorActionShowChatTab:    showResponseTab(false); break;
         case kLlmrEditorActionShowRawTab:     showResponseTab(true); break;
-        case kLlmrEditorActionOpenAdvancedSettings:  showAdvancedSettings(); break;
-        case kLlmrEditorActionCloseAdvancedSettings: showBasicSettings(); break;
+        case kLlmrEditorActionOpenAdvancedSettings:  showSettings(); break;
+        case kLlmrEditorActionCloseAdvancedSettings: showSettings(); break;
         case kLlmrEditorActionOllamaServeModel:      ollamaServeModel(); break;
         case kLlmrEditorActionOllamaStopServingModel: ollamaStopServingModel(); break;
         case kLlmrEditorActionOpenHelp:       openHelp(); break;
@@ -823,6 +854,14 @@ public:
         case kLlmrEditorActionChooseBridgeUserLibrary: chooseBridgeUserLibrary(); break;
         case kLlmrEditorActionRevealInstalledBridge: revealInstalledBridge(); break;
         case kLlmrEditorActionUseDetectedBridgeLibrary: useDetectedBridgeLibrary(); break;
+        case kLlmrEditorActionOpenSystemPrompts: openSystemPromptsWindow(); break;
+        case kLlmrEditorActionSaveSystemPrompt: saveSystemPromptFromEditor(); break;
+        case kLlmrEditorActionCancelSystemPrompt: closeSystemPromptsWindow(); break;
+        case kLlmrEditorActionSaveSystemPromptAs: saveSystemPromptToFile(); break;
+        case kLlmrEditorActionLoadSystemPrompt: loadSystemPromptFromFile(); break;
+        case kLlmrEditorActionResetSystemPrompt: resetSystemPromptToDefault(); break;
+        case kLlmrEditorActionSystemPromptPresetChanged: systemPromptPresetChanged(); break;
+        case kLlmrEditorActionCancelOperation: cancelCurrentOperation(); break;
         default: break;
         }
     }
@@ -1072,13 +1111,37 @@ private:
         [v setPlaceholderString:ph]; [v setFont:[NSFont systemFontOfSize:12.0]];
         [p addSubview:v]; [v release]; return v;
     }
-    NSTextField *promptFieldIn(NSView *p, NSRect f, NSString *ph)
+    NSTextView *promptTextViewIn(NSView *p, NSRect f, NSScrollView **outScroll)
     {
-        NSTextField *v = [[LlmrPromptField alloc] initWithFrame:f];
-        [v setPlaceholderString:ph];
-        [v setFont:[NSFont systemFontOfSize:12.0]];
-        [p addSubview:v];
+        NSScrollView *sc = [[NSScrollView alloc] initWithFrame:f];
+        [sc setHasVerticalScroller:YES];
+        [sc setHasHorizontalScroller:NO];
+        [sc setHorizontalScrollElasticity:NSScrollElasticityNone];
+        [sc setAutohidesScrollers:YES];
+        [sc setBorderType:NSBezelBorder];
+        [sc setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+
+        NSTextView *v = [[LlmrPromptTextView alloc] initWithFrame:NSMakeRect(0, 0, f.size.width, f.size.height)];
+        [v setFont:[NSFont systemFontOfSize:13.0]];
+        [v setEditable:YES];
+        [v setRichText:NO];
+        [v setSelectable:YES];
+        [v setAllowsUndo:YES];
+        [v setBackgroundColor:cChatBg()];
+        [v setTextColor:cPri()];
+        [v setHorizontallyResizable:NO];
+        [v setVerticallyResizable:YES];
+        [[v textContainer] setWidthTracksTextView:YES];
+        [[v textContainer] setContainerSize:NSMakeSize(f.size.width, CGFLOAT_MAX)];
+        [v setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+
+        [sc setDocumentView:v];
+        [p addSubview:sc];
+        if (outScroll) {
+            *outScroll = sc;
+        }
         [v release];
+        [sc release];
         return v;
     }
     NSPopUpButton *comboIn(NSView *p, NSRect f, NSArray *items)
@@ -1169,30 +1232,20 @@ private:
         [view_ addSubview:chatView_]; [chatView_ release];
         buildChatView(width, height);
 
-        // Settings overlay (hidden by default)
+        // Settings surface (hosted in a separate fixed-size window)
         settingsView_ = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height)];
         [settingsView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
         [settingsView_ setWantsLayer:YES];
         settingsView_.layer.backgroundColor = cBg().CGColor;
-        [settingsView_ setHidden:YES];
-        [view_ addSubview:settingsView_]; [settingsView_ release];
+        [settingsView_ setHidden:NO];
         buildSettingsView(width, height);
 
         loadSettings();
-
-        // Prompt to install AbletonOSC if missing (once per session)
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            if (view_) {
-                checkAbletonOSCOnFirstUse();
-                checkLLMRDeviceBridgeOnFirstUse();
-            }
-        });
     }
 
     void buildChatView(CGFloat width, CGFloat height)
     {
-        static const CGFloat kHdr = 74.0, kGuide = 34.0, kTabs = 34.0, kBtm = 104.0, kPad = 12.0;
+        static const CGFloat kHdr = 74.0, kGuide = 34.0, kTabs = 34.0, kBtm = 164.0, kPad = 12.0;
 
         // Header bar (top-anchored)
         NSView *hdr = [[NSView alloc] initWithFrame:NSMakeRect(0, height - kHdr, width, kHdr)];
@@ -1210,27 +1263,34 @@ private:
                 cAccent(),
                 [NSColor colorWithCalibratedRed:0.07 green:0.13 blue:0.22 alpha:1.0],
                 [NSColor colorWithCalibratedRed:0.18 green:0.42 blue:0.72 alpha:1.0]);
+        [chatModelLabel_ setToolTip:@"Provider and model readiness for planning."];
         [chatModelLabel_ setAutoresizingMask:NSViewMaxXMargin | NSViewMaxYMargin];
-        chatOscLabel_ = chipIn(hdr, @"● AbletonOSC not checked",
+        chatOscLabel_ = chipIn(hdr, @"● AbletonOSC: not tested",
                 NSMakeRect(kPad + 168, 10, 126, 22),
                 cPri(),
                 [NSColor colorWithCalibratedRed:0.12 green:0.14 blue:0.18 alpha:1.0],
                 [NSColor colorWithCalibratedRed:0.30 green:0.35 blue:0.42 alpha:1.0]);
-        chatBridgeLabel_ = chipIn(hdr, @"● Bridge optional",
+        [chatOscLabel_ setToolTip:@"AbletonOSC connection settings. This is required for ordinary Live actions."];
+        chatBridgeLabel_ = chipIn(hdr, @"● Device Bridge: only needed for devices",
                 NSMakeRect(kPad + 302, 10, 126, 22),
                 cPri(),
                 [NSColor colorWithCalibratedRed:0.12 green:0.14 blue:0.18 alpha:1.0],
                 [NSColor colorWithCalibratedRed:0.30 green:0.35 blue:0.42 alpha:1.0]);
-        chatDryRunLabel_ = chipIn(hdr, @"● Dry run on",
+        [chatBridgeLabel_ setToolTip:@"Device Bridge status. It is only required for browser/device loading actions."];
+        chatDryRunLabel_ = chipIn(hdr, @"● Safety: preview only",
                 NSMakeRect(kPad + 436, 10, 112, 22),
                 cPri(),
                 [NSColor colorWithCalibratedRed:0.12 green:0.14 blue:0.18 alpha:1.0],
                 [NSColor colorWithCalibratedRed:0.30 green:0.35 blue:0.42 alpha:1.0]);
+        [chatDryRunLabel_ setToolTip:@"Safety mode. Preview only runs the plan without changing the Live set; live run sends actions."];
 
-        NSButton *helpBtn = btnIn(hdr, NSMakeRect(width - 190, 38, 74, 28),
+        NSButton *helpBtn = btnIn(hdr, NSMakeRect(width - 274, 38, 74, 28),
                                   @"Help", kLlmrEditorActionOpenHelp);
         [helpBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
-        chatSettingsButton_ = btnIn(hdr, NSMakeRect(width - 104, 38, 92, 28),
+        NSButton *systemPromptsButton = btnIn(hdr, NSMakeRect(width - 192, 38, 108, 28),
+                            @"System Prompts", kLlmrEditorActionOpenSystemPrompts);
+        [systemPromptsButton setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
+        chatSettingsButton_ = btnIn(hdr, NSMakeRect(width - 80, 38, 68, 28),
                                     @"Settings", kLlmrEditorActionOpenSettings);
         [chatSettingsButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
 
@@ -1239,7 +1299,7 @@ private:
         [guide setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
         [chatView_ addSubview:guide]; [guide release];
         labelIn(guide,
-                @"Flow: Settings -> provider/model -> prompt -> Plan -> review Plan/Details -> Dry run -> Execute when ready",
+                @"Status: Model, AbletonOSC, Device Bridge, Safety. Type a request and click Run.",
                 NSMakeRect(kPad, 8, width - 2*kPad, 18),
                 [NSFont systemFontOfSize:11.0], cSec());
 
@@ -1248,7 +1308,7 @@ private:
         [tabs setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
         [chatView_ addSubview:tabs]; [tabs release];
 
-        chatTabButton_ = btnIn(tabs, NSMakeRect(kPad, 4, 86, 26), @"Plan", kLlmrEditorActionShowChatTab);
+        chatTabButton_ = btnIn(tabs, NSMakeRect(kPad, 4, 86, 26), @"Result", kLlmrEditorActionShowChatTab);
         rawTabButton_ = btnIn(tabs, NSMakeRect(kPad + 92, 4, 96, 26), @"Details", kLlmrEditorActionShowRawTab);
 
         // Chat history scroll (fills middle, auto-resizes)
@@ -1284,41 +1344,34 @@ private:
         if ([provider length] == 0) {
             initialStatus = @"Setup needed: Choose a provider in Settings.";
         } else if (![provider isEqualToString:@"ollama"] && ![provider isEqualToString:@"omlx"] && [apiKey length] == 0) {
-            initialStatus = @"Setup needed: Add API key in Advanced Settings.";
+            initialStatus = @"Setup needed: add API key in Settings.";
         }
         chatStatusLabel_ = labelIn(btm, initialStatus,
                                    NSMakeRect(kPad, 4, width - kPad*2, 18),
                                    [NSFont systemFontOfSize:11.0], cSec());
         [chatStatusLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
 
-        // Execute button + Preview button (second row)
-        chatExecuteButton_ = btnIn(btm, NSMakeRect(kPad, 30, 96, 28),
-                                   @"Execute", kLlmrEditorActionExecute);
-        [chatExecuteButton_ setEnabled:NO];
-        chatPreviewButton_ = btnIn(btm, NSMakeRect(kPad + 106, 30, 86, 28),
-                                   @"Dry run", kLlmrEditorActionPreview);
-        [chatPreviewButton_ setEnabled:NO];
-        chatAutoApproveButton_ = checkIn(btm,
-            NSMakeRect(kPad + 204, 32, 126, 24), @"Auto-approve", false);
-        LlmrEditorTarget *autoTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionAutoApproveChanged];
-        [targets_ addObject:autoTarget];
-        [chatAutoApproveButton_ setTarget:autoTarget];
-        [chatAutoApproveButton_ setAction:@selector(performAction:)];
-        [autoTarget release];
+        // Multiline composer (top row of bottom)
+        chatInputView_ = promptTextViewIn(btm, NSMakeRect(kPad, 68, width - kPad*2 - 92, 84), &chatInputScrollView_);
+        chatPromptPlaceholderLabel_ = noteIn(btm,
+            @"Ask LLM-r to create, edit, arrange, mix, or control Live…",
+            NSMakeRect(kPad + 8, 132, width - kPad*2 - 108, 16),
+            [NSFont systemFontOfSize:12.0], cSec());
+        [chatPromptPlaceholderLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+        if ([chatInputView_ respondsToSelector:@selector(setLlmrPlaceholderLabel:)]) {
+            [(LlmrPromptTextView *)chatInputView_ setLlmrPlaceholderLabel:chatPromptPlaceholderLabel_];
+        }
 
-        // Input field + Send button (top row of bottom)
-        chatInputField_ = promptFieldIn(btm, NSMakeRect(kPad, 68, width - kPad*2 - 92, 28),
-                                        @"Describe what you want Ableton to do…");
-        [chatInputField_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
-        LlmrEditorTarget *inputTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionPlan];
-        [targets_ addObject:inputTarget];
-        [chatInputField_ setTarget:inputTarget];
-        [chatInputField_ setAction:@selector(performAction:)];
-        [inputTarget release];
-
-        chatSendButton_ = btnIn(btm, NSMakeRect(width - kPad - 84, 68, 84, 28),
-                                @"Plan", kLlmrEditorActionPlan);
+        chatSendButton_ = btnIn(btm, NSMakeRect(width - kPad - 84, 124, 84, 28),
+                                @"Run", kLlmrEditorActionPlan);
         [chatSendButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
+        [chatSendButton_ setToolTip:@"Plan with the selected model, then run the resulting Ableton actions."];
+        chatCancelButton_ = btnIn(btm, NSMakeRect(width - kPad - 84, 90, 84, 28),
+                                  @"Cancel", kLlmrEditorActionCancelOperation);
+        [chatCancelButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
+        [chatCancelButton_ setEnabled:NO];
+        [chatCancelButton_ setHidden:YES];
+        [chatCancelButton_ setToolTip:@"Cancel the current planning or execution request."];
 
         // Populate model badge from saved settings
         NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
@@ -1333,281 +1386,225 @@ private:
     // ─── buildSettingsView ────────────────────────────────────
     void buildSettingsView(CGFloat width, CGFloat height)
     {
-        static const CGFloat kHdr = 44.0, kPad = 16.0, kLblW = 104.0, kGap = 8.0;
-        const CGFloat fldW = width - 2.0*kPad - kLblW - kGap;
-        CGFloat mainFldW = fldW;
-        if (mainFldW > 440.0) mainFldW = 440.0;
+        (void)width;
+        (void)height;
+        static const CGFloat kSettingsWidth = 920.0;
+        static const CGFloat kSettingsHeight = 720.0;
+        static const CGFloat kHdr = 48.0, kFooter = 48.0, kPad = 16.0;
+        static const CGFloat kLblW = 104.0, kGap = 8.0;
+        static const CGFloat kLeftX = 16.0, kColW = 432.0, kRightX = 464.0;
+        const CGFloat fldW = kColW - kLblW - kGap;
+        [settingsView_ setFrame:NSMakeRect(0, 0, kSettingsWidth, kSettingsHeight)];
 
         // Header
-        NSView *hdr = [[NSView alloc] initWithFrame:NSMakeRect(0, height - kHdr, width, kHdr)];
+        NSView *hdr = [[NSView alloc] initWithFrame:NSMakeRect(0, kSettingsHeight - kHdr, kSettingsWidth, kHdr)];
         [hdr setWantsLayer:YES]; hdr.layer.backgroundColor = cHdr().CGColor;
-        [hdr setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
+        [hdr setAutoresizingMask:NSViewMinYMargin];
         [settingsView_ addSubview:hdr]; [hdr release];
 
-        labelIn(hdr, @"Settings", NSMakeRect(kPad, 9, 160, 26),
+        labelIn(hdr, @"Settings", NSMakeRect(kPad, 12, 160, 24),
                 [NSFont boldSystemFontOfSize:16.0], cPri());
-        settingsAdvancedButton_ = btnIn(hdr, NSMakeRect(width - 320, 8, 112, 28),
-                                        @"Advanced", kLlmrEditorActionOpenAdvancedSettings);
-        [settingsAdvancedButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
-        settingsBasicButton_ = btnIn(hdr, NSMakeRect(width - 320, 8, 112, 28),
-                                     @"Basic", kLlmrEditorActionCloseAdvancedSettings);
-        [settingsBasicButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
-        [settingsBasicButton_ setHidden:YES];
-        NSButton *cancelBtn = btnIn(hdr, NSMakeRect(width - 198, 8, 86, 28),
+        NSButton *cancelBtn = btnIn(hdr, NSMakeRect(kSettingsWidth - 198, 8, 86, 28),
                                     @"Cancel", kLlmrEditorActionCancelSettings);
         [cancelBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
-        NSButton *saveBtn = btnIn(hdr, NSMakeRect(width - 104, 8, 88, 28),
+        NSButton *saveBtn = btnIn(hdr, NSMakeRect(kSettingsWidth - 104, 8, 88, 28),
                                   @"Save", kLlmrEditorActionSaveSettings);
         [saveBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
 
-        settingsMainView_ = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
-        [settingsMainView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+        settingsMainView_ = [[NSView alloc] initWithFrame:NSMakeRect(0, kFooter, kSettingsWidth, kSettingsHeight - kHdr - kFooter)];
+        [settingsMainView_ setAutoresizingMask:NSViewNotSizable];
         [settingsMainView_ setWantsLayer:YES]; settingsMainView_.layer.backgroundColor = cBg().CGColor;
         [settingsView_ addSubview:settingsMainView_]; [settingsMainView_ release];
 
-        CGFloat y = height - kHdr - 22.0;
-        labelIn(settingsMainView_, @"Basic Settings", NSMakeRect(kPad, y - 24.0, width - 2*kPad, 24.0),
-                [NSFont boldSystemFontOfSize:13.0], cAccent());
+        NSView *footer = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, kSettingsWidth, kFooter)];
+        [footer setWantsLayer:YES]; footer.layer.backgroundColor = cHdr().CGColor;
+        [settingsView_ addSubview:footer]; [footer release];
+        noteIn(footer,
+            @"Save applies changes. Cancel restores the previously saved settings.",
+            NSMakeRect(kPad, 15, 420, 18),
+            [NSFont systemFontOfSize:11.0], cSec());
+        NSButton *bottomCancelBtn = btnIn(footer, NSMakeRect(kSettingsWidth - 198, 10, 86, 28),
+                                         @"Cancel", kLlmrEditorActionCancelSettings);
+        [bottomCancelBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
+        NSButton *bottomSaveBtn = btnIn(footer, NSMakeRect(kSettingsWidth - 104, 10, 88, 28),
+                                       @"Save", kLlmrEditorActionSaveSettings);
+        [bottomSaveBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
+
+        CGFloat leftY = kSettingsHeight - kHdr - kFooter - 14.0;
+        CGFloat rightY = leftY;
+
+#define SECTION(parent, x, y, title) \
+        labelIn(parent, title, NSMakeRect(x, y - 22.0, kColW, 22.0), \
+                [NSFont boldSystemFontOfSize:12.0], cAccent()); \
         y -= 30.0;
-        noteIn(settingsMainView_,
-               @"Basic Settings chooses the model used for planning. Advanced Settings controls Ableton, Bridge, local runtimes, and diagnostics.",
-               NSMakeRect(kPad, y - 38.0, width - 2*kPad, 38.0),
-               [NSFont systemFontOfSize:11.0], cSec());
-        y -= 52.0;
-        labelIn(settingsMainView_, @"Provider", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
-                [NSFont systemFontOfSize:12.0], cSec());
-        settingsProviderCombo_ = comboIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 28.0, mainFldW, 28.0),
-            providers());
+
+#define ROW(parent, x, y, label, field_expr) \
+        labelIn(parent, label, NSMakeRect(x, y - 28.0, kLblW, 28.0), \
+                [NSFont systemFontOfSize:12.0], cSec()); \
+        field_expr; \
+        y -= 36.0;
+
+        SECTION(settingsMainView_, kLeftX, leftY, @"Provider")
+        ROW(settingsMainView_, kLeftX, leftY, @"Provider",
+            settingsProviderCombo_ = comboIn(settingsMainView_,
+                NSMakeRect(kLeftX + kLblW + kGap, leftY - 28.0, fldW, 28.0),
+                providers()))
         LlmrEditorTarget *providerTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionProviderChanged];
         [targets_ addObject:providerTarget];
         [settingsProviderCombo_ setTarget:providerTarget];
         [settingsProviderCombo_ setAction:@selector(performAction:)];
         [providerTarget release];
         [settingsProviderCombo_ setAutoresizingMask:NSViewMaxYMargin];
-        y -= 42.0;
-        labelIn(settingsMainView_, @"Model", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
-                [NSFont systemFontOfSize:12.0], cSec());
-        settingsModelField_ = comboIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 28.0, mainFldW, 28.0),
-            defaultModelsForProvider(@"openai"));
+
+        ROW(settingsMainView_, kLeftX, leftY, @"Model",
+            settingsModelField_ = comboIn(settingsMainView_,
+                NSMakeRect(kLeftX + kLblW + kGap, leftY - 28.0, fldW, 28.0),
+                defaultModelsForProvider(@"openai")))
         [settingsModelField_ setAutoresizingMask:NSViewMaxYMargin];
-        y -= 36.0;
-        labelIn(settingsMainView_, @"Custom model", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
-                [NSFont systemFontOfSize:12.0], cSec());
-        settingsCustomModelField_ = fieldIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 28.0, mainFldW, 28.0),
-            @"Only for unlisted or custom models", NO);
+
+        ROW(settingsMainView_, kLeftX, leftY, @"Custom model",
+            settingsCustomModelField_ = fieldIn(settingsMainView_,
+                NSMakeRect(kLeftX + kLblW + kGap, leftY - 28.0, fldW, 28.0),
+                @"Only for unlisted or custom models", NO))
         [settingsCustomModelField_ setAutoresizingMask:NSViewMaxYMargin];
-        y -= 34.0;
         settingsModelStatusLabel_ = noteIn(settingsMainView_,
             @"Select a listed model or enter a custom model.",
-            NSMakeRect(kPad + kLblW + kGap, y - 34.0, mainFldW, 34.0),
+            NSMakeRect(kLeftX + kLblW + kGap, leftY - 28.0, fldW, 28.0),
             [NSFont systemFontOfSize:11.0], cSec());
-        y -= 48.0;
-        labelIn(settingsMainView_, @"Server", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
-                [NSFont systemFontOfSize:12.0], cSec());
-        settingsEndpointField_ = fieldIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 28.0, mainFldW, 28.0),
-            @"Provider default or API base URL", NO);
+        leftY -= 38.0;
+
+        ROW(settingsMainView_, kLeftX, leftY, @"Server",
+            settingsEndpointField_ = fieldIn(settingsMainView_,
+                NSMakeRect(kLeftX + kLblW + kGap, leftY - 28.0, fldW, 28.0),
+                @"Provider default or API base URL", NO))
         [settingsEndpointField_ setAutoresizingMask:NSViewMaxYMargin];
-        y -= 44.0;
+
+        ROW(settingsMainView_, kLeftX, leftY, @"API key",
+            settingsApiKeyField_ = fieldIn(settingsMainView_,
+                NSMakeRect(kLeftX + kLblW + kGap, leftY - 28.0, fldW, 28.0),
+                @"Cloud providers only", YES))
+
+        SECTION(settingsMainView_, kLeftX, leftY, @"Run behaviour")
         settingsDryRunButton_ = checkIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 120, 24), @"Dry run", true);
-        y -= 30.0;
-        settingsAutoApproveButton_ = checkIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 150, 24), @"Auto-approve", false);
-        y -= 46.0;
-        btnIn(settingsMainView_, NSMakeRect(kPad + kLblW + kGap, y - 30.0, 124, 30),
+            NSMakeRect(kLeftX + kLblW + kGap, leftY - 24.0, 260, 24), @"Preview only; do not change Live", true);
+        leftY -= 30.0;
+        settingsDestructiveButton_ = checkIn(settingsMainView_,
+            NSMakeRect(kLeftX + kLblW + kGap, leftY - 24.0, 220, 24), @"Allow destructive actions", false);
+        leftY -= 30.0;
+        settingsExtraPromptButton_ = checkIn(settingsMainView_,
+            NSMakeRect(kLeftX + kLblW + kGap, leftY - 24.0, 220, 24), @"LLM-r guidance prompt", true);
+        leftY -= 38.0;
+        btnIn(settingsMainView_, NSMakeRect(kLeftX + kLblW + kGap, leftY - 30.0, 124, 30),
               @"Test readiness", kLlmrEditorActionTestReadiness);
-        btnIn(settingsMainView_, NSMakeRect(kPad + kLblW + kGap + 134, y - 30.0, 132, 30),
-              @"Advanced", kLlmrEditorActionOpenAdvancedSettings);
-
-        settingsAdvancedView_ = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
-        [settingsAdvancedView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-        [settingsAdvancedView_ setWantsLayer:YES]; settingsAdvancedView_.layer.backgroundColor = cBg().CGColor;
-        [settingsAdvancedView_ setHidden:YES];
-        [settingsView_ addSubview:settingsAdvancedView_]; [settingsAdvancedView_ release];
-
-        static const CGFloat kContentH = 980.0;
-        NSScrollView *sc = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
-        [sc setHasVerticalScroller:YES]; [sc setBorderType:NSNoBorder];
-        [sc setHasHorizontalScroller:NO];
-        [sc setHorizontalScrollElasticity:NSScrollElasticityNone];
-        [sc setAutohidesScrollers:YES];
-        [sc setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-        [sc setBackgroundColor:cBg()];
-        [settingsAdvancedView_ addSubview:sc]; [sc release];
-
-        NSView *cv = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, kContentH)];
-        [cv setAutoresizingMask:NSViewWidthSizable];
-        [cv setWantsLayer:YES]; cv.layer.backgroundColor = cBg().CGColor;
-        [sc setDocumentView:cv]; [cv release];
-
-        CGFloat ay = kContentH;
-
-#define SECT(title) \
-        ay -= 16.0; \
-        labelIn(cv, title, NSMakeRect(kPad, ay - 22.0, width - 2*kPad, 22.0), \
-                [NSFont boldSystemFontOfSize:12.0], cAccent()); \
-        ay -= 24.0;
-
-#define ROW_LBL(lbl, field_expr) \
-        ay -= 8.0; \
-        labelIn(cv, lbl, NSMakeRect(kPad, ay - 28.0, kLblW, 28.0), \
-                [NSFont systemFontOfSize:12.0], cSec()); \
-        field_expr; \
-        ay -= 30.0;
-
-        noteIn(cv,
-            @"Advanced Settings controls Ableton, Bridge, local runtimes, and diagnostics. Basic Settings chooses the planning model.",
-            NSMakeRect(kPad, ay - 42.0, width - 2*kPad, 42.0),
+        leftY -= 42.0;
+        noteIn(settingsMainView_,
+            @"Preview mode is the safety path. Turn it off when you want one-click live execution.",
+            NSMakeRect(kLeftX, leftY - 44.0, kColW, 44.0),
             [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 54.0;
-        noteIn(cv,
-            @"Runtime checks are manual in this VST3: click Recheck Bridge or Refresh Status. Opening Settings does not probe services.",
-            NSMakeRect(kPad, ay - 30.0, width - 2*kPad, 30.0),
-            [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 40.0;
 
-        SECT(@"Provider credentials")
-        ROW_LBL(@"API key:",
-            settingsApiKeyField_ = fieldIn(cv,
-                NSMakeRect(kPad + kLblW + kGap, ay - 28.0, fldW, 28.0),
-                @"API key (cloud providers)", YES))
-        ay -= 8.0;
-        settingsExtraPromptButton_ = checkIn(cv,
-            NSMakeRect(kPad + kLblW + kGap, ay - 24.0, 220, 24), @"LLM-r guidance prompt", true);
-        ay -= 30.0;
-        noteIn(cv,
-            @"Server/API base URL is in Basic Settings. Companion server API tokens are configured outside the VST3.",
-            NSMakeRect(kPad + kLblW + kGap, ay - 34.0, fldW, 34.0),
-            [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 46.0;
+        SECTION(settingsMainView_, kRightX, rightY, @"Ableton")
+        labelIn(settingsMainView_, @"OSC host", NSMakeRect(kRightX, rightY - 28.0, kLblW, 28.0),
+                [NSFont systemFontOfSize:12.0], cSec());
+        settingsOscHostField_ = fieldIn(settingsMainView_,
+            NSMakeRect(kRightX + kLblW + kGap, rightY - 28.0, 170, 28.0), @"127.0.0.1", NO);
+        labelIn(settingsMainView_, @"Port", NSMakeRect(kRightX + kLblW + kGap + 182, rightY - 28.0, 44, 28.0),
+                [NSFont systemFontOfSize:12.0], cSec());
+        settingsOscPortField_ = fieldIn(settingsMainView_,
+            NSMakeRect(kRightX + kLblW + kGap + 232, rightY - 28.0, 90, 28.0), @"11000", NO);
+        rightY -= 36.0;
 
-        SECT(@"AbletonOSC")
-        ay -= 8.0;
-        labelIn(cv, @"Host", NSMakeRect(kPad, ay - 28.0, kLblW, 28.0),
+        labelIn(settingsMainView_, @"Bridge host", NSMakeRect(kRightX, rightY - 28.0, kLblW, 28.0),
                 [NSFont systemFontOfSize:12.0], cSec());
-        settingsOscHostField_ = fieldIn(cv,
-            NSMakeRect(kPad + kLblW + kGap, ay - 28.0, 170, 28.0), @"127.0.0.1", NO);
-        labelIn(cv, @"Port", NSMakeRect(kPad + kLblW + kGap + 182, ay - 28.0, 44, 28.0),
+        settingsBridgeHostField_ = fieldIn(settingsMainView_,
+            NSMakeRect(kRightX + kLblW + kGap, rightY - 28.0, 170, 28.0), @"127.0.0.1", NO);
+        labelIn(settingsMainView_, @"Port", NSMakeRect(kRightX + kLblW + kGap + 182, rightY - 28.0, 44, 28.0),
                 [NSFont systemFontOfSize:12.0], cSec());
-        settingsOscPortField_ = fieldIn(cv,
-            NSMakeRect(kPad + kLblW + kGap + 232, ay - 28.0, 90, 28.0), @"11000", NO);
-        btnIn(cv, NSMakeRect(kPad + kLblW + kGap + 334, ay - 28.0, 128, 28), @"Test readiness", kLlmrEditorActionTestReadiness);
-        ay -= 42.0;
+        settingsBridgePortField_ = fieldIn(settingsMainView_,
+            NSMakeRect(kRightX + kLblW + kGap + 232, rightY - 28.0, 90, 28.0), @"8788", NO);
+        rightY -= 36.0;
 
-        SECT(@"Device Bridge")
-        ay -= 8.0;
-        labelIn(cv, @"Host", NSMakeRect(kPad, ay - 28.0, kLblW, 28.0),
+        labelIn(settingsMainView_, @"Detected", NSMakeRect(kRightX, rightY - 28.0, kLblW, 28.0),
                 [NSFont systemFontOfSize:12.0], cSec());
-        settingsBridgeHostField_ = fieldIn(cv,
-            NSMakeRect(kPad + kLblW + kGap, ay - 28.0, 170, 28.0), @"127.0.0.1", NO);
-        labelIn(cv, @"Port", NSMakeRect(kPad + kLblW + kGap + 182, ay - 28.0, 44, 28.0),
-                [NSFont systemFontOfSize:12.0], cSec());
-        settingsBridgePortField_ = fieldIn(cv,
-            NSMakeRect(kPad + kLblW + kGap + 232, ay - 28.0, 90, 28.0), @"8788", NO);
-        ay -= 40.0;
-
-        labelIn(cv, @"Detected", NSMakeRect(kPad, ay - 28.0, kLblW, 28.0),
-                [NSFont systemFontOfSize:12.0], cSec());
-        settingsBridgeLibraryCandidatesCombo_ = comboIn(cv,
-            NSMakeRect(kPad + kLblW + kGap, ay - 28.0, fldW - 150.0, 28.0), @[]);
+        settingsBridgeLibraryCandidatesCombo_ = comboIn(settingsMainView_,
+            NSMakeRect(kRightX + kLblW + kGap, rightY - 28.0, 174.0, 28.0), @[]);
         LlmrEditorTarget *detectedLibraryTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionUseDetectedBridgeLibrary];
         [targets_ addObject:detectedLibraryTarget];
         [settingsBridgeLibraryCandidatesCombo_ setTarget:detectedLibraryTarget];
         [settingsBridgeLibraryCandidatesCombo_ setAction:@selector(performAction:)];
         [detectedLibraryTarget release];
-        btnIn(cv, NSMakeRect(kPad + kLblW + kGap + fldW - 142.0, ay - 28.0, 142, 28),
+        btnIn(settingsMainView_, NSMakeRect(kRightX + kLblW + kGap + 182.0, rightY - 28.0, 142, 28),
               @"Choose Ableton User Library…", kLlmrEditorActionChooseBridgeUserLibrary);
-        ay -= 38.0;
+        rightY -= 34.0;
 
-        settingsBridgeLibraryLabel_ = noteIn(cv,
+        settingsBridgeLibraryLabel_ = noteIn(settingsMainView_,
             @"Selected Ableton User Library: Not selected",
-            NSMakeRect(kPad, ay - 34.0, width - 2*kPad, 34.0),
+            NSMakeRect(kRightX, rightY - 28.0, kColW, 28.0),
             [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 38.0;
-        settingsBridgeInstallTargetLabel_ = noteIn(cv,
+        rightY -= 30.0;
+        settingsBridgeInstallTargetLabel_ = noteIn(settingsMainView_,
             @"Bridge install target: Not selected",
-            NSMakeRect(kPad, ay - 34.0, width - 2*kPad, 34.0),
+            NSMakeRect(kRightX, rightY - 28.0, kColW, 28.0),
             [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 38.0;
-        deviceBridgeStatusLabel_ = noteIn(cv,
+        rightY -= 30.0;
+        deviceBridgeStatusLabel_ = noteIn(settingsMainView_,
             @"Bridge status: Not installed",
-            NSMakeRect(kPad, ay - 108.0, width - 2*kPad, 108.0),
+            NSMakeRect(kRightX, rightY - 72.0, kColW, 72.0),
             [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 118.0;
+        rightY -= 78.0;
 
-        btnIn(cv, NSMakeRect(kPad, ay - 28.0, 84, 28), @"Recheck", kLlmrEditorActionDeviceBridgeStatus);
-        settingsBridgeInstallButton_ = btnIn(cv, NSMakeRect(kPad + 94, ay - 28.0, 132, 28), @"Install / Reinstall Bridge", kLlmrEditorActionInstallBridge);
-        settingsBridgeRevealButton_ = btnIn(cv, NSMakeRect(kPad + 236, ay - 28.0, 138, 28), @"Reveal Installed Bridge", kLlmrEditorActionRevealInstalledBridge);
-        btnIn(cv, NSMakeRect(kPad + 384, ay - 28.0, 124, 28), @"Copy Install Path", kLlmrEditorActionCopyBridgeInstallPath);
-        ay -= 36.0;
-        btnIn(cv, NSMakeRect(kPad, ay - 28.0, 136, 28), @"Open Bridge Setup Help", kLlmrEditorActionOpenBridgeHelp);
-        ay -= 40.0;
+        btnIn(settingsMainView_, NSMakeRect(kRightX, rightY - 28.0, 72, 28), @"Recheck", kLlmrEditorActionDeviceBridgeStatus);
+        settingsBridgeInstallButton_ = btnIn(settingsMainView_, NSMakeRect(kRightX + 80, rightY - 28.0, 114, 28), @"Install Bridge", kLlmrEditorActionInstallBridge);
+        settingsBridgeRevealButton_ = btnIn(settingsMainView_, NSMakeRect(kRightX + 202, rightY - 28.0, 104, 28), @"Reveal", kLlmrEditorActionRevealInstalledBridge);
+        btnIn(settingsMainView_, NSMakeRect(kRightX + 314, rightY - 28.0, 92, 28), @"Copy Path", kLlmrEditorActionCopyBridgeInstallPath);
+        rightY -= 34.0;
+        btnIn(settingsMainView_, NSMakeRect(kRightX, rightY - 28.0, 132, 28), @"Bridge Setup Help", kLlmrEditorActionOpenBridgeHelp);
+        rightY -= 38.0;
 
-        SECT(@"Ollama")
-        ollamaStatusLabel_ = noteIn(cv,
-            @"Ollama: status unknown. Open Advanced Settings or click Refresh Status.",
-            NSMakeRect(kPad, ay - 36.0, width - 2*kPad, 36.0),
+        SECTION(settingsMainView_, kRightX, rightY, @"Ollama")
+        ollamaStatusLabel_ = noteIn(settingsMainView_,
+            @"Ollama: status unknown. Click Refresh Status.",
+            NSMakeRect(kRightX, rightY - 34.0, kColW, 34.0),
             [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 48.0;
-        btnIn(cv, NSMakeRect(kPad,          ay - 28.0, 108, 28), @"Start Ollama",   kLlmrEditorActionOllamaStart);
-        btnIn(cv, NSMakeRect(kPad + 116,    ay - 28.0, 108, 28), @"Stop Ollama",    kLlmrEditorActionOllamaStop);
-        btnIn(cv, NSMakeRect(kPad + 232,    ay - 28.0, 112, 28), @"Install", kLlmrEditorActionOllamaInstall);
-        btnIn(cv, NSMakeRect(kPad + 352,    ay - 28.0, 124, 28), @"Refresh Status", kLlmrEditorActionOllamaListModels);
-        ay -= 44.0;
+        rightY -= 40.0;
+        btnIn(settingsMainView_, NSMakeRect(kRightX,          rightY - 28.0, 86, 28), @"Start",   kLlmrEditorActionOllamaStart);
+        btnIn(settingsMainView_, NSMakeRect(kRightX + 94,     rightY - 28.0, 82, 28), @"Stop",    kLlmrEditorActionOllamaStop);
+        btnIn(settingsMainView_, NSMakeRect(kRightX + 184,    rightY - 28.0, 78, 28), @"Install", kLlmrEditorActionOllamaInstall);
+        btnIn(settingsMainView_, NSMakeRect(kRightX + 270,    rightY - 28.0, 112, 28), @"Refresh Status", kLlmrEditorActionOllamaListModels);
+        rightY -= 36.0;
 
-        labelIn(cv, @"Installed model", NSMakeRect(kPad, ay - 20.0, 160, 20.0),
+        labelIn(settingsMainView_, @"Installed model", NSMakeRect(kRightX, rightY - 20.0, 160, 20.0),
                 [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 24.0;
-        CGFloat ollamaComboW = width - 2.0*kPad - 244.0;
-        if (ollamaComboW > 420.0) ollamaComboW = 420.0;
-        if (ollamaComboW < 240.0) ollamaComboW = 240.0;
-        CGFloat ollamaBtnX = kPad + ollamaComboW + 10.0;
-        ollamaModelsCombo_ = comboIn(cv,
-            NSMakeRect(kPad, ay - 28.0, ollamaComboW, 28.0), @[]);
+        rightY -= 24.0;
+        ollamaModelsCombo_ = comboIn(settingsMainView_,
+            NSMakeRect(kRightX, rightY - 28.0, 188, 28.0), @[]);
         [ollamaModelsCombo_ setAutoresizingMask:NSViewMaxYMargin];
-        btnIn(cv, NSMakeRect(ollamaBtnX, ay - 28.0, 64, 28), @"Serve", kLlmrEditorActionOllamaServeModel);
-        btnIn(cv, NSMakeRect(ollamaBtnX + 72, ay - 28.0, 112, 28), @"Stop Serving", kLlmrEditorActionOllamaStopServingModel);
-        btnIn(cv, NSMakeRect(ollamaBtnX + 192, ay - 28.0, 52, 28), @"Test", kLlmrEditorActionOllamaTestModel);
-        ay -= 44.0;
+        btnIn(settingsMainView_, NSMakeRect(kRightX + 198, rightY - 28.0, 58, 28), @"Serve", kLlmrEditorActionOllamaServeModel);
+        btnIn(settingsMainView_, NSMakeRect(kRightX + 264, rightY - 28.0, 94, 28), @"Stop Serve", kLlmrEditorActionOllamaStopServingModel);
+        btnIn(settingsMainView_, NSMakeRect(kRightX + 366, rightY - 28.0, 52, 28), @"Test", kLlmrEditorActionOllamaTestModel);
+        rightY -= 36.0;
 
-        labelIn(cv, @"Downloadable model", NSMakeRect(kPad, ay - 20.0, 160, 20.0),
+        labelIn(settingsMainView_, @"Downloadable model", NSMakeRect(kRightX, rightY - 20.0, 160, 20.0),
                 [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 24.0;
-        ollamaModelField_ = comboIn(cv,
-            NSMakeRect(kPad, ay - 28.0, ollamaComboW, 28.0),
+        rightY -= 24.0;
+        ollamaModelField_ = comboIn(settingsMainView_,
+            NSMakeRect(kRightX, rightY - 28.0, 188, 28.0),
             fallbackOllamaDownloadModels());
         [ollamaModelField_ setAutoresizingMask:NSViewMaxYMargin];
-        btnIn(cv, NSMakeRect(ollamaBtnX, ay - 28.0, 118, 28),
+        btnIn(settingsMainView_, NSMakeRect(kRightX + 198, rightY - 28.0, 104, 28),
               @"Refresh Online", kLlmrEditorActionOllamaRefreshOnlineModels);
-        btnIn(cv, NSMakeRect(ollamaBtnX + 126, ay - 28.0, 118, 28),
+        btnIn(settingsMainView_, NSMakeRect(kRightX + 310, rightY - 28.0, 86, 28),
               @"Download", kLlmrEditorActionOllamaDownloadModel);
-        ay -= 52.0;
+        rightY -= 36.0;
 
-        SECT(@"oMLX")
-        noteIn(cv,
-            @"oMLX can be selected as a provider in Basic Settings. Use the PyQt companion for oMLX runtime download, serve, stop, and delete controls in this release.",
-            NSMakeRect(kPad, ay - 44.0, width - 2*kPad, 44.0),
-            [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 58.0;
-
-        SECT(@"Safety and diagnostics")
-        settingsDestructiveButton_ = checkIn(cv,
-            NSMakeRect(kPad, ay - 24.0, 210, 24), @"Allow destructive actions", false);
-        ay -= 34.0;
-        noteIn(cv,
-            @"Debug output lives in the Details tab after planning or execution.",
-            NSMakeRect(kPad, ay - 30.0, width - 2*kPad, 30.0),
+        noteIn(settingsMainView_,
+            @"oMLX can be selected as a provider. Use the PyQt companion for oMLX runtime management in this release.",
+            NSMakeRect(kRightX, rightY - 34.0, kColW, 34.0),
             [NSFont systemFontOfSize:11.0], cSec());
 
-        (void)ay;
         refreshBridgeLibraryCandidates();
         refreshBridgePathUI();
-#undef SECT
-#undef ROW_LBL
+#undef SECTION
+#undef ROW
     }
 
     void setStatus(NSString *message)
@@ -1695,11 +1692,40 @@ private:
         refreshReadinessGuidance();
     }
 
-    bool currentDryRunDefault()
+    NSString *promptInputText()
+    {
+        if (!chatInputView_) return @"";
+        NSString *value = [chatInputView_ string] ?: @"";
+        return [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    }
+
+    void clearPromptInput()
+    {
+        if (chatInputView_) {
+            [chatInputView_ setString:@""];
+        }
+        refreshPromptPlaceholder();
+    }
+
+    void refreshPromptPlaceholder()
+    {
+        if (!chatPromptPlaceholderLabel_ || !chatInputView_) return;
+        NSString *raw = [chatInputView_ string] ?: @"";
+        BOOL empty = [[raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] length] == 0;
+        [chatPromptPlaceholderLabel_ setHidden:!empty];
+    }
+
+    bool requireDryRunBeforeExecuteSetting()
     {
         if (settingsDryRunButton_) return buttonOn(settingsDryRunButton_);
         NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-        return [d objectForKey:@"llmr.vst3.dry_run"] ? [d boolForKey:@"llmr.vst3.dry_run"] : true;
+        if ([d objectForKey:@"llmr.vst3.require_dry_run_before_execute"]) {
+            return [d boolForKey:@"llmr.vst3.require_dry_run_before_execute"];
+        }
+        if ([d objectForKey:@"llmr.vst3.dry_run"]) {
+            return [d boolForKey:@"llmr.vst3.dry_run"];
+        }
+        return true;
     }
 
     NSString *deviceBridgeHost()
@@ -1737,15 +1763,15 @@ private:
             [[NSUserDefaults standardUserDefaults] integerForKey:@"llmr.vst3.osc_port"];
         if (oscPort <= 0) oscPort = 11000;
         bool oscConfigured = [oscHost length] > 0 && oscPort > 0;
-        setChip(chatOscLabel_, oscConfigured ? @"AbletonOSC not checked" : @"AbletonOSC missing", false);
+        setChip(chatOscLabel_, oscConfigured ? @"AbletonOSC: not tested" : @"AbletonOSC: configure host/port", false);
 
         NSString *bridgeLabel = deviceBridgeChecked_
-            ? (deviceBridgeReachable_ ? @"Bridge reachable" : @"Bridge unreachable")
-            : @"Bridge optional";
+            ? (deviceBridgeReachable_ ? @"Device Bridge: available" : @"Device Bridge: not reachable")
+            : @"Device Bridge: only needed for devices";
         setChip(chatBridgeLabel_, bridgeLabel, deviceBridgeReachable_);
 
-        bool dry = currentDryRunDefault();
-        setChip(chatDryRunLabel_, dry ? @"Dry run on" : @"Dry run off", dry);
+        bool requireDryRun = requireDryRunBeforeExecuteSetting();
+        setChip(chatDryRunLabel_, requireDryRun ? @"Safety: preview only" : @"Safety: live run", requireDryRun);
     }
 
     void testReadiness()
@@ -1754,43 +1780,231 @@ private:
         NSString *provider = settingsProviderCombo_ ? controlString(settingsProviderCombo_) : @"";
         NSString *model = resolvedModelForSettings(provider, settingsModelField_ ? controlString(settingsModelField_) : @"");
         if ([provider length] == 0 || [model length] == 0) {
-            setStatus(@"Model missing - open Basic Settings and choose a provider/model or enter Custom model.");
+            setStatus(@"Model missing - open Settings and choose a provider/model or enter Custom model.");
             return;
         }
         NSString *oscHost = settingsOscHostField_ ? controlString(settingsOscHostField_) : @"127.0.0.1";
         NSInteger oscPort = settingsOscPortField_ ? [controlString(settingsOscPortField_) integerValue] : 11000;
         if ([oscHost length] == 0 || oscPort <= 0) {
-            setStatus(@"AbletonOSC missing - open Advanced Settings and set host/port.");
+            setStatus(@"AbletonOSC missing - open Settings and set host/port.");
             return;
         }
-        setStatus(currentDryRunDefault()
-            ? @"Readiness: model configured; AbletonOSC not checked; Device Bridge optional; Dry run on. Recheck Bridge for device_load."
-            : @"Readiness: model configured; AbletonOSC not checked; Device Bridge optional; Dry run off. Enable Dry run before first execution.");
+        setStatus(requireDryRunBeforeExecuteSetting()
+            ? @"Readiness: model configured; AbletonOSC not tested; Device Bridge only needed for device loading; preview mode is on."
+            : @"Readiness: model configured; AbletonOSC not tested; Device Bridge only needed for device loading; live run is on.");
         checkDeviceBridgeStatus();
     }
 
     void setBusy(bool busy)
     {
-        if (chatSendButton_) [chatSendButton_ setEnabled:!busy];
+        operationBusy_.store(busy);
+        if (chatSendButton_) {
+            [chatSendButton_ setEnabled:!busy];
+            [chatSendButton_ setTitle:busy ? @"Running" : @"Run"];
+        }
+        if (chatCancelButton_) {
+            [chatCancelButton_ setEnabled:busy];
+            [chatCancelButton_ setHidden:!busy];
+        }
+        if (chatInputView_) {
+            [chatInputView_ setEditable:!busy];
+        }
         bool hasActions = !busy && lastActions_ && [lastActions_ count] > 0;
         if (chatExecuteButton_) [chatExecuteButton_ setEnabled:hasActions];
         if (chatPreviewButton_) [chatPreviewButton_ setEnabled:hasActions];
     }
 
+    void cancelCurrentOperation()
+    {
+        if (!operationBusy_.load()) {
+            setStatus(@"No process is running.");
+            return;
+        }
+        operationCancelRequested_.store(true);
+        setStatus(@"Cancelling...");
+    }
+
     void showSettings()
     {
         if (!settingsView_) return;
+        if (!settingsWindow_) {
+            NSRect frame = NSMakeRect(0, 0, 920, 720);
+            settingsWindow_ = [[NSWindow alloc]
+                initWithContentRect:frame
+                          styleMask:NSWindowStyleMaskTitled
+                            backing:NSBackingStoreBuffered
+                              defer:NO];
+            [settingsWindow_ setTitle:@"LLM-r Settings"];
+            [settingsWindow_ setReleasedWhenClosed:NO];
+            [settingsWindow_ setLevel:NSModalPanelWindowLevel];
+            [settingsWindow_ setContentView:settingsView_];
+        }
         loadSettings();
-        showBasicSettings();
-        [settingsView_ setHidden:NO];
-        [chatView_ setHidden:YES];
+        ollamaListModels();
+        NSWindow *owner = view_ ? [view_ window] : nil;
+        if (owner && [settingsWindow_ sheetParent] != owner) {
+            [owner beginSheet:settingsWindow_ completionHandler:nil];
+        } else {
+            [settingsWindow_ makeKeyAndOrderFront:nil];
+        }
+        [settingsWindow_ makeKeyWindow];
+        [NSApp activateIgnoringOtherApps:YES];
     }
 
     void hideSettings()
     {
-        if (!settingsView_) return;
-        [settingsView_ setHidden:YES];
-        [chatView_ setHidden:NO];
+        if (settingsWindow_) {
+            NSWindow *parent = [settingsWindow_ sheetParent];
+            if (parent) {
+                [parent endSheet:settingsWindow_];
+            }
+            [settingsWindow_ orderOut:nil];
+        }
+    }
+
+    void ensureSystemPromptsWindow()
+    {
+        if (systemPromptsWindow_) return;
+
+        NSRect frame = NSMakeRect(0, 0, 760, 560);
+        systemPromptsWindow_ = [[NSWindow alloc]
+            initWithContentRect:frame
+                      styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
+                        backing:NSBackingStoreBuffered
+                          defer:NO];
+        [systemPromptsWindow_ setTitle:@"System Prompts"];
+        [systemPromptsWindow_ setReleasedWhenClosed:NO];
+
+        NSView *content = [systemPromptsWindow_ contentView];
+        const CGFloat pad = 12.0;
+        labelIn(content, @"Preset", NSMakeRect(pad, 524, 64, 24), [NSFont boldSystemFontOfSize:12.0], cPri());
+        systemPromptPresetCombo_ = comboIn(content, NSMakeRect(78, 522, 220, 28),
+            @[@"Default LLM-r planner", @"Conservative editor", @"Creative composer", @"Arrangement assistant", @"Custom"]);
+        LlmrEditorTarget *presetTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionSystemPromptPresetChanged];
+        [targets_ addObject:presetTarget];
+        [systemPromptPresetCombo_ setTarget:presetTarget];
+        [systemPromptPresetCombo_ setAction:@selector(performAction:)];
+        [presetTarget release];
+        [systemPromptPresetCombo_ setToolTip:@"Choose the base planner prompt shown in the editor below."];
+
+        NSScrollView *editorScroll = nil;
+        systemPromptEditor_ = promptTextViewIn(content, NSMakeRect(pad, 86, 736, 430), &editorScroll);
+        [systemPromptEditor_ setFont:[NSFont userFixedPitchFontOfSize:12.0]];
+        (void)editorScroll;
+
+        noteIn(content,
+            @"Note: planner prompts must output executable LLM-r JSON with explanation, confidence, calls, tool, and args.",
+            NSMakeRect(pad, 62, 736, 16),
+            [NSFont systemFontOfSize:11.0], cSec());
+
+        btnIn(content, NSMakeRect(pad, 20, 72, 30), @"Save", kLlmrEditorActionSaveSystemPrompt);
+        btnIn(content, NSMakeRect(pad + 80, 20, 92, 30), @"Save As…", kLlmrEditorActionSaveSystemPromptAs);
+        btnIn(content, NSMakeRect(pad + 180, 20, 76, 30), @"Load…", kLlmrEditorActionLoadSystemPrompt);
+        btnIn(content, NSMakeRect(pad + 264, 20, 108, 30), @"Reset Default", kLlmrEditorActionResetSystemPrompt);
+        btnIn(content, NSMakeRect(668, 20, 76, 30), @"Cancel", kLlmrEditorActionCancelSystemPrompt);
+    }
+
+    void loadSystemPromptEditorState()
+    {
+        if (!systemPromptEditor_ || !systemPromptPresetCombo_) return;
+        NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+        NSString *preset = [d stringForKey:systemPromptPresetKey()] ?: @"Default LLM-r planner";
+        selectComboValue(systemPromptPresetCombo_, preset);
+        [systemPromptEditor_ setString:selectedSystemPromptBase() ?: defaultSystemPromptBase()];
+    }
+
+    void systemPromptPresetChanged()
+    {
+        if (!systemPromptEditor_ || !systemPromptPresetCombo_) return;
+        NSString *preset = controlString(systemPromptPresetCombo_);
+        [systemPromptEditor_ setString:systemPromptBaseForPreset(preset) ?: defaultSystemPromptBase()];
+    }
+
+    bool systemPromptLooksSafe(NSString *text)
+    {
+        NSString *lower = [[text ?: @"" lowercaseString] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        NSArray *needles = @[@"json", @"calls", @"tool", @"args", @"llm-r"];
+        for (NSString *needle in needles) {
+            if ([lower containsString:needle]) return true;
+        }
+        return false;
+    }
+
+    bool confirmPotentiallyUnsafeSystemPrompt(NSString *text)
+    {
+        if (systemPromptLooksSafe(text)) return true;
+        NSAlert *alert = [[NSAlert alloc] init];
+        [alert setMessageText:@"Prompt may break execution"];
+        [alert setInformativeText:@"The prompt does not mention JSON/tool-call concepts. Save anyway?"];
+        [alert addButtonWithTitle:@"Save Anyway"];
+        [alert addButtonWithTitle:@"Cancel"];
+        NSModalResponse response = [alert runModal];
+        [alert release];
+        return response == NSAlertFirstButtonReturn;
+    }
+
+    void openSystemPromptsWindow()
+    {
+        ensureSystemPromptsWindow();
+        loadSystemPromptEditorState();
+        [systemPromptsWindow_ makeKeyAndOrderFront:nil];
+        [NSApp activateIgnoringOtherApps:YES];
+    }
+
+    void closeSystemPromptsWindow()
+    {
+        if (systemPromptsWindow_) {
+            [systemPromptsWindow_ orderOut:nil];
+        }
+    }
+
+    void saveSystemPromptFromEditor()
+    {
+        if (!systemPromptEditor_ || !systemPromptPresetCombo_) return;
+        NSString *text = [systemPromptEditor_ string] ?: @"";
+        if (!confirmPotentiallyUnsafeSystemPrompt(text)) {
+            return;
+        }
+        NSString *preset = controlString(systemPromptPresetCombo_);
+        NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+        [d setObject:([preset length] > 0 ? preset : @"Custom") forKey:systemPromptPresetKey()];
+        [d setObject:text forKey:systemPromptCustomKey()];
+        [d synchronize];
+        setStatus(@"System prompt saved.");
+        closeSystemPromptsWindow();
+    }
+
+    void saveSystemPromptToFile()
+    {
+        if (!systemPromptEditor_) return;
+        NSSavePanel *panel = [NSSavePanel savePanel];
+        [panel setAllowedFileTypes:@[@"txt", @"md"]];
+        [panel setNameFieldStringValue:@"llmr-system-prompt.md"];
+        if ([panel runModal] != NSModalResponseOK) return;
+        NSString *text = [systemPromptEditor_ string] ?: @"";
+        [text writeToURL:[panel URL] atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    }
+
+    void loadSystemPromptFromFile()
+    {
+        if (!systemPromptEditor_ || !systemPromptPresetCombo_) return;
+        NSOpenPanel *panel = [NSOpenPanel openPanel];
+        [panel setCanChooseFiles:YES];
+        [panel setCanChooseDirectories:NO];
+        [panel setAllowsMultipleSelection:NO];
+        [panel setAllowedFileTypes:@[@"txt", @"md"]];
+        if ([panel runModal] != NSModalResponseOK) return;
+        NSString *text = [NSString stringWithContentsOfURL:[panel URL] encoding:NSUTF8StringEncoding error:nil];
+        if (!text) return;
+        [systemPromptEditor_ setString:text];
+        selectComboValue(systemPromptPresetCombo_, @"Custom");
+    }
+
+    void resetSystemPromptToDefault()
+    {
+        if (!systemPromptEditor_ || !systemPromptPresetCombo_) return;
+        [systemPromptEditor_ setString:defaultSystemPromptBase()];
+        selectComboValue(systemPromptPresetCombo_, @"Default LLM-r planner");
     }
 
     void refreshSettingsScreenAfterModeToggle(NSResponder *preferredResponder)
@@ -1811,18 +2025,14 @@ private:
     void showBasicSettings()
     {
         if (settingsMainView_) [settingsMainView_ setHidden:NO];
-        if (settingsAdvancedView_) [settingsAdvancedView_ setHidden:YES];
-        if (settingsAdvancedButton_) [settingsAdvancedButton_ setHidden:NO];
-        if (settingsBasicButton_) [settingsBasicButton_ setHidden:YES];
+        if (settingsAdvancedView_) [settingsAdvancedView_ setHidden:NO];
         refreshSettingsScreenAfterModeToggle(settingsProviderCombo_);
     }
 
     void showAdvancedSettings()
     {
-        if (settingsMainView_) [settingsMainView_ setHidden:YES];
+        if (settingsMainView_) [settingsMainView_ setHidden:NO];
         if (settingsAdvancedView_) [settingsAdvancedView_ setHidden:NO];
-        if (settingsAdvancedButton_) [settingsAdvancedButton_ setHidden:YES];
-        if (settingsBasicButton_) [settingsBasicButton_ setHidden:NO];
         refreshSettingsScreenAfterModeToggle(settingsApiKeyField_);
         refreshBridgePathUI();
     }
@@ -2035,20 +2245,20 @@ private:
 
     void openHelp()
     {
-        showTextDialog(@"LLM-r first dry-run help",
-            @"First dry-run in 60 seconds\n\n"
-            @"1. Keep Dry run enabled.\n"
+        showTextDialog(@"LLM-r first preview help",
+            @"First preview in 60 seconds\n\n"
+            @"1. Keep Preview only enabled.\n"
             @"2. Open Settings and choose Provider and Model.\n"
             @"3. Enter a simple prompt.\n"
-            @"4. Click Plan.\n"
-            @"5. Review Plan and Details.\n"
-            @"6. Click Execute while Dry run is still enabled.\n\n"
+            @"4. Click Run.\n"
+            @"5. Review Result and Details.\n"
+            @"6. Turn Preview only off in Settings when you want live execution.\n\n"
             @"Example safe prompts\n\n"
             @"- Set tempo to 120 BPM\n"
             @"- Create a MIDI track called Drums\n"
             @"- Load Drum Rack on the selected track (requires Device Bridge)\n\n"
             @"Safety\n\n"
-            @"Dry run does not mutate the Live set. Live execution requires Dry run off. Destructive actions require explicit approval in Advanced Settings.\n\n"
+            @"Preview only does not mutate the Live set. Live run sends actions. Destructive actions require explicit approval in Settings.\n\n"
             @"Bridge\n\n"
                 @"AbletonOSC handles core commands. Device Bridge handles browser/device loading.\n\n"
                 @"How to find your Ableton User Library:\n"
@@ -2175,8 +2385,9 @@ private:
         setBridgeUserLibraryPath(bridgeUserLibrary, false, false);
         bool extraOn = [d objectForKey:@"llmr.vst3.extra_prompt_enabled"]
                        ? [d boolForKey:@"llmr.vst3.extra_prompt_enabled"] : true;
-        bool dryOn   = [d objectForKey:@"llmr.vst3.dry_run"]
-                       ? [d boolForKey:@"llmr.vst3.dry_run"] : true;
+        bool dryOn   = [d objectForKey:@"llmr.vst3.require_dry_run_before_execute"]
+                   ? [d boolForKey:@"llmr.vst3.require_dry_run_before_execute"]
+                   : ([d objectForKey:@"llmr.vst3.dry_run"] ? [d boolForKey:@"llmr.vst3.dry_run"] : true);
         bool autoOn  = [d objectForKey:@"llmr.vst3.auto_approve"]
                        ? [d boolForKey:@"llmr.vst3.auto_approve"] : false;
         [settingsExtraPromptButton_ setState:extraOn ? NSControlStateValueOn : NSControlStateValueOff];
@@ -2218,7 +2429,7 @@ private:
             if ([p isEqualToString:@"custom"]) {
                 message = @"Enter a custom model and Server URL.";
             } else {
-                message = @"Could not list models for this provider. Enter a custom model or use PyQt Advanced Settings.";
+                message = @"Could not list models for this provider. Enter a custom model or use PyQt settings.";
             }
         } else if (!preferredIsListed && allowCustomPreferred && [preferred length] > 0) {
             message = @"Saved model is not in the provider list. It is kept in Custom model.";
@@ -2318,8 +2529,10 @@ private:
         }
         [d setBool:buttonOn(settingsExtraPromptButton_) forKey:@"llmr.vst3.extra_prompt_enabled"];
         [d setBool:buttonOn(settingsDestructiveButton_) forKey:@"llmr.vst3.allow_destructive"];
-        [d setBool:buttonOn(settingsDryRunButton_)      forKey:@"llmr.vst3.dry_run"];
-        [d setBool:buttonOn(settingsAutoApproveButton_) forKey:@"llmr.vst3.auto_approve"];
+        [d setBool:buttonOn(settingsDryRunButton_)      forKey:@"llmr.vst3.require_dry_run_before_execute"];
+        if (settingsAutoApproveButton_) {
+            [d setBool:buttonOn(settingsAutoApproveButton_) forKey:@"llmr.vst3.auto_approve"];
+        }
         [d synchronize];
         if (chatAutoApproveButton_) {
             [chatAutoApproveButton_ setState:buttonOn(settingsAutoApproveButton_) ? NSControlStateValueOn : NSControlStateValueOff];
@@ -2337,7 +2550,7 @@ private:
             [settingsAutoApproveButton_ setState:enabled ? NSControlStateValueOn : NSControlStateValueOff];
         }
         if (enabled) {
-            setStatus(@"Auto-approve enabled. Plans will run after planning using the dry-run default.");
+            setStatus(@"Auto-approve enabled. Plans run after planning using the preview setting.");
         } else {
             setStatus(@"Auto-approve disabled.");
         }
@@ -2390,7 +2603,16 @@ private:
                   dispatch_semaphore_signal(semaphore);
               }];
         [task resume];
-        dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+        long waitResult = dispatch_semaphore_wait(
+            semaphore,
+            dispatch_time(DISPATCH_TIME_NOW, (int64_t)(90.0 * NSEC_PER_SEC)));
+        if (waitResult != 0) {
+            [task cancel];
+            if (error) {
+                *error = @"LLM request timed out after 90 seconds.";
+            }
+            return nil;
+        }
 
         if (statusCode) *statusCode = httpResponse ? [httpResponse statusCode] : 0;
         NSString *text = responseData
@@ -2764,21 +2986,70 @@ private:
                "- device_load {track_index,query,device_type? instrument|audio_effect|midi_effect|plugin|drum|all,preset_query?,browser_path?,allow_ambiguous?}; device_get_parameters/device_get_parameter/device_get_parameter_name/device_get_parameter_value_string/device_get_parameter_names/device_get_parameter_min_values/device_get_parameter_max_values {track_index,device_index,parameter_index?}; device_set_parameters {track_index,device_index,values 0..1}; device_set_parameter {track_index,device_index,parameter_index or device_name+parameter_name,value 0..1}; device_delete {track_index,device_index} destructive; utility_undo {}; utility_redo {}.\n";
     }
 
+    NSString *systemPromptPresetKey()
+    {
+        return @"llmr.vst3.system_prompt_preset";
+    }
+
+    NSString *systemPromptCustomKey()
+    {
+        return @"llmr.vst3.system_prompt_custom";
+    }
+
+    NSString *defaultSystemPromptBase()
+    {
+        return @"You are the LLM-r planner running inside the LLM-r VST3 plug-in in Ableton Live. "
+               "Return ONLY valid JSON matching this schema: "
+               "{\"explanation\":\"short explanation\",\"confidence\":0.0,\"calls\":[{\"tool\":\"set_tempo\",\"args\":{\"bpm\":128}}]}. "
+               "Do not include Markdown, prose, numbered lists, comments, or code fences outside the JSON object. "
+               "The top-level JSON object must contain a calls array. Every call must contain tool and args. "
+               "Plan only executable LLM-r tools. Do not claim to export/render, master, analyze loudness, or inspect unavailable Live state unless a listed tool supports it. "
+               "Use device_load when the user asks to load an instrument, audio effect, MIDI effect, drum device, preset, or plug-in by name. "
+               "Use preset_query for named presets and allow_ambiguous only when the user chose a specific ambiguous candidate. "
+               "For composition requests, create tracks/clips and MIDI notes when enough musical detail is provided. "
+               "For drum-loop requests, create a MIDI track, create a clip, add General MIDI drum notes with midi_notes_add, and fire the clip. "
+               "Do not use unsupported tools such as set_track_quantization, clip_set_start_time, or clip_set_end_time. "
+               "If arrangement insertion is unavailable, clearly state that a Session clip is created instead. "
+               "For mixing requests, use exposed mixer/device parameter tools only.\n";
+    }
+
+    NSString *systemPromptStyleForPreset(NSString *preset)
+    {
+        NSString *name = [[preset ?: @"default" lowercaseString] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([name isEqualToString:@"conservative editor"]) {
+            return @"Style: prioritise safety, minimal edits, and explicit assumptions.\n";
+        }
+        if ([name isEqualToString:@"creative composer"]) {
+            return @"Style: allow richer musical variation while staying executable.\n";
+        }
+        if ([name isEqualToString:@"arrangement assistant"]) {
+            return @"Style: prefer arrangement-aware plans; if unsupported, explain Session fallback explicitly.\n";
+        }
+        return @"Style: default LLM-r planner behaviour.\n";
+    }
+
+    NSString *systemPromptBaseForPreset(NSString *preset)
+    {
+        NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+        NSString *rawPreset = preset ?: @"Default LLM-r planner";
+        NSString *name = [[rawPreset lowercaseString] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        NSString *custom = [d stringForKey:systemPromptCustomKey()] ?: @"";
+        if ([name isEqualToString:@"custom"]) {
+            return [custom length] > 0 ? custom : defaultSystemPromptBase();
+        }
+        return [defaultSystemPromptBase() stringByAppendingString:systemPromptStyleForPreset(rawPreset)];
+    }
+
+    NSString *selectedSystemPromptBase()
+    {
+        NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+        NSString *preset = [d stringForKey:systemPromptPresetKey()] ?: @"Default LLM-r planner";
+        return systemPromptBaseForPreset(preset);
+    }
+
     NSString *systemPrompt()
     {
-        NSMutableString *prompt = [NSMutableString stringWithString:
-            @"You are the LLM-r planner running inside the LLM-r VST3 plug-in in Ableton Live. "
-             "Return ONLY valid JSON matching this schema: "
-             "{\"explanation\":\"short explanation\",\"confidence\":0.0,\"calls\":[{\"tool\":\"set_tempo\",\"args\":{\"bpm\":128}}]}. "
-             "Do not include Markdown, prose, numbered lists, comments, or code fences outside the JSON object. "
-             "The top-level JSON object must contain a calls array. Every call must contain tool and args. "
-             "Plan only executable LLM-r tools. Do not claim to export/render, master, analyze loudness, or inspect unavailable Live state unless a listed tool supports it. "
-             "Use device_load when the user asks to load an instrument, audio effect, MIDI effect, drum device, preset, or plug-in by name. "
-             "Use preset_query for named presets and allow_ambiguous only when the user chose a specific ambiguous candidate. "
-             "For composition requests, create tracks/clips and MIDI notes when enough musical detail is provided. "
-             "For drum-loop requests, create a MIDI track, create a clip, add General MIDI drum notes with midi_notes_add, and fire the clip. "
-             "Do not use unsupported tools such as set_track_quantization, clip_set_start_time, or clip_set_end_time. "
-             "For mixing requests, use exposed mixer/device parameter tools only.\n"];
+        NSMutableString *prompt = [NSMutableString stringWithString:selectedSystemPromptBase()];
         [prompt appendString:toolCatalogPrompt()];
         [prompt appendString:
             @"Example drum-loop response: {\"explanation\":\"Create a 2-bar MIDI jazz drum loop.\",\"confidence\":0.82,\"calls\":["
@@ -2791,7 +3062,7 @@ private:
              "{\"tool\":\"fire_clip\",\"args\":{\"track_index\":0,\"clip_index\":0}}"
              "]}.\n"];
         if (buttonOn(settingsExtraPromptButton_)) {
-            [prompt appendString:@"Additional guidance: be explicit about limitations, keep plans conservative for destructive edits, and prefer dry-run review before executing.\n"];
+            [prompt appendString:@"Additional guidance: be explicit about limitations, keep plans conservative for destructive edits, and prefer preview review before live execution.\n"];
         }
         return prompt;
     }
@@ -2823,48 +3094,77 @@ private:
         return out;
     }
 
-    NSDictionary *localDrumLoopPlan(NSString *userPrompt)
+    double parseRequestedDurationBeats(NSString *prompt, double tempo)
     {
-        if (!isDrumLoopRequest(userPrompt)) {
-            return nil;
+        NSString *lower = [prompt.lowercaseString stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([lower length] == 0) return 8.0;
+
+        NSRegularExpression *minutesRe = [NSRegularExpression regularExpressionWithPattern:@"([0-9]+(?:\\.[0-9]+)?)\\s*minute" options:0 error:nil];
+        NSTextCheckingResult *minutes = [minutesRe firstMatchInString:lower options:0 range:NSMakeRange(0, [lower length])];
+        if (minutes && [minutes numberOfRanges] > 1) {
+            double value = [[lower substringWithRange:[minutes rangeAtIndex:1]] doubleValue];
+            return MAX(8.0, value * MAX(tempo, 60.0));
         }
 
-        NSArray *notes = @[
-            @{@"pitch": @51, @"start_time": @0.0,  @"duration": @0.18, @"velocity": @96, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @0.67, @"duration": @0.14, @"velocity": @72, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @1.0,  @"duration": @0.18, @"velocity": @88, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @2.0,  @"duration": @0.18, @"velocity": @94, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @2.67, @"duration": @0.14, @"velocity": @70, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @3.0,  @"duration": @0.18, @"velocity": @86, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @4.0,  @"duration": @0.18, @"velocity": @96, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @4.67, @"duration": @0.14, @"velocity": @72, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @5.0,  @"duration": @0.18, @"velocity": @88, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @6.0,  @"duration": @0.18, @"velocity": @94, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @6.67, @"duration": @0.14, @"velocity": @70, @"mute": @NO},
-            @{@"pitch": @51, @"start_time": @7.0,  @"duration": @0.18, @"velocity": @86, @"mute": @NO},
-            @{@"pitch": @44, @"start_time": @1.5,  @"duration": @0.12, @"velocity": @70, @"mute": @NO},
-            @{@"pitch": @44, @"start_time": @3.5,  @"duration": @0.12, @"velocity": @72, @"mute": @NO},
-            @{@"pitch": @44, @"start_time": @5.5,  @"duration": @0.12, @"velocity": @70, @"mute": @NO},
-            @{@"pitch": @44, @"start_time": @7.5,  @"duration": @0.12, @"velocity": @72, @"mute": @NO},
-            @{@"pitch": @36, @"start_time": @0.0,  @"duration": @0.20, @"velocity": @92, @"mute": @NO},
-            @{@"pitch": @36, @"start_time": @3.33, @"duration": @0.18, @"velocity": @68, @"mute": @NO},
-            @{@"pitch": @36, @"start_time": @4.0,  @"duration": @0.20, @"velocity": @88, @"mute": @NO},
-            @{@"pitch": @36, @"start_time": @6.33, @"duration": @0.18, @"velocity": @70, @"mute": @NO},
-            @{@"pitch": @38, @"start_time": @2.0,  @"duration": @0.18, @"velocity": @66, @"mute": @NO},
-            @{@"pitch": @38, @"start_time": @3.67, @"duration": @0.12, @"velocity": @42, @"mute": @NO},
-            @{@"pitch": @38, @"start_time": @6.0,  @"duration": @0.18, @"velocity": @68, @"mute": @NO},
-            @{@"pitch": @38, @"start_time": @7.67, @"duration": @0.12, @"velocity": @44, @"mute": @NO},
-        ];
+        NSRegularExpression *secondsRe = [NSRegularExpression regularExpressionWithPattern:@"([0-9]+(?:\\.[0-9]+)?)\\s*second" options:0 error:nil];
+        NSTextCheckingResult *seconds = [secondsRe firstMatchInString:lower options:0 range:NSMakeRange(0, [lower length])];
+        if (seconds && [seconds numberOfRanges] > 1) {
+            double value = [[lower substringWithRange:[seconds rangeAtIndex:1]] doubleValue];
+            return MAX(8.0, value * MAX(tempo, 60.0) / 60.0);
+        }
+
+        NSRegularExpression *barsRe = [NSRegularExpression regularExpressionWithPattern:@"([0-9]+(?:\\.[0-9]+)?)\\s*bar" options:0 error:nil];
+        NSTextCheckingResult *bars = [barsRe firstMatchInString:lower options:0 range:NSMakeRange(0, [lower length])];
+        if (bars && [bars numberOfRanges] > 1) {
+            double value = [[lower substringWithRange:[bars rangeAtIndex:1]] doubleValue];
+            return MAX(8.0, value * 4.0);
+        }
+
+        return 8.0;
+    }
+
+    bool isDrumCompositionRequest(NSString *userPrompt)
+    {
+        NSString *lower = [userPrompt lowercaseString];
+        return [lower containsString:@"drum"] || [lower containsString:@"beat"] || [lower containsString:@"groove"];
+    }
+
+    bool isPianoCompositionRequest(NSString *userPrompt)
+    {
+        NSString *lower = [userPrompt lowercaseString];
+        return [lower containsString:@"piano"] || [lower containsString:@"ballad"];
+    }
+
+    NSDictionary *buildJazzDrumPlan(double durationBeats, double tempo, bool humanise, bool variation)
+    {
+        NSMutableArray *notes = [NSMutableArray array];
+        const int totalBeats = (int)MAX(8.0, durationBeats);
+        const int noteBudget = 640;
+        for (int beat = 0; beat < totalBeats && (int)[notes count] < noteBudget; ++beat) {
+            double t = (double)beat;
+            int section = beat / 16;
+            int rideVelocity = 84 + (section % 2 ? 6 : 0);
+            [notes addObject:@{@"pitch": @51, @"start_time": @(t), @"duration": @0.2, @"velocity": @(rideVelocity), @"mute": @NO}];
+            [notes addObject:@{@"pitch": @44, @"start_time": @(t + 0.5), @"duration": @0.1, @"velocity": @(humanise ? 62 + (beat % 5) : 68), @"mute": @NO}];
+            if (beat % 4 == 0) {
+                [notes addObject:@{@"pitch": @36, @"start_time": @(t), @"duration": @0.18, @"velocity": @(88 + (beat % 8 == 0 ? 6 : 0)), @"mute": @NO}];
+            }
+            if (beat % 4 == 2) {
+                [notes addObject:@{@"pitch": @38, @"start_time": @(t), @"duration": @0.16, @"velocity": @(74 + (variation && beat % 16 == 14 ? 10 : 0)), @"mute": @NO}];
+            }
+            if (variation && beat % 16 == 15) {
+                [notes addObject:@{@"pitch": @50, @"start_time": @(t + 0.5), @"duration": @0.12, @"velocity": @86, @"mute": @NO}];
+            }
+        }
+
         return @{
-            @"explanation": @"Built-in fallback: create a 2-bar jazzy MIDI drum loop, load Drum Rack through the Device Bridge, and add General MIDI drum notes.",
-            @"confidence": @0.72,
+            @"explanation": [NSString stringWithFormat:@"Built-in fallback: create a jazz drum Session clip (%d beats). If Arrangement insertion is unavailable, Session fallback is used.", totalBeats],
+            @"confidence": @0.74,
             @"calls": @[
-                @{@"tool": @"set_tempo", @"args": @{@"bpm": @92}},
+                @{@"tool": @"set_tempo", @"args": @{@"bpm": @(tempo)}},
                 @{@"tool": @"create_midi_track", @"args": @{@"index": @0}},
-                @{@"tool": @"track_rename", @"args": @{@"track_index": @0, @"name": @"Jazzy Drum Loop"}},
-                @{@"tool": @"device_load", @"args": @{@"track_index": @0, @"query": @"Drum Rack", @"device_type": @"drum"}},
-                @{@"tool": @"clip_create", @"args": @{@"track_index": @0, @"clip_index": @0, @"length_beats": @8}},
-                @{@"tool": @"clip_rename", @"args": @{@"track_index": @0, @"clip_index": @0, @"name": @"2-bar jazz ride loop"}},
+                @{@"tool": @"track_rename", @"args": @{@"track_index": @0, @"name": @"Jazz Drums"}},
+                @{@"tool": @"clip_create", @"args": @{@"track_index": @0, @"clip_index": @0, @"length_beats": @(totalBeats)}},
                 @{@"tool": @"midi_notes_add", @"args": @{@"track_index": @0, @"clip_index": @0, @"notes": notes}},
                 @{@"tool": @"clip_set_looping", @"args": @{@"track_index": @0, @"clip_index": @0, @"looping": @YES}},
                 @{@"tool": @"fire_clip", @"args": @{@"track_index": @0, @"clip_index": @0}},
@@ -2872,17 +3172,58 @@ private:
         };
     }
 
+    NSDictionary *buildPianoBalladPlan(double durationBeats, double tempo, NSString *key, NSString *style)
+    {
+        (void)key;
+        (void)style;
+        NSMutableArray *notes = [NSMutableArray array];
+        const int totalBeats = (int)MAX(8.0, durationBeats);
+        const int progression[4][3] = {{60,64,67},{57,60,64},{62,65,69},{55,59,62}};
+        for (int beat = 0; beat < totalBeats; beat += 4) {
+            int chord = (beat / 4) % 4;
+            for (int i = 0; i < 3; ++i) {
+                [notes addObject:@{@"pitch": @(progression[chord][i]), @"start_time": @(beat), @"duration": @3.6, @"velocity": @(68 + i * 6), @"mute": @NO}];
+            }
+            [notes addObject:@{@"pitch": @(progression[chord][1] + 12), @"start_time": @(beat + 2.0), @"duration": @1.6, @"velocity": @74, @"mute": @NO}];
+        }
+
+        return @{
+            @"explanation": [NSString stringWithFormat:@"Built-in fallback: create a piano ballad Session clip (%d beats).", totalBeats],
+            @"confidence": @0.7,
+            @"calls": @[
+                @{@"tool": @"set_tempo", @"args": @{@"bpm": @(tempo)}},
+                @{@"tool": @"create_midi_track", @"args": @{@"index": @0}},
+                @{@"tool": @"track_rename", @"args": @{@"track_index": @0, @"name": @"Piano Ballad"}},
+                @{@"tool": @"clip_create", @"args": @{@"track_index": @0, @"clip_index": @0, @"length_beats": @(totalBeats)}},
+                @{@"tool": @"midi_notes_add", @"args": @{@"track_index": @0, @"clip_index": @0, @"notes": notes}},
+                @{@"tool": @"clip_set_looping", @"args": @{@"track_index": @0, @"clip_index": @0, @"looping": @YES}},
+                @{@"tool": @"fire_clip", @"args": @{@"track_index": @0, @"clip_index": @0}},
+            ],
+        };
+    }
+
+    NSDictionary *localDrumLoopPlan(NSString *userPrompt)
+    {
+        if (!isDrumCompositionRequest(userPrompt)) {
+            return nil;
+        }
+        double durationBeats = parseRequestedDurationBeats(userPrompt, 120.0);
+        bool humanise = [[userPrompt lowercaseString] containsString:@"human"];
+        return buildJazzDrumPlan(durationBeats, 120.0, humanise, true);
+    }
+
+    NSDictionary *localPianoPlan(NSString *userPrompt)
+    {
+        if (!isPianoCompositionRequest(userPrompt)) {
+            return nil;
+        }
+        double durationBeats = parseRequestedDurationBeats(userPrompt, 80.0);
+        return buildPianoBalladPlan(durationBeats, 80.0, @"C", @"ballad");
+    }
+
     bool isDrumLoopRequest(NSString *userPrompt)
     {
-        NSString *lower = [userPrompt lowercaseString];
-        BOOL asksForDrums = ([lower containsString:@"drum"] ||
-                             [lower containsString:@"beat"] ||
-                             [lower containsString:@"groove"]);
-        BOOL asksToCreate = ([lower containsString:@"create"] ||
-                             [lower containsString:@"make"] ||
-                             [lower containsString:@"generate"] ||
-                             [lower containsString:@"write"]);
-        return asksForDrums && asksToCreate;
+        return isDrumCompositionRequest(userPrompt);
     }
 
     NSString *repairNonJsonPlan(NSString *provider, NSString *model, NSString *endpoint, NSString *apiKey,
@@ -2900,10 +3241,11 @@ private:
 
     void planFromPrompt()
     {
-        NSString *rawInput = chatInputField_ ? [[chatInputField_ stringValue] copy] : [@"" copy];
-        NSString *userPrompt = [[rawInput stringByTrimmingCharactersInSet:
-            [NSCharacterSet whitespaceAndNewlineCharacterSet]] retain];
-        [rawInput release];
+        if (operationBusy_.load()) {
+            setStatus(@"A process is already running.");
+            return;
+        }
+        NSString *userPrompt = [[promptInputText() copy] retain];
         if ([userPrompt length] == 0) {
             setStatus(@"Enter a request first.");
             [userPrompt release];
@@ -2912,17 +3254,19 @@ private:
         NSString *providerValue = canonicalProvider(controlString(settingsProviderCombo_));
         NSString *modelValue = resolvedModelForSettings(providerValue, controlString(settingsModelField_));
         if ([modelValue length] == 0) {
-            setStatus(@"Model missing - open Basic Settings and choose a provider/model or enter Custom model.");
+            setStatus(@"Model missing - open Settings and choose a provider/model or enter Custom model.");
             [userPrompt release];
             refreshReadinessGuidance();
             return;
         }
         // Clear input field and add to chat history
-        if (chatInputField_) [chatInputField_ setStringValue:@""];
+        clearPromptInput();
         appendToChat(@"user", userPrompt);
+        hasDryRunCurrentPlan_ = false;
+        operationCancelRequested_.store(false);
         setBusy(true);
         NSTimeInterval planStartTime = [NSDate timeIntervalSinceReferenceDate];
-        setStatus(@"Planning with LLM…");
+        setStatus(@"Planning...");
 
         NSString *endpointValue = resolvedEndpointForSettings(providerValue, controlString(settingsEndpointField_));
         if (settingsProviderCombo_) selectComboValue(settingsProviderCombo_, providerValue);
@@ -2941,10 +3285,13 @@ private:
             @autoreleasepool {
                 NSString *error = nil;
                 NSString *content = [callLLM(provider, model, endpoint, apiKey, system, userPrompt, &error) retain];
-                NSDictionary *plan = content ? parsePlan(content, &error) : nil;
+                BOOL cancelled = operationCancelRequested_.load();
+                NSDictionary *plan = (!cancelled && content) ? parsePlan(content, &error) : nil;
                 if (!plan && content) {
                     NSString *repairError = nil;
-                    NSString *repaired = repairNonJsonPlan(provider, model, endpoint, apiKey, userPrompt, content, &repairError);
+                    NSString *repaired = operationCancelRequested_.load()
+                        ? nil
+                        : repairNonJsonPlan(provider, model, endpoint, apiKey, userPrompt, content, &repairError);
                     NSDictionary *repairedPlan = repaired ? parsePlan(repaired, &repairError) : nil;
                     if (repairedPlan) {
                         NSString *original = [content retain];
@@ -2958,8 +3305,11 @@ private:
                         error = repairError;
                     }
                 }
-                if (!plan) {
+                if (!plan && !operationCancelRequested_.load()) {
                     NSDictionary *fallback = localDrumLoopPlan(userPrompt);
+                    if (!fallback) {
+                        fallback = localPianoPlan(userPrompt);
+                    }
                     if (fallback) {
                         plan = fallback;
                         NSString *original = [content retain];
@@ -2974,7 +3324,7 @@ private:
                 }
                 id calls = plan ? ([plan objectForKey:@"calls"] ?: [plan objectForKey:@"actions"] ?: [plan objectForKey:@"tool_calls"]) : nil;
                 NSArray *actions = plan ? buildActions(calls, &error) : nil;
-                if (plan && isDrumLoopRequest(userPrompt) && !planHasUsefulDrumLoop(calls)) {
+                if (plan && !operationCancelRequested_.load() && isDrumLoopRequest(userPrompt) && !planHasUsefulDrumLoop(calls)) {
                     NSDictionary *fallback = localDrumLoopPlan(userPrompt);
                     if (fallback) {
                         plan = fallback;
@@ -2990,14 +3340,28 @@ private:
                         error = nil;
                     }
                 }
+                if (!plan && !operationCancelRequested_.load() && isPianoCompositionRequest(userPrompt)) {
+                    NSDictionary *fallback = localPianoPlan(userPrompt);
+                    if (fallback) {
+                        plan = fallback;
+                        calls = [fallback objectForKey:@"calls"];
+                        actions = buildActions(calls, &error);
+                        error = nil;
+                    }
+                }
                 NSTimeInterval elapsed = [NSDate timeIntervalSinceReferenceDate] - planStartTime;
                 NSString *display = nil;
                 NSString *rawDisplay = nil;
                 NSString *status = nil;
-                if (actions && [actions count] > 0) {
+                cancelled = operationCancelRequested_.load();
+                if (cancelled) {
+                    display = [@"Cancelled." retain];
+                    rawDisplay = [(error ?: @"Request cancelled.") retain];
+                    status = [@"Cancelled." retain];
+                } else if (actions && [actions count] > 0) {
                     display = [renderPlan(plan, content, actions) retain];
                     rawDisplay = [renderRawPlan(plan, content, actions) retain];
-                    status = [[NSString stringWithFormat:@"Plan ready - %lu step(s). Execute uses the Dry run setting; Dry run previews only. (%.1fs)",
+                    status = [[NSString stringWithFormat:@"Plan ready - %lu step(s). (%.1fs)",
                                (unsigned long)[actions count], elapsed] retain];
                 } else {
                     display = [assistantFailureMessage(error, content) retain];
@@ -3027,15 +3391,12 @@ private:
                         updateRawResponse(rawDisplay ?: @"");
                         showResponseTab(false);
                         setStatus(status);
-                        setBusy(false);
-                        if (buttonOn(chatAutoApproveButton_) && lastActions_ && [lastActions_ count] > 0) {
-                            NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-                            bool dryDefault = [d objectForKey:@"llmr.vst3.dry_run"]
-                                ? [d boolForKey:@"llmr.vst3.dry_run"] : false;
-                            setStatus(dryDefault
-                                ? @"Auto-approve enabled — running preview."
-                                : @"Auto-approve enabled — executing plan.");
-                            executeLastPlan(dryDefault);
+                        if (!operationCancelRequested_.load() && lastActions_ && [lastActions_ count] > 0) {
+                            bool previewOnly = requireDryRunBeforeExecuteSetting();
+                            setStatus(previewOnly ? @"Executing preview..." : @"Executing...");
+                            executeLastPlan(previewOnly);
+                        } else {
+                            setBusy(false);
                         }
                     }
                     [retainedActions release];
@@ -3123,7 +3484,7 @@ private:
                     } else if (rok) {
                         setStatus(@"Device Bridge reachable.");
                     } else {
-                        setStatus(@"Device Bridge not reachable. See Advanced Settings.");
+                        setStatus(@"Device Bridge not reachable. Open Settings and recheck Bridge.");
                     }
                     [rs release];
                     this->release();
@@ -3288,11 +3649,43 @@ private:
         return code >= 200 && code < 300 && (!error || !*error);
     }
 
+    void executeFromMainButton()
+    {
+        if (!lastActions_ || [lastActions_ count] == 0) {
+            setStatus(@"Create a plan first.");
+            return;
+        }
+        if (!requireDryRunBeforeExecuteSetting() || hasDryRunCurrentPlan_) {
+            executeLastPlan(false);
+            return;
+        }
+
+        NSAlert *alert = [[NSAlert alloc] init];
+        [alert setMessageText:@"Run Preview first"];
+        [alert setInformativeText:@"This plan has not been previewed since it was generated."];
+        [alert addButtonWithTitle:@"Run Preview"];
+        [alert addButtonWithTitle:@"Execute Anyway"];
+        [alert addButtonWithTitle:@"Cancel"];
+        NSModalResponse response = [alert runModal];
+        [alert release];
+
+        if (response == NSAlertFirstButtonReturn) {
+            executeLastPlan(true);
+        } else if (response == NSAlertSecondButtonReturn) {
+            executeLastPlan(false);
+        } else {
+            setStatus(@"Execution cancelled.");
+        }
+    }
+
     void executeLastPlan(bool dryRun)
     {
         if (!lastActions_ || [lastActions_ count] == 0) {
             setStatus(@"Create a plan first.");
             return;
+        }
+        if (!operationBusy_.load()) {
+            operationCancelRequested_.store(false);
         }
         bool allowDestructive = buttonOn(settingsDestructiveButton_);
         NSString *host = [controlString(settingsOscHostField_) copy];
@@ -3300,33 +3693,43 @@ private:
         NSArray *actions = [lastActions_ retain];
         NSMutableArray *runtimeActions = [actions mutableCopy];
         setBusy(true);
-        setStatus(dryRun ? @"Preparing dry run..." : @"Executing plan...");
+        setStatus(dryRun ? @"Executing preview..." : @"Executing...");
 
         addRef();
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             @autoreleasepool {
                 NSMutableString *report = [NSMutableString string];
                 bool blocked = false;
-                if (!dryRun) {
+                bool cancelled = operationCancelRequested_.load();
+                if (!dryRun && !cancelled) {
                     bool needsDeviceBridge = false;
                     for (NSDictionary *act in actions) {
+                        if (operationCancelRequested_.load()) {
+                            cancelled = true;
+                            break;
+                        }
                         NSString *transport = [act objectForKey:@"transport"] ?: @"osc";
                         if ([transport isEqualToString:@"device_bridge"]) {
                             needsDeviceBridge = true;
                             break;
                         }
                     }
-                    if (needsDeviceBridge) {
+                    if (needsDeviceBridge && !cancelled) {
                         NSString *err = nil;
                         NSInteger code = 0;
                         httpRequest(deviceBridgeURL(@"/health"), @"GET", nil, nil, 2.0, &code, &err);
+                        cancelled = operationCancelRequested_.load();
                         if (code < 200 || code >= 300 || err) {
                             blocked = true;
                             [report appendFormat:@"BLOCKED Device Bridge preflight failed on %@:%d. %@\n",
                                 deviceBridgeHost(), deviceBridgePort(), err ?: @"Enable LLMR_Bridge in Ableton Live."];
                         }
-                        if (!blocked) {
+                        if (!blocked && !cancelled) {
                             for (NSUInteger actionIndex = 0; actionIndex < [runtimeActions count]; ++actionIndex) {
+                                if (operationCancelRequested_.load()) {
+                                    cancelled = true;
+                                    break;
+                                }
                                 NSDictionary *act = [runtimeActions objectAtIndex:actionIndex];
                                 NSString *transport = [act objectForKey:@"transport"] ?: @"osc";
                                 if (![transport isEqualToString:@"device_bridge"]) continue;
@@ -3340,6 +3743,10 @@ private:
                                 }
                                 NSInteger resolveCode = 0;
                                 NSString *resolveResponse = httpRequest(deviceBridgeURL(@"/api/devices/resolve"), @"POST", body, nil, 10.0, &resolveCode, &resolveError);
+                                if (operationCancelRequested_.load()) {
+                                    cancelled = true;
+                                    break;
+                                }
                                 if (resolveCode == 409) {
                                     NSString *pickerError = nil;
                                     NSDictionary *updatedAction = chooseDeviceBridgeCandidateForAction(act, resolveResponse, &pickerError);
@@ -3356,6 +3763,10 @@ private:
                                     body = deviceBridgeBodyForAction(act, &resolveError);
                                     resolveCode = 0;
                                     resolveResponse = httpRequest(deviceBridgeURL(@"/api/devices/resolve"), @"POST", body, nil, 10.0, &resolveCode, &resolveError);
+                                    if (operationCancelRequested_.load()) {
+                                        cancelled = true;
+                                        break;
+                                    }
                                 }
                                 if (resolveCode < 200 || resolveCode >= 300 || resolveError) {
                                     blocked = true;
@@ -3368,15 +3779,19 @@ private:
                         }
                     }
                 }
-                if (!blocked) {
+                if (!blocked && !cancelled) {
                     for (NSDictionary *act in runtimeActions) {
+                        if (operationCancelRequested_.load()) {
+                            cancelled = true;
+                            break;
+                        }
                         bool destructive = [[act objectForKey:@"destructive"] boolValue];
                         if (destructive && !dryRun && !allowDestructive) {
                             [report appendFormat:@"Skipped destructive: %@\n", [act objectForKey:@"tool"]];
                             continue;
                         }
                         if (dryRun) {
-                            [report appendFormat:@"DRY RUN %@ %@\n",
+                            [report appendFormat:@"PREVIEW %@ %@\n",
                                 [act objectForKey:@"address"], [[act objectForKey:@"args"] description]];
                             continue;
                         }
@@ -3389,17 +3804,24 @@ private:
                             ok = sendOsc(host, port, [act objectForKey:@"address"],
                                          [act objectForKey:@"args"], &err);
                         }
+                        if (operationCancelRequested_.load()) {
+                            cancelled = true;
+                            break;
+                        }
                         [report appendFormat:@"%@ %@ %@\n", ok ? @"SENT" : @"ERROR",
                             [act objectForKey:@"address"],
                             ok ? [[act objectForKey:@"args"] description] : err];
                     }
                 }
-                NSString *statusMsg = dryRun ? @"Dry run complete." : (blocked ? @"Execution blocked." : @"Execution complete.");
+                NSString *statusMsg = cancelled ? @"Cancelled." : (dryRun ? @"Preview complete." : (blocked ? @"BLOCKED execution." : @"Execution complete."));
                 NSString *message = [[NSString stringWithFormat:@"%@\n%@", statusMsg, report] retain];
                 NSString *status = [statusMsg retain];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     appendToChat(@"assistant", message);
                     setStatus(status);
+                    if (dryRun && !blocked && !cancelled) {
+                        hasDryRunCurrentPlan_ = true;
+                    }
                     setBusy(false);
                     [message release];
                     [status release];
@@ -3410,6 +3832,38 @@ private:
                 });
             }
         });
+    }
+
+    NSInteger continueWaitingDecisionForLLM(NSString *provider, NSString *model, NSTimeInterval elapsed)
+    {
+        __block NSInteger decision = 0; // 0 wait again, 1 wait without timeout, 2 cancel
+        void (^showAlert)(void) = ^{
+            if (!view_) return;
+            NSInteger seconds = (NSInteger)elapsed;
+            NSString *runtime = [NSString stringWithFormat:@"%@ / %@",
+                provider ?: @"provider", [model length] > 0 ? model : @"model"];
+            NSAlert *alert = [[NSAlert alloc] init];
+            [alert setMessageText:@"LLM request is still running"];
+            [alert setInformativeText:[NSString stringWithFormat:
+                @"%@ has been waiting for %ld seconds. Continue waiting?",
+                runtime, (long)seconds]];
+            [alert addButtonWithTitle:@"Wait 5 More Minutes"];
+            [alert addButtonWithTitle:@"Wait Without Timeout"];
+            [alert addButtonWithTitle:@"Cancel Request"];
+            NSModalResponse response = [alert runModal];
+            [alert release];
+            if (response == NSAlertSecondButtonReturn) {
+                decision = 1;
+            } else if (response == NSAlertThirdButtonReturn) {
+                decision = 2;
+            }
+        };
+        if ([NSThread isMainThread]) {
+            showAlert();
+        } else {
+            dispatch_sync(dispatch_get_main_queue(), showAlert);
+        }
+        return decision;
     }
 
     NSString *callLLM(NSString *provider, NSString *model, NSString *endpoint, NSString *apiKey,
@@ -3474,6 +3928,7 @@ private:
 
         NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
         [request setHTTPMethod:@"POST"];
+        [request setTimeoutInterval:24.0 * 60.0 * 60.0];
         [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 
         NSDictionary *body = nil;
@@ -3539,7 +3994,43 @@ private:
                   dispatch_semaphore_signal(semaphore);
               }];
         [task resume];
-        dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+        NSTimeInterval requestStart = [NSDate timeIntervalSinceReferenceDate];
+        NSTimeInterval nextPromptAt = requestStart + 300.0;
+        BOOL waitWithoutTimeout = NO;
+        while (true) {
+            if (operationCancelRequested_.load()) {
+                [task cancel];
+                if (error) {
+                    *error = @"Request cancelled.";
+                }
+                [llmModel release];
+                return nil;
+            }
+            long waitResult = dispatch_semaphore_wait(
+                semaphore,
+                dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)));
+            if (waitResult == 0) {
+                break;
+            }
+            NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+            if (!waitWithoutTimeout && now >= nextPromptAt) {
+                NSInteger decision = continueWaitingDecisionForLLM(p, llmModel, now - requestStart);
+                if (decision == 2) {
+                    operationCancelRequested_.store(true);
+                    [task cancel];
+                    if (error) {
+                        *error = @"Request cancelled.";
+                    }
+                    [llmModel release];
+                    return nil;
+                }
+                if (decision == 1) {
+                    waitWithoutTimeout = YES;
+                } else {
+                    nextPromptAt = now + 300.0;
+                }
+            }
+        }
 
         NSString *result = nil;
         if (requestError) {
@@ -4411,7 +4902,7 @@ private:
 
         NSString *selectedLibrary = normalizedPath([[NSUserDefaults standardUserDefaults] stringForKey:bridgeUserLibrarySettingsKey()]);
         if ([selectedLibrary length] == 0) {
-            setStatus(@"Choose your Ableton User Library in Advanced Settings before installing Bridge.");
+            setStatus(@"Choose your Ableton User Library in Settings before installing Bridge.");
             return;
         }
 
@@ -4568,13 +5059,16 @@ private:
     NSView *chatView_{nullptr};
     NSTextView *chatHistoryView_{nullptr};
     NSTextView *rawResponseView_{nullptr};
-    NSTextField *chatInputField_{nullptr};
+    NSTextView *chatInputView_{nullptr};
+    NSScrollView *chatInputScrollView_{nullptr};
+    NSTextField *chatPromptPlaceholderLabel_{nullptr};
     NSTextField *chatStatusLabel_{nullptr};
     NSTextField *chatModelLabel_{nullptr};
     NSTextField *chatOscLabel_{nullptr};
     NSTextField *chatBridgeLabel_{nullptr};
     NSTextField *chatDryRunLabel_{nullptr};
     NSButton *chatSendButton_{nullptr};
+    NSButton *chatCancelButton_{nullptr};
     NSButton *chatExecuteButton_{nullptr};
     NSButton *chatPreviewButton_{nullptr};
     NSButton *chatAutoApproveButton_{nullptr};
@@ -4584,6 +5078,7 @@ private:
 
     // Settings overlay
     NSView *settingsView_{nullptr};
+    NSWindow *settingsWindow_{nullptr};
     NSPopUpButton *settingsProviderCombo_{nullptr};
     NSPopUpButton *settingsModelField_{nullptr};
     NSTextField *settingsCustomModelField_{nullptr};
@@ -4605,8 +5100,6 @@ private:
     NSButton *settingsAutoApproveButton_{nullptr};
     NSView *settingsMainView_{nullptr};
     NSView *settingsAdvancedView_{nullptr};
-    NSButton *settingsAdvancedButton_{nullptr};
-    NSButton *settingsBasicButton_{nullptr};
 
     // Ollama controls (inside settings)
     NSTextField *ollamaStatusLabel_{nullptr};
@@ -4620,6 +5113,13 @@ private:
     bool deviceBridgeChecked_{false};
     bool deviceBridgeReachable_{false};
     NSString *bridgeUserLibraryPath_{nullptr};
+    bool hasDryRunCurrentPlan_{false};
+    std::atomic<bool> operationCancelRequested_{false};
+    std::atomic<bool> operationBusy_{false};
+
+    NSWindow *systemPromptsWindow_{nullptr};
+    NSPopUpButton *systemPromptPresetCombo_{nullptr};
+    NSTextView *systemPromptEditor_{nullptr};
 
     // Local Remote Script bridge for browser/device loading.
     int deviceBridgePort_{8788};
@@ -4915,20 +5415,48 @@ LlmrPluginFactory gFactory;
 }
 @end
 
-@implementation LlmrPromptField
+@implementation LlmrPromptTextView
+- (void)setLlmrPlaceholderLabel:(NSTextField *)label
+{
+    _llmrPlaceholderLabel = label;
+    [self updateLlmrPlaceholder];
+}
+- (void)updateLlmrPlaceholder
+{
+    if (!_llmrPlaceholderLabel) return;
+    NSString *raw = [self string] ?: @"";
+    BOOL empty = [[raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] length] == 0;
+    [_llmrPlaceholderLabel setHidden:!empty];
+}
+- (void)setString:(NSString *)string
+{
+    [super setString:string ?: @""];
+    [self updateLlmrPlaceholder];
+}
+- (void)didChangeText
+{
+    [super didChangeText];
+    [self updateLlmrPlaceholder];
+}
 - (BOOL)performKeyEquivalent:(NSEvent *)event
 {
-    // Cmd-A: select all text in the field – Live may intercept this before it
-    // reaches a standard NSTextField, so we handle it explicitly here.
     NSEventModifierFlags mods = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
     if (mods == NSEventModifierFlagCommand) {
-        NSString *chars = [event charactersIgnoringModifiers] ?: @"";
+        NSString *chars = [[event charactersIgnoringModifiers] lowercaseString] ?: @"";
         if ([chars isEqualToString:@"a"]) {
-            [self selectText:self];
-            NSText *editor = [[self window] fieldEditor:YES forObject:self];
-            if (editor) {
-                [editor selectAll:self];
-            }
+            [self selectAll:nil];
+            return YES;
+        }
+        if ([chars isEqualToString:@"c"]) {
+            [self copy:nil];
+            return YES;
+        }
+        if ([chars isEqualToString:@"x"]) {
+            [self cut:nil];
+            return YES;
+        }
+        if ([chars isEqualToString:@"v"]) {
+            [self paste:nil];
             return YES;
         }
     }
@@ -4939,14 +5467,17 @@ LlmrPluginFactory gFactory;
     NSString *chars = [event charactersIgnoringModifiers] ?: @"";
     unichar ch = [chars length] > 0 ? [chars characterAtIndex:0] : 0;
     if (ch == NSCarriageReturnCharacter || ch == NSEnterCharacter || ch == NSNewlineCharacter) {
-        id target = [self target];
-        SEL action = [self action];
-        if (target && action) {
-            [NSApp sendAction:action to:target from:self];
+        NSEventModifierFlags mods = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+        if ((mods & NSEventModifierFlagShift) || (mods & NSEventModifierFlagOption)) {
+            [super keyDown:event];
             return;
         }
+        [super insertNewline:nil];
+        [self updateLlmrPlaceholder];
+        return;
     }
     [super keyDown:event];
+    [self updateLlmrPlaceholder];
 }
 @end
 

@@ -1,10 +1,10 @@
 # STATUS — LLM-r 0.6.9 release candidate
 
-Last updated: 2026-05-21 01:57
+Last updated: 2026-05-21 06:30
 
 ## Snapshot
 - Version: `0.6.9`
-- Branch: `release/0.6.9`
+- Branch: `fix/0.6.9-vst3-ux-runtime-blockers`
 - Release state: pre-1.0 release candidate
 - Primary surface: native VST3 plug-in
 - Companion surfaces: PyQt GUI, web UI, FastAPI server
@@ -13,7 +13,7 @@ Last updated: 2026-05-21 01:57
 ## Product summary
 LLM-r turns plain-language production requests into executable Ableton Live action plans. It is designed as a DAW control bridge, not a full composition engine or audio post-production suite.
 
-The intended user workflow is: prompt -> plan -> review -> dry-run -> execute. The plan is explicit, safety-labelled, and reviewable before any live mutation. Dry run previews execution without mutating the set.
+The intended VST3 user workflow is: prompt -> Run. Run plans first, then automatically executes the validated action list in Preview mode or live mode depending on Settings. Preview mode preserves the dry-run safety path and does not mutate the Live set.
 
 LLM-r connects to Ableton Live through AbletonOSC for core transport/track/clip/device operations and through LLMRDeviceBridge for browser/device loading workflows such as `device_load`.
 
@@ -21,10 +21,17 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 
 ## Shipped surfaces
 ### VST3 plug-in
-- Supports provider/model selection (`openai`, `anthropic`, `google`, `ollama`, `omlx`, `custom`), prompt input, Plan/Details tabs, dry-run, auto-approve, destructive approval, Device Bridge checks, Save/Cancel settings, and Ollama controls in Advanced Settings.
-- Prompt 15 follow-up fixes: main-screen readiness labels now show a green/red icon plus plain white text without chip backgrounds/borders; Advanced Settings horizontal scrolling is further suppressed (elastic horizontal scroll disabled) and minimum editor width is increased to avoid horizontal squeeze; Basic/Advanced toggle now refreshes layout/focus immediately so controls in the newly shown panel respond without requiring mouse movement.
-- Prompt 16 bridge installer repair: VST3 no longer treats `~/Music/Ableton/User Library` as install authority; Advanced Settings now requires selecting/confirming the actual Ableton User Library, persists that choice (`llmr.vst3.bridge_user_library_path`), installs bridge files to `<User Library>/Remote Scripts/LLMR_Bridge`, validates `__init__.py`, detects double-nesting, exposes Reveal/Copy/Recheck/Help recovery actions, and shows explicit selected/target/status lines with reachability guidance.
-- Prompt 16 settings/wrench hang fix: opening Settings and switching Basic/Advanced are now side-effect-free UI transitions (no automatic Bridge/Ollama/network probes); blocking HTTP now hard-fails if called on the UI thread; Bridge/Ollama manual check actions now include in-flight guards to prevent overlapping probes; and global bottom status messages from Bridge checks are concise/single-line instead of multiline diagnostics.
+- Supports provider/model selection (`openai`, `anthropic`, `google`, `ollama`, `omlx`, `custom`), prompt input, Result/Details tabs, one-click Run, Preview mode, destructive approval, Device Bridge checks, modal single-screen Save/Cancel settings, and Ollama controls.
+- Prompt 16-22 branch audit and repair pass completed on `fix/0.6.9-vst3-ux-runtime-blockers` with a checked-in audit report at `docs/0.6.9-VST3-UX-RUNTIME-AUDIT.md`.
+- Prompt 17 execution semantics repair: Execute no longer follows the old dry-run default mode. Current VST3 UX routes the visible Run action through planning first, then Preview/live execution according to the Settings safety mode.
+- Prompt 18 main UI updates: multiline prompt composer (`NSTextView`), clearer readiness wording, and a new header `System Prompts` action.
+- Prompt 20 system prompt workflow: fixed System Prompts window with preset selector + edit/save/save-as/load/reset; prompt preset/custom persistence via `llmr.vst3.system_prompt_preset` and `llmr.vst3.system_prompt_custom`; planner prompt still appends `toolCatalogPrompt()`.
+- Prompt 21 reliability updates: added duration parsing helpers (`minute`, `second`, `bar` -> beats), drum/piano deterministic fallback generators, and a 90s bounded provider wait in `callLLM`.
+- Prompt 19 settings refactor now complete: Settings opens as a fixed-size modal sheet/window, Save/Cancel are explicit at the top and bottom, and the in-plugin Basic/Advanced toggle flow was removed from the active UI path.
+- Current VST3 UX follow-up: System Prompt preset selection now updates the editor, Settings automatically refreshes Ollama status on open, the prompt placeholder hides while typing, the main surface has one Run action plus Cancel, and LLM requests wait in five-minute intervals with Continue Waiting / Wait Without Timeout / Cancel Request choices.
+- Prompt 15 follow-up fixes: main-screen readiness labels now show a green/red icon plus plain white text without chip backgrounds/borders; the current Settings window is a compact non-scrolling modal surface.
+- Prompt 16 bridge installer repair: VST3 no longer treats `~/Music/Ableton/User Library` as install authority; Settings now requires selecting/confirming the actual Ableton User Library, persists that choice (`llmr.vst3.bridge_user_library_path`), installs bridge files to `<User Library>/Remote Scripts/LLMR_Bridge`, validates `__init__.py`, detects double-nesting, exposes Reveal/Copy/Recheck/Help recovery actions, and shows explicit selected/target/status lines with reachability guidance.
+- Prompt 16 settings/wrench hang fix: opening Settings avoids Bridge probes and blocking UI-thread HTTP; it now starts only an asynchronous Ollama status refresh. Bridge/Ollama actions include in-flight guards to prevent overlapping probes, and global bottom status messages from Bridge checks are concise/single-line instead of multiline diagnostics.
 - Deliberately does not yet include the PyQt/web readiness strip (`GET /api/readiness`) or a full oMLX management tab.
 - Manual validation still needed before tag: real AbletonOSC smoke pass, Prompt 16 VST3 bridge path-selection/install/reachability retest in Ableton (including relocated/external User Library), Device Bridge candidate-resolution pass, and local-runtime smoke checks.
 
@@ -79,7 +86,7 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 - Device Bridge
 
 ## Safety
-- Dry run: previews execution report without mutating the Live set.
+- Preview mode: uses the dry-run execution path to preview the execution report without mutating the Live set.
 - Destructive approval: destructive actions require explicit approval when not in dry run.
 - One-time plan execution: a plan can only be executed once.
 - Plan expiry/store bounds: plans expire and plan-store size is bounded.
@@ -104,10 +111,16 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 - Execute-batch metadata tests: `test_execute_batch_response_includes_executed_actions_metadata` verifies `/api/execute_batch` `executed_actions` match `/api/execute` metadata shape.
   - Prompt 14 fix: added `assert action["args"] == [2, 3]` assertion.
   - Last verified in Prompt 14: included in `python -m pytest -q` run above.
+- VST3 static regression tests now include prompt-sequence checks:
+  - `tests/test_vst3_settings_side_effects.py` verifies Execute dispatch is no longer tied to `executeLastPlan(currentDryRunDefault())`, prompt input uses multiline text view wiring, Settings is modal/no-scroll, Ollama refreshes on open, and the main surface has Run plus Cancel.
+  - `tests/test_vst3_fallback_static.py` verifies duration/fallback helper function presence, planner fallback wiring, and the longer continue/cancel LLM wait path.
+  - `tests/test_vst3_system_prompts_static.py` verifies System Prompts storage keys, preset-change wiring, and prompt composition pipeline.
 - Release workflow checks:
+  - Last verified in Prompt 19 follow-up: `python -m pytest -q` passed (`169 passed, 4 warnings`).
+  - Last verified in Prompt 19 follow-up: `./scripts/build_vst3.sh` passed.
+  - Last verified in Prompt 19 follow-up: `python -m pytest -q tests/test_vst3_settings_side_effects.py` passed (`6 passed`).
   - Last verified in Prompt 14: `ruff check .` passed.
   - Last verified in Prompt 14: `git diff --check` passed.
-  - Last verified in Prompt 11: `./scripts/build_vst3.sh` passed.
   - Last verified in Prompt 11: `bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"` passed.
   - Expected command: `python3 -m build`.
 - Not automated: browser-level web end-to-end automation, real Ableton Live mutation correctness, real Device Bridge browser behaviour, and real Ollama/oMLX runtime behaviour on release target machines.
@@ -136,6 +149,7 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 - Complete real Ollama runtime smoke test on the release target machine.
 - Complete real oMLX runtime smoke test on the release target machine.
 - Complete manual web and PyQt smoke passes on the release candidate build.
+- Complete real Ableton manual validation for Prompt 17-22 behaviour (Run -> plan -> preview/live execution, multiline composer keyboard UX, System Prompts selector/save/load/reset, modal Settings, Cancel, long-wait prompts, and 1-2 minute composition fallback behaviour).
 
 ## Post-0.6.9 roadmap
 1. Professional VST3 polish and validation.
@@ -147,4 +161,4 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 7. Readiness/oMLX parity decision for VST3.
 8. Packaging/signing/notarisation if needed.
 
-Last updated: 2026-05-21 01:57
+Last updated: 2026-05-21 06:30

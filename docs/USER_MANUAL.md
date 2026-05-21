@@ -36,19 +36,19 @@ You configure the provider and model in LLM-r; Modelito handles the connection t
   - Provider and model controls are selectors, not editable text fields.
   - Use **Custom model** only for unlisted model IDs or the `custom` provider.
   - For `omlx`, select the provider/model in VST3 and use the PyQt companion for local runtime management tasks.
-6. Keep **Dry run** enabled and click **Test readiness**.
-7. For cloud providers, open **Advanced Settings** and enter the API key.
+6. Keep **Preview only; do not change Live** enabled and click **Test readiness**.
+7. For cloud providers, open **Settings** and enter the API key.
 8. Confirm the AbletonOSC host and port. The default is `127.0.0.1:11000`.
 9. If you want device loading:
   - in Live's Browser, right-click **User Library** and choose **Show in Finder**
-  - in LLM-r Advanced Settings -> Device Bridge, click **Choose Ableton User Library...** and select that folder
+  - in LLM-r Settings, click **Choose Ableton User Library...** and select that folder
   - click **Install / Reinstall Bridge**
   - restart Live
   - in Live Settings -> Link, Tempo & MIDI -> Control Surface, choose `LLMR_Bridge` if it appears
   - click **Recheck**
   - if it does not appear, check Live `Log.txt` for `LLMR`, `Bridge`, `RemoteScriptError`, `Traceback`, or `ImportError`
 10. Click **Save**.
-11. Run one safe prompt, click **Plan**, review **Plan** and **Details**, then click **Execute** while Dry run is still enabled.
+11. Run one safe prompt, click **Run**, and review **Result** and **Details**. Turn Preview only off in Settings when you are ready for live execution.
 
 ### PyQt first-run wizard (companion surface)
 
@@ -72,7 +72,7 @@ When you open the PyQt GUI for the first time, LLM-r shows a guided wizard.
 
 Advanced Settings remains the full runtime-management surface for local runtimes.
 
-Use **Advanced Settings** to check Device Bridge reachability before executing
+Use VST3 **Settings** or PyQt **Advanced Settings** to check Device Bridge reachability before executing
 plans that include `device_load`. Execution also resolves each device-load
 candidate before sending any mutations, so ambiguous browser matches block until
 the plan uses a specific candidate path or a confirmed ambiguous choice.
@@ -89,10 +89,10 @@ Use it for:
 
 - typing prompts inside Ableton Live
 - reviewing a plan before it touches the set
-- dry-running and executing from the plug-in window
-- cloud-provider setup and Ollama setup that fits inside the plug-in's Advanced Settings
+- previewing and executing from the plug-in window
+- cloud-provider setup and Ollama setup that fits inside the plug-in's Settings window
 
-The shipped VST3 currently includes prompt entry, Plan and Details tabs, dry run, Auto-approve, destructive approval, Device Bridge checks/recovery actions, a minimal readiness strip, in-plug-in Help, and Ollama controls. It does not show the same full readiness strip or oMLX management tab that the companion surfaces show.
+The shipped VST3 currently includes a multiline prompt composer, a one-click **Run** flow, Result and Details tabs, Preview mode, destructive approval, Device Bridge checks/recovery actions, a minimal readiness strip, a System Prompts window, in-plug-in Help, modal Save/Cancel Settings, and Ollama controls. It does not show the same full readiness strip or oMLX management tab that the companion surfaces show.
 
 Use the PyQt companion when you need full readiness checks or full local runtime management.
 
@@ -131,26 +131,26 @@ The web companion keeps safety defaults visible and explicit:
 ## Main Screen
 
 The main screen is a command surface with readiness chips, a prompt field, a
-Plan Board, execution controls, and an **Auto-approve** checkbox.
-Press **Return** in the prompt field to create a plan, or click **Plan**.
+Result view, Details view, and a single **Run** button. Run plans first, then
+executes the validated actions in Preview or live mode depending on Settings.
 
-The VST3 **Help** button opens an in-plug-in guide called "First dry-run in 60
-seconds". It covers keeping Dry run enabled, choosing provider/model, entering a
-safe prompt, planning, reviewing Details, and clicking Execute while Dry run is
-still on. It also explains AbletonOSC versus Device Bridge. Screenshots are
+The VST3 **Help** button opens an in-plug-in guide called "First preview in 60
+seconds". It covers keeping Preview only enabled, choosing provider/model,
+entering a safe prompt, clicking Run, and reviewing Details before live
+execution. It also explains AbletonOSC versus Device Bridge. Screenshots are
 future work; the current Help is text-only.
 
-### Plan Tab
+### Result Tab
 
-The **Plan** tab is the normal user-facing view. It shows:
+The **Result** tab is the normal user-facing view. It shows:
 
 - your request
 - the assistant's interpreted Plan Board
 - planned Ableton steps with safety and transport labels
 - safety notes for destructive operations
-- execution or dry-run results
+- execution or preview results
 
-The plan view is selectable. Use standard macOS shortcuts such as `Cmd+C`, `Cmd+A`, and normal text selection.
+The result view is selectable. Use standard macOS shortcuts such as `Cmd+C`, `Cmd+A`, and normal text selection.
 
 ## Reviewing A Plan
 
@@ -162,7 +162,7 @@ Check these items before you execute:
 - which tracks, clips, scenes, or devices the actions target
 - whether any step is marked destructive
 - whether any `device_load` step is ambiguous and needs a more exact browser path or preset choice
-- whether Dry run is still on for a safe preview
+- whether Preview only is still on for a safe first run
 
 If the plan is wrong, edit the prompt and plan again. Do not execute a plan just because the model answered confidently.
 
@@ -178,32 +178,26 @@ answers with prose, LLM-r first asks the model to repair the answer into the
 action schema. For common drum-loop requests, it can also fall back to a local
 2-bar MIDI drum-loop plan so the workflow still produces executable actions.
 
-### Dry Run and Execute
+### Run and Preview
 
-Keep **Dry run** enabled when testing. A dry run shows what would be sent to Ableton without changing the Live set.
+Click **Run** to have LLM-r plan and then execute the validated action list.
+With **Preview only; do not change Live** enabled, execution produces a preview
+report and never mutates the Live set. With Preview only disabled, LLM-r sends
+the actions to Ableton after the same preflight checks.
 
-For live performance, keep Dry run on until the set is saved and tested.
-
-Click **Execute** only after reviewing the plan. Destructive actions, such as deleting tracks or clips, require **Allow destructive actions** in Settings and dry run must be off.
-
-Enable **Auto-approve** only when you want LLM-r to run the plan immediately
-after planning. If Dry run is enabled, Auto-approve runs a preview. If Dry run is
-off, Auto-approve sends the actions to Ableton after the same preflight checks.
-Avoid Auto-approve with Dry run off during performance.
+For live performance, keep Preview only on until the set is saved and tested.
+Destructive actions, such as deleting tracks or clips, require **Allow
+destructive actions** in Settings.
 
 ## Safety Controls
 
-### Dry run
+### Preview only
 
-Dry run previews the execution report without mutating the Live set. This should stay on during setup and when testing a new provider or prompt style.
-
-### Auto-approve
-
-Auto-approve removes the extra manual click between planning and execution. It is safer when Dry run is still on. If Dry run is off, Auto-approve becomes live execution immediately after planning.
+Preview only shows the execution report without mutating the Live set. This should stay on during setup and when testing a new provider or prompt style.
 
 ### Destructive approval
 
-LLM-r marks destructive steps separately. Deleting tracks, clips, scenes, notes, or devices requires explicit destructive approval and Dry run must be off.
+LLM-r marks destructive steps separately. Deleting tracks, clips, scenes, notes, or devices requires explicit destructive approval and Preview only must be off.
 
 ### Device Bridge preflight
 
@@ -211,40 +205,31 @@ LLM-r marks destructive steps separately. Deleting tracks, clips, scenes, notes,
 
 ## Settings
 
-The basic Settings screen is intentionally short:
+The VST3 Settings window is modal, fixed-size, and intentionally kept to one screen:
 
 - **Provider**: `openai`, `anthropic`, `google`, `ollama`, `omlx`, or `custom`
 - **Model**: a non-editable provider-specific selector
 - **Custom model**: explicit text field for unlisted model IDs or the `custom` provider
 - **Server**: provider default or API base URL
-- **Dry run**: whether **Execute** previews instead of mutating Live
-- **Auto-approve**: whether plans run immediately after planning
+- **API key**: cloud-provider credential
+- **Preview only; do not change Live**: whether Run previews instead of mutating Live
+- **Allow destructive actions**: permits destructive live actions when Preview only is off
+- **AbletonOSC and Device Bridge**: host/port and bridge installation/recheck controls
+- **Ollama**: status refresh, start/stop/install, installed model, serve, stop serve, test, online refresh, and download
 - **Test readiness**: updates the minimal VST3 readiness guidance
 
-Use **Save** to apply changes. Use **Cancel** to discard changes.
-
-## Advanced Settings
-
-Advanced Settings contains fields that are not needed for every request:
-
-- provider API key
-- LLM-r guidance prompt toggle
-- AbletonOSC host and port
-- Device Bridge host/port, User Library selection, install/reinstall, reveal/copy install path, setup help, and recheck actions
-- Ollama service and model controls
-- oMLX release note/status; full oMLX runtime controls remain in PyQt
-- destructive-action approval
-- diagnostics notes
+Use **Save** to apply changes. Use **Cancel** to discard changes. Opening
+Settings refreshes the local Ollama status automatically.
 
 ## Readiness
 
 Readiness answers three separate questions:
 
 - can LLM-r create a plan?
-- can LLM-r dry-run that plan safely?
+- can LLM-r preview that plan safely?
 - can LLM-r execute that plan live?
 
-The PyQt GUI and web UI expose full readiness directly. In headless mode, call `GET /api/readiness`. The VST3 exposes a smaller first-use strip: model configured/missing, AbletonOSC configured/not checked, Device Bridge reachable/unreachable/optional, and Dry run on/off. Keep Dry run on first and treat PyQt/web as the source for full readiness diagnostics.
+The PyQt GUI and web UI expose full readiness directly. In headless mode, call `GET /api/readiness`. The VST3 exposes a smaller first-use strip: model configured/missing, AbletonOSC configured/not checked, Device Bridge reachable/unreachable/optional, and Preview/live state. Keep Preview only on first and treat PyQt/web as the source for full readiness diagnostics.
 
 ### Provider API Keys
 
@@ -258,7 +243,7 @@ For custom providers, enter the endpoint expected by that provider. Custom provi
 
 ## Ollama
 
-Ollama controls live in **Advanced Settings**.
+Ollama controls live in the VST3 **Settings** window and in the PyQt companion runtime screens.
 
 ### Status
 
@@ -295,7 +280,7 @@ Click **Download** to pull the selected model through Ollama. Large models can t
 
 ## oMLX
 
-Full oMLX controls live in the PyQt companion **Advanced Settings -> oMLX** screen. The VST3 can select `omlx` as a provider and shows an Advanced Settings note, but it does not manage the oMLX runtime in this release.
+Full oMLX controls live in the PyQt companion **Advanced Settings -> oMLX** screen. The VST3 can select `omlx` as a provider and shows a Settings note, but it does not manage the oMLX runtime in this release.
 
 The flow from LLM-r through to oMLX is: LLM-r → Modelito → oMLX runtime.
 
@@ -339,7 +324,7 @@ Use this order for local runtimes:
 4. Download one model into that runtime's own model store.
 5. Serve or activate the model if the runtime requires it.
 6. Set the matching LLM-r provider and model.
-7. Keep Dry run on and test a safe prompt first.
+7. Keep Preview only on and test a safe prompt first.
 
 Ollama and oMLX do not share a model store. Download the model separately in the runtime you plan to use.
 
@@ -381,11 +366,11 @@ Start Ollama first. Then click **Refresh Online**, choose a model, and click **D
 
 ### Ableton does not change
 
-Check that AbletonOSC is installed, active, and listening on the host/port shown in Advanced Settings. If the failed step is `device_load`, also check that `LLMR_Bridge` is installed in the active User Library and enabled in a Control Surface slot after restarting Live. A `409` or ambiguous-candidate error means the browser query needs a more specific device name, preset query, or candidate path. Keep **Dry run** off when you actually want to execute.
+Check that AbletonOSC is installed, active, and listening on the host/port shown in Settings. If the failed step is `device_load`, also check that `LLMR_Bridge` is installed in the active User Library and enabled in a Control Surface slot after restarting Live. A `409` or ambiguous-candidate error means the browser query needs a more specific device name, preset query, or candidate path. Turn **Preview only** off when you actually want to execute live.
 
 ### Device Bridge not reachable
 
-The VST3 Advanced Settings Bridge area shows this status when the local Remote
+The VST3 Settings Bridge area shows this status when the local Remote
 Script HTTP server does not answer. It now distinguishes disk install status
 from runtime reachability and shows both the selected User Library path and the
 exact install target.

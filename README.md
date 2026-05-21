@@ -1,6 +1,6 @@
 # LLM-r
 
-**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. The **VST3 plug-in is the primary product surface**: describe what you want in plain language inside Ableton Live, review the generated plan, then dry-run or execute it.
+**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. The **VST3 plug-in is the primary product surface**: describe what you want in plain language inside Ableton Live, then click **Run**. LLM-r plans first, then runs the validated actions in Preview or live mode depending on Settings.
 
 The other surfaces are companions for the same workflow:
 
@@ -17,7 +17,7 @@ Natural language prompt in the VST3
                             Ollama / oMLX / custom)
         │
         ▼
-   Action plan  (dry-run or execute)
+   Action plan  (preview or live run)
         │
         ▼
    AbletonOSC / Device Bridge ─────►  Ableton Live
@@ -27,10 +27,10 @@ Natural language prompt in the VST3
 
 ## Features
 
-- **Self-contained VST3 plug-in** — configure the LLM, write prompts, review plans, dry-run, and execute from inside Ableton Live
+- **Self-contained VST3 plug-in** — configure the LLM, write prompts, run plans, preview safely, and execute from inside Ableton Live
 - **Clear surface split** — VST3 for primary in-Live use, PyQt for setup/debug/control, web UI for lightweight browser access, and FastAPI for automation/headless workflows
 - **Natural-language planner** — the plug-in and `POST /api/plan` convert a free-text prompt into a typed, validated action plan
-- **Safe execution** — dry-run mode, destructive-action approval step, and a strict capability registry
+- **Safe execution** — Preview mode, destructive-action approval step, and a strict capability registry
 - **Macro system** — named sequences of actions (`idea_sketch`, `performance_prep`, …) with full CRUD via the API
 - **Live state introspection** — query song settings, tracks, devices, clips, and parameters at runtime
 - **Device loading** — load Live browser devices or plug-ins by name through the bundled LLMRDeviceBridge Remote Script
@@ -101,12 +101,11 @@ bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
 
 Open the `LLM-r` plug-in window in Ableton Live. The plug-in GUI is the main
 user-facing workflow: provider/model settings, prompt entry, plan review,
-dry-run, Auto-approve, destructive-action approval, Plan/Details tabs, and
-Advanced Settings for cloud API keys, AbletonOSC, Device Bridge checks, and
-Ollama runtime controls.
+one-click Run, destructive-action approval, Result/Details tabs, a modal
+single-screen Settings window with Save/Cancel, and Ollama runtime controls.
 
 The VST3 now includes a minimal first-use readiness strip for model, AbletonOSC,
-Device Bridge, and Dry run state. It is not full `GET /api/readiness` parity and
+Device Bridge, and execution safety state (`preview only` / `live run`). It is not full `GET /api/readiness` parity and
 does not include an oMLX runtime-management UI. Use the companion surfaces for
 full readiness checks and local runtime management.
 
@@ -151,10 +150,10 @@ model download/serve/delete, and AbletonOSC configuration.
 Use this sequence on a new install:
 
 1. Open **Settings** and choose a provider/model.
-2. Keep **Dry run** enabled.
-3. Use **Test readiness** in Basic Settings.
-4. For cloud providers, add the API key in Advanced Settings.
-5. For `device_load`, open Advanced Settings -> Device Bridge and:
+2. Keep **Preview only; do not change Live** enabled.
+3. Use **Test readiness** in Settings.
+4. For cloud providers, add the API key in Settings.
+5. For `device_load`, open Settings -> Device Bridge and:
   - click **Choose Ableton User Library...**
   - in Live, right-click **User Library** in the Browser and choose **Show in Finder** to locate the folder
   - click **Install / Reinstall Bridge**
@@ -167,11 +166,11 @@ If `LLMR_Bridge` does not appear in Live, check Live `Log.txt` for `LLMR`, `Brid
 Readiness checks:
 In PyQt or web UI, read the readiness status directly.
 In headless mode, call `GET /api/readiness`.
-In the VST3, use the minimal readiness strip and run a dry run first; the plug-in does not claim the same readiness parity as the companion surfaces.
+In the VST3, use the minimal readiness strip and run in Preview mode first; the plug-in does not claim the same readiness parity as the companion surfaces.
 
 1. Try a safe prompt such as `Set the tempo to 120 BPM` or `Create one MIDI track named Ideas`.
-2. Review the plan before executing.
-3. Execute only after the plan looks correct and any destructive steps are intentional.
+2. Click **Run** and review the Result/Details output.
+3. Turn Preview off only after the plan looks correct and any destructive steps are intentional.
 
 ### Try these first
 
@@ -181,7 +180,7 @@ Safe first prompts for novice users:
 - `Create one MIDI track named Drums.`
 - `Create an audio track named Vox In and arm it.`
 - `Create a 4-bar clip on track 0 and rename it Beat Sketch.`
-- `Dry-run deleting clip 0 on track 0.`
+- `Preview deleting clip 0 on track 0.`
 
 More advanced prompts for professional users:
 
@@ -191,8 +190,7 @@ More advanced prompts for professional users:
 - `Load Drum Rack on track 2.` *(requires Device Bridge)*
 - `Load EQ Eight on track 1 and set a conservative gain staging level.` *(requires Device Bridge for loading)*
 
-For live performance, keep Dry run on until the set is saved and tested. Avoid
-Auto-approve with Dry run off during performance.
+For live performance, keep **Preview only** enabled until the set is saved and tested.
 
 ### Local models
 
@@ -450,22 +448,21 @@ own runtime settings in macOS user defaults and can:
 - choose provider/model/endpoint and API key
 - provider picker includes `openai`, `anthropic`, `google`, `ollama`, `omlx`, and `custom`
 - use non-editable provider/model selectors plus an explicit Custom model field
-- switch between Plan and Details response tabs
+- open a **System Prompts** window to edit/save/load/reset planner prompt presets
+- switch between Result and Details response tabs
 - copy/select text from the response panel
-- keep provider/model, optional Custom model, Server/API base URL, Dry run, and
-  Test readiness on the Basic Settings screen
-- keep API keys, AbletonOSC, Device Bridge host/port, Bridge setup actions,
-  Ollama controls, oMLX notes, destructive approval, and diagnostics in
-  Advanced Settings
-- show a minimal readiness strip for model, AbletonOSC, Device Bridge, and Dry run state
+- use a multiline prompt composer in the main window
+- keep provider/model, optional Custom model, Server/API base URL, API key,
+  Preview mode, destructive approval, AbletonOSC, Device Bridge setup actions,
+  Ollama controls, oMLX notes, and Test readiness in one modal Settings window
+- show a minimal readiness strip for model, AbletonOSC, Device Bridge, and Preview state
 - show transport/device status checks and Ollama model/runtime state
 - load the downloadable-model pull-down from the Ollama online model library
-- open an in-plug-in Help dialog with the first dry-run path and Bridge setup notes
+- open an in-plug-in Help dialog with the first Preview path and Bridge setup notes
 - save or cancel settings changes explicitly
 - send the built-in LLM-r tool catalog and optional guidance to the LLM
 - parse the returned JSON plan
-- dry-run or execute the resulting AbletonOSC and Device Bridge actions
-- auto-approve plans after planning while respecting the dry-run default
+- run the resulting AbletonOSC and Device Bridge actions automatically after planning, using Preview or live mode from Settings
 - block destructive actions unless explicitly allowed
 
 The shipped VST3 currently does **not** provide:

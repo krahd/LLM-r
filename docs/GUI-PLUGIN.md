@@ -9,47 +9,46 @@ opening a separate terminal or companion window.
 
 - **Command surface** — type requests in natural language and review the result
   as a Plan Board instead of raw model output.
-- **Plan / Details tabs** — use Plan for the interpreted action board and
+- **Result / Details tabs** — use Result for the interpreted action board and
   Details for the exact provider response/debug payload.
-- **Resizable window** — drag the plug-in editor to the size you want.
-- **Separate Settings panel** — click ⚙ Settings to open a dedicated screen.
-  Basic provider/model choices, optional Custom model, Server/API base URL,
-  Dry run, Auto-approve, and Test readiness stay on the first settings screen.
-  API keys, AbletonOSC, Device Bridge setup, Ollama controls, oMLX notes,
-  destructive approval, and diagnostics are in Advanced Settings.
+- **Fixed main window** — the plug-in editor uses a stable fixed size for host compatibility.
+- **Modal Settings window** — click Settings to open a single-screen modal
+  window with provider/model, optional Custom model, Server/API base URL, API
+  key, Preview mode, destructive approval, AbletonOSC, Device Bridge setup,
+  Ollama controls, oMLX note, Test readiness, Save, and Cancel.
 - **Normal selector behaviour** — provider, model, installed-model, and
   downloadable-model controls are non-editable selectors that open when clicked
   anywhere on the visible field.
 - **First-use guidance** — Help opens an in-plug-in text guide for a safe
-  first dry-run path. Screenshots are not bundled yet.
+  first Preview path. Screenshots are not bundled yet.
+- **System Prompts window** — edit, save, load, and reset planner prompt presets without editing code.
 - **Explicit settings commit** — Save applies changes; Cancel discards edits.
 - **Persistent settings** — API keys, ports, model names, and checkboxes are
   saved to macOS `NSUserDefaults` and restored across sessions.
-- **Dry-run by default** — every plan is previewed before execution; toggle
+- **One-click Run** — Run plans first, then automatically executes the validated
+  action list in Preview or live mode depending on Settings.
+- **Preview by default** — every plan is previewed before live execution; toggle
   off when you're confident.
-- **Auto-approve option** — when enabled, the plug-in runs the plan immediately
-  after planning, using the saved dry-run default.
 - **Destructive-action guard** — track/scene/clip deletes and `stop_all_clips`
   require "Allow destructive actions" to be enabled in Settings.
 
 ## Command workflow
 
 1. Load **LLM-r** as a VST3 instrument in any Ableton Live track.
-2. Open Settings, choose Provider and Model, keep Dry run on, and click Test readiness.
-3. For cloud providers, open Advanced Settings and add the API key.
-4. For `device_load`, use Advanced Settings -> Device Bridge -> Recheck.
+2. Open Settings, choose Provider and Model, keep Preview only on, and click Test readiness.
+3. For cloud providers, add the API key in Settings.
+4. For `device_load`, use Settings -> Device Bridge -> Recheck.
 5. Type a request — e.g. *"Create a 4-bar bass line at 90 BPM on a new MIDI
-   track"* — and press **Plan**.
-6. LLM-r calls the configured LLM and returns a Plan Board.
-7. Review the plan, then click **Execute** while Dry run is still enabled for the first smoke path.
+   track"* — and press **Run**.
+6. LLM-r calls the configured LLM, returns a Plan Board, then runs Preview or live execution based on Settings.
+7. Review Result and Details; turn Preview only off only when you want live execution.
 
 ## Settings panel
 
 Open with the ⚙ Settings button. Use Save to apply changes, or Cancel to leave
 the current runtime settings unchanged.
-Use Basic Settings for provider/model, optional Custom model, Server/API base URL,
-Dry run, Auto-approve, and Test readiness. Use Advanced Settings for provider
-keys, AbletonOSC, Device Bridge, Ollama, oMLX notes, destructive approval, and diagnostics.
+The VST3 Settings window is one modal screen; it does not use a Basic/Advanced
+split or a scrolling settings view.
 
 ### LLM Provider
 
@@ -68,14 +67,14 @@ keys, AbletonOSC, Device Bridge, Ollama, oMLX notes, destructive approval, and d
 | --- | --- |
 | Host | Default `127.0.0.1` |
 | Port | Default `11000` |
-| Dry run default | Pre-check to preview plans without sending actions |
-| Auto-approve plans | Run the plan immediately after planning, respecting the dry-run default |
+| Preview only | Run without mutating Live |
+| Allow destructive actions | Permit destructive live actions when Preview only is off |
 
 ### Device Bridge
 
-Advanced Settings includes a **Check Bridge** control that verifies the local
+Settings includes a **Recheck** control that verifies the local
 LLMRDeviceBridge Remote Script on `127.0.0.1:8788` before executing plans that
-include `device_load`. Non-dry-run execution also asks the bridge to resolve
+include `device_load`. Live execution also asks the bridge to resolve
 each selected device, preset, or browser path before any OSC mutation is sent.
 
 Bridge install is now user-library-selected, not hard-coded. In Device Bridge:
@@ -99,9 +98,10 @@ External SSD User Libraries are supported when the drive is mounted before Live 
 If `LLMR_Bridge` does not appear in Live, check Live `Log.txt` for `LLMR`,
 `Bridge`, `RemoteScriptError`, `Traceback`, or `ImportError`.
 
-### Advanced Ollama (local models)
+### Ollama (local models)
 
-Ollama management operations are available from Advanced Settings:
+Ollama management operations are available from Settings. Opening Settings
+refreshes local Ollama status automatically:
 
 | Action | Description |
 | --- | --- |
