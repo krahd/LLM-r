@@ -33,6 +33,23 @@ python3 -m build
 git diff --check
 ```
 
+## Pre-release UI checklist
+
+Do not mark these complete unless you manually exercised the release candidate build or packaged app that users will receive.
+
+- First-run flow checked
+- Readiness display checked where shipped
+- Plan, dry run, and execute flow checked
+- Local runtime tabs checked
+- VST3 UI checked
+- Web UI checked
+
+Interpret the checklist literally:
+
+- The current shipped VST3 should be checked for its actual plan/review/execute workflow, settings, Device Bridge checks, and Ollama controls.
+- The current shipped PyQt GUI and web UI should be checked for readiness display.
+- The current shipped local runtime tabs are the PyQt Ollama and oMLX tabs; the VST3 does not currently ship an oMLX management tab.
+
 ## macOS validation steps
 
 These are required before tagging but are not automated in CI:
@@ -97,11 +114,13 @@ Local install helpers:
 - The default local VST3 smoke bundle is named `LLM-r.vst3` and reports
   `Tomas Laurenzo` as its VST3 factory vendor. It is advertised as a minimal
   VST3 instrument with a native Cocoa editor view. The editor is self-contained:
-  it exposes provider/model settings, readiness chips for AbletonOSC and
-  LLMRDeviceBridge, Plan and Details response tabs, explicit Save/Cancel
-  settings, Advanced Settings for API keys and Ollama status/model control,
-  prompt entry, plan review, dry-run, auto-approve, destructive-action approval,
-  and direct AbletonOSC plus Device Bridge execution.
+  it exposes provider/model settings (including `omlx` selection),
+  AbletonOSC and LLMRDeviceBridge status checks, Plan and Details response tabs, explicit
+  Save/Cancel settings, Advanced Settings for API keys and Ollama
+  status/model control, prompt entry, plan review, dry-run, auto-approve,
+  destructive-action approval, and direct AbletonOSC plus Device Bridge
+  execution. The shipped VST3 does not currently expose the same readiness
+  strip as PyQt/web and does not currently ship an oMLX management tab.
 - The primary release/install path should stay focused on the VST3 bundle plus
   the bundled LLMRDeviceBridge Remote Script. Server, web UI, and PyQt GUI
   artifacts are companion tools for advanced/headless workflows.
@@ -109,7 +128,11 @@ Local install helpers:
   Plan, Action Table, Run Log, and Details tabs, plus the same Auto-approve
   option. Its main Settings screen is intentionally limited to provider/model
   and execution defaults; Advanced Settings owns API keys, Ollama controls,
-  server connection, AbletonOSC, and planner guidance.
+  oMLX controls, server connection, AbletonOSC, planner guidance, and the
+  most complete shipped readiness display.
+- The web UI is a lightweight browser companion with readiness chips, prompt,
+  plan/review/execute controls, Run Log, and Details tab. It should be checked
+  separately from the VST3 because its UI surface is different.
 
 Notes and caveats:
 

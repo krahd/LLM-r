@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from pathlib import Path
 
 from llmr import __version__
-from llmr.ableton_osc import AbletonOSCClient, capabilities
+from llmr.ableton_osc import AbletonAction, AbletonOSCClient, capabilities
 from llmr.config import settings
 from llmr.device_bridge import (
     DeviceBridgeError,
@@ -60,6 +60,7 @@ from llmr.modelito_adapter import (
 from llmr.planner import IntentPlanner, PlanStore
 from llmr.prompts import planner_extra_prompt
 from llmr.osc_replies import OscReplyListener
+from llmr.plan_summary import infer_target_label, infer_transport, summarise_actions
 from llmr.schemas import PlannedToolCall, ToolName
 from llmr.sessions import SessionStore
 
@@ -117,7 +118,7 @@ class SettingsPatch(BaseModel):
 
 
 class LocalModelRequest(BaseModel):
-    model: str = Field(min_length=1, max_length=256)
+    model: str = Field(min_length=1, max_length=256, pattern=r".*\S.*")
 
 
 class LiveRefreshRequest(BaseModel):
@@ -780,7 +781,47 @@ async def generic_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=payload)
 
 
+def _serialize_action(action: AbletonAction) -> dict[str, Any]:
+    """Serialise a single AbletonAction to a UI-facing dict with display metadata."""
+    semantic = getattr(action, "semantic_args", {}) or {}
+    transport = getattr(action, "transport", "osc")
+    raw_for_transport = {
+        "tool": action.tool.value,
+        "transport": transport,
+        "address": action.address,
+    }
+    actual_transport = infer_transport(raw_for_transport)
+    if actual_transport == "osc":
+        transport_label = "AbletonOSC"
+        transport_plain_label = "Ableton command"
+    elif actual_transport == "device_bridge":
+        transport_label = "Device Bridge"
+        transport_plain_label = "Browser/device loading"
+    else:
+        transport_label = actual_transport or "Other"
+        transport_plain_label = "Advanced route"
+
+    # Prefer semantic args for target label; fall back to positional args.
+    target_label = infer_target_label(semantic if semantic else (action.args or {}))
+
+    return {
+        "tool": action.tool.value,
+        "address": action.address,
+        "args": action.args,
+        "semantic_args": semantic,
+        "description": action.description,
+        "destructive": action.destructive,
+        "transport": transport,
+        "target_label": target_label,
+        "transport_label": transport_label,
+        "transport_plain_label": transport_plain_label,
+        "safety_label": "Destructive" if action.destructive else "Safe",
+    }
+
+
 def _serialize_plan(plan) -> dict:
+    planned_actions = [_serialize_action(action) for action in plan.actions]
+
     return {
         "plan_id": plan.id,
         "prompt": plan.prompt,
@@ -789,17 +830,8 @@ def _serialize_plan(plan) -> dict:
         "requires_approval": plan.requires_approval,
         "created_at": plan.created_at,
         "executed_at": plan.executed_at,
-        "planned_actions": [
-            {
-                "tool": a.tool.value,
-                "address": a.address,
-                "args": a.args,
-                "description": a.description,
-                "destructive": a.destructive,
-                "transport": getattr(a, "transport", "osc"),
-            }
-            for a in plan.actions
-        ],
+        "summary": summarise_actions(planned_actions),
+        "planned_actions": planned_actions,
     }
 
 
@@ -918,6 +950,13 @@ def get_osc_reply_status() -> dict:
     )
     listener_status["recent_count"] = len(_osc_reply_events)
     return listener_status
+
+
+@app.get("/api/readiness")
+def get_readiness() -> dict:
+    from llmr.readiness import compute_readiness
+
+    return compute_readiness(settings, _osc_reply_listener)
 
 
 @app.get("/api/osc-replies/recent")
@@ -1396,16 +1435,7 @@ def execute_plan(req: ExecuteRequest) -> dict:
         "requires_approval": plan.requires_approval,
         "dry_run": req.dry_run,
         "executed_at": plan.executed_at,
-        "executed_actions": [
-            {
-                "tool": a.tool.value,
-                "address": a.address,
-                "args": a.args,
-                "description": a.description,
-                "transport": getattr(a, "transport", "osc"),
-            }
-            for a in plan.actions
-        ],
+        "executed_actions": [_serialize_action(a) for a in plan.actions],
         "execution_report": execution_report,
     }
 
@@ -1428,6 +1458,7 @@ def execute_batch(req: ExecuteBatchRequest) -> dict:
         "dry_run": req.dry_run,
         "executed_at": executed_at,
         "execution_report": execution_report,
+        "executed_actions": [_serialize_action(a) for a in actions],
     }
 
 

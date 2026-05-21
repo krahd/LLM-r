@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from llmr.device_parameters import resolve_parameter
@@ -28,6 +28,7 @@ class AbletonAction:
     description: str
     destructive: bool = False
     transport: str = "osc"
+    semantic_args: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -264,7 +265,8 @@ def _build_midi_note_range(args: dict[str, Any], *, allow_empty: bool) -> list[A
             return payload
         return payload + [0, 128, 0.0, 16384.0]
     if not all(provided):
-        raise ValueError("'start_pitch', 'pitch_span', 'start_time', and 'time_span' must be provided together")
+        raise ValueError(
+            "'start_pitch', 'pitch_span', 'start_time', and 'time_span' must be provided together")
     start_pitch = _bounded_int(args["start_pitch"], "start_pitch", 0, 127)
     pitch_span = int(args["pitch_span"])
     start_time = float(args["start_time"])
@@ -1012,6 +1014,7 @@ class AbletonOSCClient:
             description=spec.description,
             destructive=spec.destructive,
             transport=spec.transport,
+            semantic_args=dict(args),
         )
 
 

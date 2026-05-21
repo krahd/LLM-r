@@ -16,7 +16,6 @@ release/
 pip-wheel-metadata/
 
 # PyInstaller
-*.spec
 llm-r-gui
 llm-r-server
 
@@ -40,7 +39,6 @@ htmlcov/
 
 # Logs
 *.log
-gui_run.log
 
 # macOS
 .DS_Store
@@ -52,5 +50,3 @@ gui_run.log
 
 # Type check / cache
 .mypy_cache/
-llm-r-0.6.9-release-candidate-prompt.md
-STATUSold.md

@@ -1,4 +1,4 @@
-"""Explicit tests for /api/omlx/* routes via FastAPI TestClient."""
+"""Explicit tests for /api/ollama/* routes via FastAPI TestClient."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,38 +23,38 @@ def _reset_app_state(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_omlx_status_get(monkeypatch):
+def test_ollama_status_get(monkeypatch):
     expected = {"ok": True, "running": False, "version": "1.0.0"}
-    monkeypatch.setattr(app_module, "omlx_status", lambda: expected)
+    monkeypatch.setattr(app_module, "ollama_status", lambda: expected)
     with TestClient(app_module.app) as client:
-        resp = client.get("/api/omlx/status")
+        resp = client.get("/api/ollama/status")
     assert resp.status_code == 200
     assert resp.json() == expected
 
 
-def test_omlx_local_models_get(monkeypatch):
-    expected = {"ok": True, "models": ["mlx-community/Llama-3.2-3B"]}
-    monkeypatch.setattr(app_module, "omlx_local_models", lambda: expected)
+def test_ollama_local_models_get(monkeypatch):
+    expected = {"ok": True, "models": ["llama3.2:latest"]}
+    monkeypatch.setattr(app_module, "ollama_local_models", lambda: expected)
     with TestClient(app_module.app) as client:
-        resp = client.get("/api/omlx/local_models")
+        resp = client.get("/api/ollama/local_models")
     assert resp.status_code == 200
     assert resp.json() == expected
 
 
-def test_omlx_remote_models_get(monkeypatch):
-    expected = {"ok": True, "models": ["mlx-community/Mistral-7B"]}
-    monkeypatch.setattr(app_module, "omlx_remote_models", lambda: expected)
+def test_ollama_remote_models_get(monkeypatch):
+    expected = {"ok": True, "models": ["qwen3:latest"]}
+    monkeypatch.setattr(app_module, "ollama_remote_models", lambda: expected)
     with TestClient(app_module.app) as client:
-        resp = client.get("/api/omlx/remote_models")
+        resp = client.get("/api/ollama/remote_models")
     assert resp.status_code == 200
     assert resp.json() == expected
 
 
-def test_omlx_running_models_get(monkeypatch):
+def test_ollama_running_models_get(monkeypatch):
     expected = {"ok": True, "models": []}
-    monkeypatch.setattr(app_module, "omlx_running_models", lambda: expected)
+    monkeypatch.setattr(app_module, "ollama_running_models", lambda: expected)
     with TestClient(app_module.app) as client:
-        resp = client.get("/api/omlx/running_models")
+        resp = client.get("/api/ollama/running_models")
     assert resp.status_code == 200
     assert resp.json() == expected
 
@@ -64,29 +64,29 @@ def test_omlx_running_models_get(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_omlx_start_post(monkeypatch):
-    expected = {"ok": True, "message": "omlx started"}
-    monkeypatch.setattr(app_module, "omlx_start", lambda: expected)
+def test_ollama_start_post(monkeypatch):
+    expected = {"ok": True, "message": "ollama started"}
+    monkeypatch.setattr(app_module, "ollama_start", lambda: expected)
     with TestClient(app_module.app) as client:
-        resp = client.post("/api/omlx/start")
+        resp = client.post("/api/ollama/start")
     assert resp.status_code == 200
     assert resp.json() == expected
 
 
-def test_omlx_stop_post(monkeypatch):
-    expected = {"ok": True, "message": "omlx stopped"}
-    monkeypatch.setattr(app_module, "omlx_stop", lambda: expected)
+def test_ollama_stop_post(monkeypatch):
+    expected = {"ok": True, "message": "ollama stopped"}
+    monkeypatch.setattr(app_module, "ollama_stop", lambda: expected)
     with TestClient(app_module.app) as client:
-        resp = client.post("/api/omlx/stop")
+        resp = client.post("/api/ollama/stop")
     assert resp.status_code == 200
     assert resp.json() == expected
 
 
-def test_omlx_install_post(monkeypatch):
-    expected = {"ok": True, "message": "omlx installed"}
-    monkeypatch.setattr(app_module, "omlx_install", lambda: expected)
+def test_ollama_install_post(monkeypatch):
+    expected = {"ok": True, "message": "ollama install opened"}
+    monkeypatch.setattr(app_module, "ollama_install", lambda: expected)
     with TestClient(app_module.app) as client:
-        resp = client.post("/api/omlx/install")
+        resp = client.post("/api/ollama/install")
     assert resp.status_code == 200
     assert resp.json() == expected
 
@@ -96,7 +96,7 @@ def test_omlx_install_post(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_omlx_download_post(monkeypatch):
+def test_ollama_download_post(monkeypatch):
     received: list[str] = []
     expected = {"ok": True, "message": "download started"}
 
@@ -104,15 +104,15 @@ def test_omlx_download_post(monkeypatch):
         received.append(model)
         return expected
 
-    monkeypatch.setattr(app_module, "omlx_download", fake_download)
+    monkeypatch.setattr(app_module, "ollama_download", fake_download)
     with TestClient(app_module.app) as client:
-        resp = client.post("/api/omlx/download", json={"model": "test-model"})
+        resp = client.post("/api/ollama/download", json={"model": "test-model"})
     assert resp.status_code == 200
     assert resp.json() == expected
     assert received == ["test-model"]
 
 
-def test_omlx_delete_post(monkeypatch):
+def test_ollama_delete_post(monkeypatch):
     received: list[str] = []
     expected = {"ok": True, "message": "deleted"}
 
@@ -120,15 +120,15 @@ def test_omlx_delete_post(monkeypatch):
         received.append(model)
         return expected
 
-    monkeypatch.setattr(app_module, "omlx_delete", fake_delete)
+    monkeypatch.setattr(app_module, "ollama_delete", fake_delete)
     with TestClient(app_module.app) as client:
-        resp = client.post("/api/omlx/delete", json={"model": "test-model"})
+        resp = client.post("/api/ollama/delete", json={"model": "test-model"})
     assert resp.status_code == 200
     assert resp.json() == expected
     assert received == ["test-model"]
 
 
-def test_omlx_serve_post(monkeypatch):
+def test_ollama_serve_post(monkeypatch):
     received: list[str] = []
     expected = {"ok": True, "message": "serving"}
 
@@ -136,15 +136,15 @@ def test_omlx_serve_post(monkeypatch):
         received.append(model)
         return expected
 
-    monkeypatch.setattr(app_module, "omlx_serve", fake_serve)
+    monkeypatch.setattr(app_module, "ollama_serve", fake_serve)
     with TestClient(app_module.app) as client:
-        resp = client.post("/api/omlx/serve", json={"model": "test-model"})
+        resp = client.post("/api/ollama/serve", json={"model": "test-model"})
     assert resp.status_code == 200
     assert resp.json() == expected
     assert received == ["test-model"]
 
 
-def test_omlx_stop_serving_post(monkeypatch):
+def test_ollama_stop_serving_post(monkeypatch):
     received: list[str] = []
     expected = {"ok": True, "message": "stopped serving"}
 
@@ -152,9 +152,9 @@ def test_omlx_stop_serving_post(monkeypatch):
         received.append(model)
         return expected
 
-    monkeypatch.setattr(app_module, "omlx_stop_serving", fake_stop_serving)
+    monkeypatch.setattr(app_module, "ollama_stop_serving", fake_stop_serving)
     with TestClient(app_module.app) as client:
-        resp = client.post("/api/omlx/stop_serving", json={"model": "test-model"})
+        resp = client.post("/api/ollama/stop_serving", json={"model": "test-model"})
     assert resp.status_code == 200
     assert resp.json() == expected
     assert received == ["test-model"]
@@ -165,41 +165,41 @@ def test_omlx_stop_serving_post(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_omlx_download_empty_model_returns_422(monkeypatch):
-    monkeypatch.setattr(app_module, "omlx_download", lambda model: {"ok": True})
+def test_ollama_download_empty_model_returns_422(monkeypatch):
+    monkeypatch.setattr(app_module, "ollama_download", lambda model: {"ok": True})
     with TestClient(app_module.app) as client:
-        resp = client.post("/api/omlx/download", json={"model": ""})
+        resp = client.post("/api/ollama/download", json={"model": ""})
     assert resp.status_code == 422
 
 
-def test_omlx_download_blank_model_returns_422(monkeypatch):
-    monkeypatch.setattr(app_module, "omlx_download", lambda model: {"ok": True})
+def test_ollama_download_blank_model_returns_422(monkeypatch):
+    monkeypatch.setattr(app_module, "ollama_download", lambda model: {"ok": True})
     with TestClient(app_module.app) as client:
-        resp = client.post("/api/omlx/download", json={"model": "   "})
+        resp = client.post("/api/ollama/download", json={"model": "   "})
     assert resp.status_code == 422
 
 
-def test_omlx_write_routes_require_auth_when_token_set(monkeypatch):
+def test_ollama_write_routes_require_auth_when_token_set(monkeypatch):
     monkeypatch.setattr(app_module.settings, "api_token", "secret-token")
     with TestClient(app_module.app) as client:
-        resp = client.post("/api/omlx/start")
+        resp = client.post("/api/ollama/start")
     assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------
-# Settings persistence — omlx provider and model
+# Settings persistence — ollama provider and model
 # ---------------------------------------------------------------------------
 
 
-def test_settings_patch_persists_omlx_provider_and_model(monkeypatch):
+def test_settings_patch_persists_ollama_provider_and_model(monkeypatch):
     monkeypatch.setattr(type(app_module.settings), "save", lambda self: None)
 
     with TestClient(app_module.app) as client:
         resp = client.patch(
             "/api/settings",
-            json={"modelito_provider": "omlx", "modelito_model": "test-omlx-model"},
+            json={"modelito_provider": "ollama", "modelito_model": "llama3.2:latest"},
         )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["modelito_provider"] == "omlx"
-    assert data["modelito_model"] == "test-omlx-model"
+    assert data["modelito_provider"] == "ollama"
+    assert data["modelito_model"] == "llama3.2:latest"
