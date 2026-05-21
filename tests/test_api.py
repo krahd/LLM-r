@@ -352,6 +352,14 @@ def test_plan_and_session_history(monkeypatch):
     plan = app_module.create_plan(app_module.PromptRequest(prompt="set tempo to 120"))
     assert plan["plan_id"] == "plan-a"
     assert plan["session_id"]
+    assert "summary" in plan
+    assert plan["summary"]["count"] == 1
+    assert plan["summary"]["safe_count"] == 1
+    assert plan["summary"]["transport_counts"]["osc"] == 1
+    assert plan["planned_actions"][0]["target_label"] == "General"
+    assert plan["planned_actions"][0]["transport_label"] == "AbletonOSC"
+    assert plan["planned_actions"][0]["transport_plain_label"] == "Ableton command"
+    assert plan["planned_actions"][0]["safety_label"] == "Safe"
 
     session = app_module.get_session(plan["session_id"])
     assert len(session["history"]) >= 1

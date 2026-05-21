@@ -1,6 +1,6 @@
 # STATUS — LLM-r 0.6.9 release candidate
 
-Last updated: 2026-05-20 16:25
+Last updated: 2026-05-20 23:09
 
 ## Snapshot
 - Version: `0.6.9`
@@ -83,20 +83,22 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 
 ## Test status
 - Automated unit/API tests: present and broad across planning/execution/settings/runtime routes.
-  - Last verified in this session: `python -m pytest -q` -> `132 passed, 4 warnings`.
+  - Last verified in Prompt 11: `python -m pytest -q` -> `147 passed, 4 warnings`.
+- Web UI static smoke tests: present (`tests/test_web_ui_static.py`) for critical IDs, API endpoint strings, fallback functions, and safety copy in `web/index.html`.
+  - Included in Prompt 11 full-suite run above.
 - Ollama API route tests: present (`tests/test_ollama_api.py`) with mocked adapter/runtime boundaries.
-  - Last verified in this session: included in `python -m pytest -q` run above.
+  - Last verified in Prompt 11: included in `python -m pytest -q` run above.
 - oMLX route tests: present (`tests/test_omlx_api.py`) with mocked runtime adapter behaviour.
-  - Last verified in this session: included in `python -m pytest -q` run above.
+  - Last verified in Prompt 11: included in `python -m pytest -q` run above.
 - Plan summary tests: present (`tests/test_plan_summary.py`).
-  - Last verified in this session: included in `python -m pytest -q` run above.
+  - Last verified in Prompt 11: included in `python -m pytest -q` run above.
 - Release workflow checks:
-  - Last verified in this session: `ruff check .` passed.
-  - Last verified in this session: `git diff --check` passed.
-  - Last verified in this session: `./scripts/build_vst3.sh` passed.
-  - Last verified in this session: `bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"` passed.
-  - Expected command (not run in this session): `python3 -m build`.
-- Not automated: real Ableton Live mutation correctness, real Device Bridge browser behaviour, real Ollama/oMLX runtime behaviour on release target machines.
+  - Last verified in Prompt 11: `ruff check .` passed.
+  - Last verified in Prompt 11: `git diff --check` passed.
+  - Last verified in Prompt 11: `./scripts/build_vst3.sh` passed.
+  - Last verified in Prompt 11: `bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"` passed.
+  - Expected command: `python3 -m build`.
+- Not automated: browser-level web end-to-end automation, real Ableton Live mutation correctness, real Device Bridge browser behaviour, and real Ollama/oMLX runtime behaviour on release target machines.
 
 ## Manual validation required before tag
 - VST3 build on macOS.
@@ -133,4 +135,4 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 7. Readiness/oMLX parity decision for VST3.
 8. Packaging/signing/notarisation if needed.
 
-Last updated: 2026-05-20 16:25
+Last updated: 2026-05-20 23:09

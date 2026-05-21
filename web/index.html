@@ -792,7 +792,7 @@
           <div class="summary-item"><div class="summary-label">Step count</div><div class="summary-value">${summary.count}</div></div>
           <div class="summary-item"><div class="summary-label">Model confidence</div><div class="summary-value">${confidence}%</div></div>
           <div class="summary-item"><div class="summary-label">Safety profile</div><div class="summary-value">${summary.safeCount} safe / ${summary.destructiveCount} destructive</div></div>
-          <div class="summary-item"><div class="summary-label">Execution path</div><div class="summary-value">AbletonOSC (Ableton command) ${summary.transportCounts.osc} | Device Bridge (Browser/device loading) ${summary.transportCounts.device_bridge}</div></div>
+          <div class="summary-item"><div class="summary-label">Execution path</div><div class="summary-value">AbletonOSC (Ableton command) ${summary.transportCounts.osc} | Device Bridge (Browser/device loading) ${summary.transportCounts.device_bridge} | Advanced route ${summary.transportCounts.other}</div></div>
           <div class="summary-item"><div class="summary-label">Manual approval</div><div class="summary-value">${requiresApproval ? 'Required' : 'Not required'}</div></div>
         </div>
         ${summary.destructiveCount ? `<div class="warning"><strong>Warning:</strong> This plan includes destructive steps. Keep preview mode on until you are fully sure.</div>` : '<div class="success"><strong>Safe preview:</strong> All planned steps are non-destructive.</div>'}

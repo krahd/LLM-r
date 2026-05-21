@@ -60,6 +60,7 @@ from llmr.modelito_adapter import (
 from llmr.planner import IntentPlanner, PlanStore
 from llmr.prompts import planner_extra_prompt
 from llmr.osc_replies import OscReplyListener
+from llmr.plan_summary import infer_target_label, infer_transport, summarise_actions
 from llmr.schemas import PlannedToolCall, ToolName
 from llmr.sessions import SessionStore
 
@@ -781,6 +782,37 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 
 def _serialize_plan(plan) -> dict:
+    planned_actions = []
+    for action in plan.actions:
+        raw_action = {
+            "tool": action.tool.value,
+            "address": action.address,
+            "args": action.args,
+            "description": action.description,
+            "destructive": action.destructive,
+            "transport": getattr(action, "transport", "osc"),
+        }
+        transport = infer_transport(raw_action)
+        if transport == "osc":
+            transport_label = "AbletonOSC"
+            transport_plain_label = "Ableton command"
+        elif transport == "device_bridge":
+            transport_label = "Device Bridge"
+            transport_plain_label = "Browser/device loading"
+        else:
+            transport_label = transport or "Other"
+            transport_plain_label = "Advanced route"
+
+        planned_actions.append(
+            {
+                **raw_action,
+                "target_label": infer_target_label(action.args or {}),
+                "transport_label": transport_label,
+                "transport_plain_label": transport_plain_label,
+                "safety_label": "Destructive" if action.destructive else "Safe",
+            }
+        )
+
     return {
         "plan_id": plan.id,
         "prompt": plan.prompt,
@@ -789,17 +821,8 @@ def _serialize_plan(plan) -> dict:
         "requires_approval": plan.requires_approval,
         "created_at": plan.created_at,
         "executed_at": plan.executed_at,
-        "planned_actions": [
-            {
-                "tool": a.tool.value,
-                "address": a.address,
-                "args": a.args,
-                "description": a.description,
-                "destructive": a.destructive,
-                "transport": getattr(a, "transport", "osc"),
-            }
-            for a in plan.actions
-        ],
+        "summary": summarise_actions(planned_actions),
+        "planned_actions": planned_actions,
     }
 
 

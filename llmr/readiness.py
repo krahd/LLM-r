@@ -24,6 +24,50 @@ if TYPE_CHECKING:
     from llmr.osc_replies import OscReplyListener
 
 
+def _model_names_from_payload(payload: dict[str, Any]) -> list[str]:
+    """Extract normalized model names from a local-runtime payload."""
+    values = payload.get("models", []) or []
+    names: list[str] = []
+
+    for item in values:
+        if isinstance(item, str):
+            name = item.strip()
+            if name and name not in names:
+                names.append(name)
+            continue
+
+        if isinstance(item, dict):
+            for key in ("id", "model", "name"):
+                raw = str(item.get(key, "")).strip()
+                if raw and raw not in names:
+                    names.append(raw)
+            for raw_value in item.values():
+                raw = str(raw_value).strip()
+                if raw and raw not in names:
+                    names.append(raw)
+            continue
+
+        raw = str(item).strip()
+        if raw and raw not in names:
+            names.append(raw)
+
+    return names
+
+
+def _contains_model(payload: dict[str, Any], configured_model: str) -> bool:
+    """Check whether a configured model exists in a local-runtime payload."""
+    target = configured_model.strip()
+    if not target:
+        return False
+
+    names = _model_names_from_payload(payload)
+    if target in names:
+        return True
+
+    target_folded = target.casefold()
+    return any(name.casefold() == target_folded for name in names)
+
+
 def compute_readiness(
     settings: "Settings",
     osc_reply_listener: "OscReplyListener | None" = None,
@@ -56,19 +100,19 @@ def compute_readiness(
     # ── Model ─────────────────────────────────────────────────────────────────
     provider = (settings.modelito_provider or "").strip()
     model = (settings.modelito_model or "").strip()
-    model_ok = bool(provider and model)
+    has_provider_and_model = bool(provider and model)
     model_info: dict[str, Any] = {
-        "ok": model_ok,
+        "ok": has_provider_and_model,
         "provider": provider,
         "model": model,
         "message": (
             f"{provider} / {model}"
-            if model_ok
+            if has_provider_and_model
             else "No provider or model is configured."
         ),
         "next_step": (
             ""
-            if model_ok
+            if has_provider_and_model
             else "Open Settings and choose a provider and model."
         ),
     }
@@ -188,9 +232,9 @@ def compute_readiness(
     }
 
     # ── Readiness flags ───────────────────────────────────────────────────────
-    local_runtime_warnings: list[str] = []
-    local_runtime_errors: list[str] = []
-    credential_errors: list[str] = []
+    model_error: str | None = None
+    model_next_step = ""
+    final_model_ok = True
 
     provider_api_env = {
         "openai": "OPENAI_API_KEY",
@@ -199,65 +243,115 @@ def compute_readiness(
         "cohere": "COHERE_API_KEY",
         "mistral": "MISTRAL_API_KEY",
     }
-    if model_ok and provider in provider_api_env:
+    if not provider:
+        final_model_ok = False
+        model_error = "No model provider is configured."
+        model_next_step = "Open Settings and choose a provider and model."
+    elif not model:
+        final_model_ok = False
+        model_error = "No model is configured for the selected provider."
+        model_next_step = "Open Settings and choose a provider and model."
+    elif provider in provider_api_env:
         key_name = provider_api_env[provider]
         if not (os.getenv(key_name) or "").strip():
-            credential_errors.append(
+            final_model_ok = False
+            model_error = (
                 f"Missing API key for {provider}. Set {key_name} or configure it in Advanced Settings."
             )
-
-    if model_ok and provider == "ollama":
+            model_next_step = "Set your API key in Advanced Settings and retry readiness."
+    elif provider == "ollama":
         status_payload = ollama_status()
-        local_payload = ollama_local_models()
         if not bool(status_payload.get("ok", False)):
-            local_runtime_errors.append(
+            final_model_ok = False
+            model_error = (
                 f"Ollama runtime check failed: {status_payload.get('message', 'unknown error')}"
             )
+            model_next_step = "Fix Ollama runtime status in Advanced Settings \u2192 Ollama."
         elif not bool(status_payload.get("running", False)):
-            local_runtime_errors.append(
-                "Start Ollama service. Open Advanced Settings \u2192 Ollama."
-            )
-        local_models = local_payload.get("models", []) or []
-        if not local_models:
-            local_runtime_warnings.append(
-                "Download or select an Ollama model. Open Advanced Settings \u2192 Ollama."
-            )
-
-    if model_ok and provider == "omlx":
+            final_model_ok = False
+            model_error = "Start Ollama service. Open Advanced Settings \u2192 Ollama."
+            model_next_step = "Start Ollama, then refresh readiness."
+        else:
+            local_payload = ollama_local_models()
+            if not bool(local_payload.get("ok", False)):
+                final_model_ok = False
+                model_error = (
+                    "Ollama local model listing failed: "
+                    f"{local_payload.get('message', 'unknown error')}"
+                )
+                model_next_step = "Fix local model listing in Advanced Settings \u2192 Ollama."
+            else:
+                local_names = _model_names_from_payload(local_payload)
+                if not local_names:
+                    final_model_ok = False
+                    model_error = (
+                        "Download or select an Ollama model. "
+                        "Open Advanced Settings \u2192 Ollama."
+                    )
+                    model_next_step = "Download a local Ollama model or choose one already installed."
+                elif not _contains_model(local_payload, model):
+                    final_model_ok = False
+                    model_error = (
+                        f"Selected Ollama model is not installed: {model}. "
+                        "Download it or choose an installed model in Advanced Settings \u2192 Ollama."
+                    )
+                    model_next_step = "Choose an installed Ollama model or download the selected one."
+    elif provider == "omlx":
         status_payload = omlx_status()
-        local_payload = omlx_local_models()
         if not bool(status_payload.get("ok", False)):
-            local_runtime_errors.append(
+            final_model_ok = False
+            model_error = (
                 f"oMLX runtime check failed: {status_payload.get('message', 'unknown error')}"
             )
+            model_next_step = "Fix oMLX runtime status in Advanced Settings \u2192 oMLX."
         elif not bool(status_payload.get("running", False)):
-            local_runtime_errors.append(
-                "Start oMLX service. Open Advanced Settings \u2192 oMLX."
-            )
-        local_models = local_payload.get("models", []) or []
-        if not local_models:
-            local_runtime_warnings.append(
-                "Download or select an oMLX model. Open Advanced Settings \u2192 oMLX."
-            )
+            final_model_ok = False
+            model_error = "Start oMLX service. Open Advanced Settings \u2192 oMLX."
+            model_next_step = "Start oMLX, then refresh readiness."
+        else:
+            local_payload = omlx_local_models()
+            if not bool(local_payload.get("ok", False)):
+                final_model_ok = False
+                model_error = (
+                    "oMLX local model listing failed: "
+                    f"{local_payload.get('message', 'unknown error')}"
+                )
+                model_next_step = "Fix local model listing in Advanced Settings \u2192 oMLX."
+            else:
+                local_names = _model_names_from_payload(local_payload)
+                if not local_names:
+                    final_model_ok = False
+                    model_error = (
+                        "Download or select an oMLX model. "
+                        "Open Advanced Settings \u2192 oMLX."
+                    )
+                    model_next_step = "Download a local oMLX model or choose one already installed."
+                elif not _contains_model(local_payload, model):
+                    final_model_ok = False
+                    model_error = (
+                        f"Selected oMLX model is not installed: {model}. "
+                        "Download it or choose an installed model in Advanced Settings \u2192 oMLX."
+                    )
+                    model_next_step = "Choose an installed oMLX model or download the selected one."
 
-    ready_to_plan: bool = model_ok and not local_runtime_errors and not credential_errors
-    ready_to_dry_run: bool = model_ok and not local_runtime_errors and not credential_errors
-    ready_to_execute: bool = (
-        model_ok and osc_configured and not local_runtime_errors and not credential_errors
-    )
+    if final_model_ok:
+        model_info["message"] = f"{provider} / {model} is ready for planning."
+        model_info["next_step"] = ""
+    else:
+        model_info["message"] = model_error or "Provider/model is not ready for planning."
+        model_info["next_step"] = model_next_step or "Resolve model readiness and retry."
+    model_info["ok"] = final_model_ok
+
+    ready_to_plan: bool = final_model_ok
+    ready_to_dry_run: bool = final_model_ok
+    ready_to_execute: bool = final_model_ok and osc_configured
 
     # ── Warnings and errors ───────────────────────────────────────────────────
     warnings: list[str] = []
     errors: list[str] = []
 
-    if not model_ok:
-        errors.append(
-            "No model configured. Planning and execution will fail. "
-            "Open Settings and choose a provider and model."
-        )
-    errors.extend(credential_errors)
-    errors.extend(local_runtime_errors)
-    warnings.extend(local_runtime_warnings)
+    if not final_model_ok:
+        errors.append(model_info["message"])
     if not osc_configured:
         warnings.append(
             "AbletonOSC host/port is not configured. Live execution will fail."
