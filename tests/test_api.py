@@ -415,7 +415,7 @@ def test_execute_plan_response_includes_action_metadata(monkeypatch):
         actions=[
             AbletonAction(
                 tool=ToolName.fire_clip,
-                    address="/live/clip/fire",
+                address="/live/clip/fire",
                 args=[1, 0],
                 description="Fire clip",
                 destructive=False,
