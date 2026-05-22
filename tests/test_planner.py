@@ -5,18 +5,23 @@ from llmr.planner import IntentPlanner, PlanStore, StoredPlan
 
 
 class DummyLLM:
-    def __init__(self, response: str) -> None:
-        self.response = response
+    def __init__(self, response: str | list[str]) -> None:
+        self.responses = response if isinstance(response, list) else [response]
         self.last_prompt = ""
+        self.prompts: list[str] = []
 
     def complete(self, prompt: str):
         self.last_prompt = prompt
+        self.prompts.append(prompt)
 
         class Result:
             raw_text = ""
 
         r = Result()
-        r.raw_text = self.response
+        if len(self.responses) > 1:
+            r.raw_text = self.responses.pop(0)
+        else:
+            r.raw_text = self.responses[0]
         return r
 
 
@@ -125,6 +130,7 @@ def test_system_prompt_reflects_capabilities():
     from llmr.planner import _system_prompt
 
     prompt = _system_prompt()
+    assert "LLM-r core planner contract" in prompt
     assert "song_play" in prompt
     assert "song_metronome" in prompt
     assert "track_rename" in prompt
@@ -139,6 +145,26 @@ def test_system_prompt_can_include_optional_guidance():
     assert "Prefer staged plans" in prompt
 
 
+def test_system_prompt_includes_ableton_context():
+    from llmr.planner import _system_prompt
+
+    prompt = _system_prompt(ableton_context={"tempo": 96, "view": "arrangement", "selected_track": 1})
+    assert "Current Ableton context" in prompt
+    assert "tempo: 96" in prompt
+    assert "view: 'arrangement'" in prompt
+    assert "selected_track: 1" in prompt
+
+
+def test_system_prompt_includes_musical_contracts():
+    from llmr.planner import _system_prompt
+
+    prompt = _system_prompt()
+    assert "Duration conversion" in prompt
+    assert "General MIDI drum pitches" in prompt
+    assert "Effects, devices, and automation guidance" in prompt
+    assert "Automation envelopes are not yet exposed" in prompt
+
+
 def test_planner_passes_optional_guidance_to_llm():
     llm = DummyLLM('{"explanation":"ok","confidence":0.5,"calls":[]}')
     planner = IntentPlanner(
@@ -150,3 +176,32 @@ def test_planner_passes_optional_guidance_to_llm():
     planner.plan("humanize the drums")
 
     assert "Explain unsupported MIDI note edits." in llm.last_prompt
+
+
+def test_planner_attempts_repair_after_invalid_json():
+    llm = DummyLLM([
+        "not-json",
+        '{"explanation":"repaired","confidence":0.8,"calls":[{"tool":"set_tempo","args":{"bpm":110}}]}',
+    ])
+    planner = IntentPlanner(llm=llm, ableton=AbletonOSCClient("127.0.0.1", 11000))
+
+    plan = planner.plan("set tempo to 110")
+
+    assert len(llm.prompts) == 2
+    assert "Repair it now" in llm.prompts[1]
+    assert plan.confidence == 0.8
+    assert plan.actions[0].address == "/live/song/set/tempo"
+
+
+def test_planner_passes_context_to_llm():
+    llm = DummyLLM('{"explanation":"ok","confidence":0.5,"calls":[]}')
+    planner = IntentPlanner(
+        llm=llm,
+        ableton=AbletonOSCClient("127.0.0.1", 11000),
+        ableton_context={"tempo": 140, "view": "session"},
+    )
+
+    planner.plan("create a drum loop")
+
+    assert "tempo: 140" in llm.last_prompt
+    assert "view: 'session'" in llm.last_prompt
