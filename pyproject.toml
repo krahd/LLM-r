@@ -34,7 +34,7 @@ asyncio_default_fixture_loop_scope = "function"
 include = ["llmr*"]
 
 [tool.setuptools.package-data]
-llmr = ["LLM_ASSISTANT_PROMPT.md"]
+llmr = ["LLM_ASSISTANT_PROMPT.md", "planner_prompts/*.md"]
 
 [tool.ruff]
 line-length = 100
