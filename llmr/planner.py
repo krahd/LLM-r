@@ -6,37 +6,24 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 from llmr.ableton_osc import AbletonAction, AbletonOSCClient, capabilities
 from llmr.macros import get_macro
 from llmr.modelito_adapter import ModelitoClient
+from llmr.prompts import compose_planner_prompt, compose_repair_prompt
 from llmr.schemas import PlanEnvelope, PlannedToolCall, ToolName, parse_plan_envelope
 
 
-def _system_prompt(extra_prompt: str = "") -> str:
-    available_tools = "\n".join(
-        (
-            f"- {cap.tool.value} ({cap.domain}, transport={cap.transport}, safety={cap.safety}): "
-            f"{cap.description}; args={cap.args_schema}"
-        )
-        for cap in capabilities()
+def _system_prompt(
+    extra_prompt: str = "",
+    ableton_context: dict[str, Any] | None = None,
+) -> str:
+    return compose_planner_prompt(
+        capabilities(),
+        extra_prompt=extra_prompt,
+        ableton_context=ableton_context,
     )
-    prompt = f"""You are the LLM-r planner for Ableton Live.
-Return ONLY valid JSON matching schema:
-{{
-  "explanation": "short explanation",
-  "confidence": 0.0,
-  "calls": [
-    {{"tool": "set_tempo", "args": {{"bpm": 128}}}},
-    {{"tool": "fire_clip", "args": {{"track_index": 0, "clip_index": 0}}}}
-  ]
-}}
-Available tools:
-{available_tools}
-"""
-    if extra_prompt.strip():
-        prompt += f"\nAdditional optional guidance:\n{extra_prompt.strip()}\n"
-    return prompt
 
 
 @dataclass
@@ -171,10 +158,12 @@ class IntentPlanner:
         llm: ModelitoClient,
         ableton: AbletonOSCClient,
         extra_prompt: str = "",
+        ableton_context: dict[str, Any] | None = None,
     ) -> None:
         self.llm = llm
         self.ableton = ableton
         self.extra_prompt = extra_prompt
+        self.ableton_context = ableton_context
 
     def plan(self, user_prompt: str) -> StoredPlan:
         macro_calls = _maybe_parse_macro_prompt(user_prompt)
@@ -188,16 +177,30 @@ class IntentPlanner:
                 ableton=self.ableton,
             )
 
-        result = self.llm.complete(
-            f"{_system_prompt(self.extra_prompt)}\nUser request: {user_prompt}"
-        )
+        prompt = f"{_system_prompt(self.extra_prompt, self.ableton_context)}\nUser request: {user_prompt}"
+        result = self.llm.complete(prompt)
         envelope = _parse_envelope(result.raw_text)
+        raw_text = result.raw_text
+
+        if not envelope.calls and envelope.confidence == 0.0:
+            repair_prompt = compose_repair_prompt(
+                invalid_output=result.raw_text,
+                tool_capabilities=capabilities(),
+                extra_prompt=self.extra_prompt,
+                ableton_context=self.ableton_context,
+            )
+            repair_result = self.llm.complete(f"{repair_prompt}\nUser request: {user_prompt}")
+            repaired = _parse_envelope(repair_result.raw_text)
+            if repaired.calls or repaired.confidence > envelope.confidence:
+                envelope = repaired
+                raw_text = repair_result.raw_text
+
         return _build_stored_plan(
             prompt=user_prompt,
             explanation=envelope.explanation,
             confidence=envelope.confidence,
             calls=envelope.calls,
-            llm_raw=result.raw_text,
+            llm_raw=raw_text,
             ableton=self.ableton,
         )
 
