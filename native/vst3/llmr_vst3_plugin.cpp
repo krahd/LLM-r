@@ -36,6 +36,13 @@ enum LlmrEditorAction : NSInteger {
     kLlmrEditorActionPreview = 22,
     kLlmrEditorActionDeviceBridgeStatus = 23,
     kLlmrEditorActionAutoApproveChanged = 24,
+    kLlmrEditorActionOpenBridgeHelp = 25,
+    kLlmrEditorActionCopyBridgeInstallPath = 26,
+    kLlmrEditorActionInstallBridge = 27,
+    kLlmrEditorActionTestReadiness = 28,
+    kLlmrEditorActionChooseBridgeUserLibrary = 29,
+    kLlmrEditorActionRevealInstalledBridge = 30,
+    kLlmrEditorActionUseDetectedBridgeLibrary = 31,
 };
 
 static void llmrEditorHandleAction(void *owner, NSInteger action);
@@ -57,7 +64,7 @@ static void llmrEditorHandleAction(void *owner, NSInteger action);
 @interface LlmrTextField : NSTextField
 @end
 
-@interface FullClickComboBox : NSComboBox
+@interface FullClickComboBox : NSPopUpButton
 @end
 #endif
 
@@ -690,10 +697,21 @@ public:
         settingsAdvancedView_ = nullptr;
         settingsAdvancedButton_ = nullptr;
         settingsBasicButton_ = nullptr;
+        settingsCustomModelField_ = nullptr;
+        settingsModelStatusLabel_ = nullptr;
+        settingsBridgeHostField_ = nullptr;
+        settingsBridgePortField_ = nullptr;
+        settingsBridgeLibraryCandidatesCombo_ = nullptr;
+        settingsBridgeLibraryLabel_ = nullptr;
+        settingsBridgeInstallTargetLabel_ = nullptr;
+        settingsBridgeInstallButton_ = nullptr;
+        settingsBridgeRevealButton_ = nullptr;
         ollamaStatusLabel_ = nullptr;
         deviceBridgeStatusLabel_ = nullptr;
         ollamaModelField_ = nullptr;
         ollamaModelsCombo_ = nullptr;
+        [bridgeUserLibraryPath_ release];
+        bridgeUserLibraryPath_ = nullptr;
 #endif
         return kResultOk;
     }
@@ -764,7 +782,7 @@ public:
         if (!rect) {
             return kInvalidArgument;
         }
-        constexpr int kMinW = 600, kMinH = 420;
+        constexpr int kMinW = 900, kMinH = 560;
         if (rect->right - rect->left < kMinW) rect->right = rect->left + kMinW;
         if (rect->bottom - rect->top < kMinH) rect->bottom = rect->top + kMinH;
         return kResultOk;
@@ -775,7 +793,7 @@ public:
     {
         switch (action) {
         case kLlmrEditorActionPlan:          planFromPrompt(); break;
-        case kLlmrEditorActionExecute:       executeLastPlan(false); break;
+        case kLlmrEditorActionExecute:       executeLastPlan(currentDryRunDefault()); break;
         case kLlmrEditorActionPreview:       executeLastPlan(true); break;
         case kLlmrEditorActionSaveSettings:  saveSettings(); hideSettings(); break;
         case kLlmrEditorActionOpenSettings:  showSettings(); break;
@@ -798,6 +816,13 @@ public:
         case kLlmrEditorActionOllamaTestModel: ollamaTestModel(); break;
         case kLlmrEditorActionDeviceBridgeStatus: checkDeviceBridgeStatus(); break;
         case kLlmrEditorActionAutoApproveChanged: saveAutoApproveSetting(); break;
+        case kLlmrEditorActionOpenBridgeHelp: openBridgeSetupHelp(); break;
+        case kLlmrEditorActionCopyBridgeInstallPath: copyBridgeInstallPath(); break;
+        case kLlmrEditorActionInstallBridge: installDeviceBridgeFromSettings(); break;
+        case kLlmrEditorActionTestReadiness: testReadiness(); break;
+        case kLlmrEditorActionChooseBridgeUserLibrary: chooseBridgeUserLibrary(); break;
+        case kLlmrEditorActionRevealInstalledBridge: revealInstalledBridge(); break;
+        case kLlmrEditorActionUseDetectedBridgeLibrary: useDetectedBridgeLibrary(); break;
         default: break;
         }
     }
@@ -835,7 +860,7 @@ private:
 
     static NSArray *providers()
     {
-        return @[@"openai", @"anthropic", @"google", @"ollama", @"custom"];
+        return @[@"openai", @"anthropic", @"google", @"ollama", @"omlx", @"custom"];
     }
 
     static NSString *canonicalProvider(NSString *provider)
@@ -867,6 +892,9 @@ private:
         if ([p isEqualToString:@"ollama"]) {
             return @[];
         }
+        if ([p isEqualToString:@"omlx"]) {
+            return @[];
+        }
         if ([p isEqualToString:@"custom"]) {
             return @[];
         }
@@ -883,9 +911,20 @@ private:
         ];
     }
 
-    static NSString *controlString(NSTextField *field)
+    static NSString *controlString(id control)
     {
-        NSString *value = field ? [field stringValue] : @"";
+        NSString *value = @"";
+        if ([control isKindOfClass:[NSPopUpButton class]]) {
+            NSMenuItem *item = [(NSPopUpButton *)control selectedItem];
+            id represented = [item representedObject];
+            if ([represented isKindOfClass:[NSString class]]) {
+                value = represented;
+            } else {
+                value = [item title] ?: @"";
+            }
+        } else if ([control respondsToSelector:@selector(stringValue)]) {
+            value = [control stringValue] ?: @"";
+        }
         return [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     }
 
@@ -972,6 +1011,9 @@ private:
     static NSColor *cSec()    { return [NSColor colorWithCalibratedWhite:0.60 alpha:1.0]; }
     static NSColor *cAccent() { return [NSColor colorWithCalibratedRed:0.43 green:0.76 blue:0.96 alpha:1.0]; }
     static NSColor *cChatBg() { return [NSColor colorWithCalibratedRed:0.07 green:0.075 blue:0.085 alpha:1.0]; }
+    static NSColor *cOk()     { return [NSColor colorWithCalibratedRed:0.36 green:0.78 blue:0.55 alpha:1.0]; }
+    static NSColor *cWarn()   { return [NSColor colorWithCalibratedRed:0.98 green:0.72 blue:0.30 alpha:1.0]; }
+    static NSColor *cBad()    { return [NSColor colorWithCalibratedRed:0.95 green:0.38 blue:0.38 alpha:1.0]; }
 
     // ─── Generic UI helpers (add to arbitrary parent) ─────────
     NSTextField *labelIn(NSView *p, NSString *txt, NSRect f, NSFont *font, NSColor *col)
@@ -983,16 +1025,45 @@ private:
         [v setFont:font]; [v setTextColor:col];
         [p addSubview:v]; [v release]; return v;
     }
+    NSTextField *noteIn(NSView *p, NSString *txt, NSRect f, NSFont *font, NSColor *col)
+    {
+        NSTextField *v = labelIn(p, txt, f, font, col);
+        [v setLineBreakMode:NSLineBreakByWordWrapping];
+        [v setUsesSingleLineMode:NO];
+        [[v cell] setWraps:YES];
+        return v;
+    }
     NSTextField *chipIn(NSView *p, NSString *txt, NSRect f, NSColor *fg, NSColor *bg, NSColor *border)
     {
         NSTextField *v = labelIn(p, txt, f, [NSFont boldSystemFontOfSize:10.0], fg);
-        [v setAlignment:NSTextAlignmentCenter];
-        [v setWantsLayer:YES];
-        v.layer.backgroundColor = bg.CGColor;
-        v.layer.cornerRadius = 7.0;
-        v.layer.borderWidth = 1.0;
-        v.layer.borderColor = border.CGColor;
+        (void)bg;
+        (void)border;
+        [v setAlignment:NSTextAlignmentLeft];
+        [[v cell] setLineBreakMode:NSLineBreakByTruncatingTail];
+        [[v cell] setUsesSingleLineMode:YES];
+        [v setWantsLayer:NO];
         return v;
+    }
+    void setChip(NSTextField *chip, NSString *txt, bool ok)
+    {
+        if (!chip) return;
+        NSString *text = txt ?: @"";
+        NSColor *iconColor = ok ? cOk() : cBad();
+        NSDictionary *iconAttrs = @{
+            NSFontAttributeName: [NSFont boldSystemFontOfSize:11.0],
+            NSForegroundColorAttributeName: iconColor,
+        };
+        NSDictionary *textAttrs = @{
+            NSFontAttributeName: [NSFont systemFontOfSize:11.0],
+            NSForegroundColorAttributeName: cPri(),
+        };
+        NSMutableAttributedString *value = [[[NSMutableAttributedString alloc] init] autorelease];
+        [value appendAttributedString:[[[NSAttributedString alloc] initWithString:@"● "
+                                                                        attributes:iconAttrs] autorelease]];
+        [value appendAttributedString:[[[NSAttributedString alloc] initWithString:text
+                                                                        attributes:textAttrs] autorelease]];
+        [chip setAttributedStringValue:value];
+        [chip setWantsLayer:NO];
     }
     NSTextField *fieldIn(NSView *p, NSRect f, NSString *ph, BOOL secure)
     {
@@ -1010,22 +1081,32 @@ private:
         [v release];
         return v;
     }
-    NSComboBox *comboIn(NSView *p, NSRect f, NSArray *items)
+    NSPopUpButton *comboIn(NSView *p, NSRect f, NSArray *items)
     {
-        NSComboBox *v = [[FullClickComboBox alloc] initWithFrame:f];
-        [v addItemsWithObjectValues:items]; [v setCompletes:YES];
+        NSPopUpButton *v = [[FullClickComboBox alloc] initWithFrame:f pullsDown:NO];
+        [v removeAllItems];
+        for (NSString *item in items ?: @[]) {
+            [v addItemWithTitle:item];
+            [[v lastItem] setRepresentedObject:item];
+        }
         [v setFont:[NSFont systemFontOfSize:12.0]];
         [p addSubview:v]; [v release]; return v;
     }
     void setButtonTextColor(NSButton *button, NSColor *color)
     {
         if (!button) return;
+        NSMutableParagraphStyle *style = [[[NSMutableParagraphStyle alloc] init] autorelease];
+        [style setAlignment:NSTextAlignmentCenter];
+        [style setLineBreakMode:NSLineBreakByTruncatingTail];
         NSDictionary *attrs = @{
             NSFontAttributeName: [button font] ?: [NSFont systemFontOfSize:12.0],
             NSForegroundColorAttributeName: color ?: cPri(),
+            NSParagraphStyleAttributeName: style,
         };
         NSAttributedString *title = [[NSAttributedString alloc] initWithString:[button title] attributes:attrs];
+        [button setAlignment:NSTextAlignmentCenter];
         [button setAttributedTitle:title];
+        [[button cell] setLineBreakMode:NSLineBreakByTruncatingTail];
         [title release];
     }
     NSButton *checkIn(NSView *p, NSRect f, NSString *title, bool on)
@@ -1042,6 +1123,7 @@ private:
         NSButton *v = [[NSButton alloc] initWithFrame:f];
         [v setTitle:title]; [v setBezelStyle:NSBezelStyleRounded];
         [v setFont:[NSFont systemFontOfSize:12.0]];
+        setButtonTextColor(v, [NSColor controlTextColor]);
         LlmrEditorTarget *t = [[LlmrEditorTarget alloc] initWithOwner:this action:action];
         [targets_ addObject:t]; [t release];
         [v setTarget:t]; [v setAction:@selector(performAction:)];
@@ -1051,6 +1133,8 @@ private:
     {
         NSScrollView *sc = [[NSScrollView alloc] initWithFrame:scrollF];
         [sc setHasVerticalScroller:YES]; [sc setBorderType:NSNoBorder];
+        [sc setHasHorizontalScroller:NO];
+        [sc setAutohidesScrollers:YES];
         [sc setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
         NSTextView *tv = [[LlmrCopyTextView alloc] initWithFrame:NSMakeRect(0,0,scrollF.size.width,scrollF.size.height)];
         [tv setEditable:NO]; [tv setRichText:YES];
@@ -1108,7 +1192,7 @@ private:
 
     void buildChatView(CGFloat width, CGFloat height)
     {
-        static const CGFloat kHdr = 44.0, kTabs = 34.0, kBtm = 90.0, kPad = 12.0;
+        static const CGFloat kHdr = 74.0, kGuide = 34.0, kTabs = 34.0, kBtm = 104.0, kPad = 12.0;
 
         // Header bar (top-anchored)
         NSView *hdr = [[NSView alloc] initWithFrame:NSMakeRect(0, height - kHdr, width, kHdr)];
@@ -1116,36 +1200,50 @@ private:
         [hdr setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
         [chatView_ addSubview:hdr]; [hdr release];
 
-        labelIn(hdr, @"LLM-r", NSMakeRect(kPad, 9, 56, 26),
+        labelIn(hdr, @"LLM-r", NSMakeRect(kPad, 41, 56, 26),
                 [NSFont boldSystemFontOfSize:18.0], cPri());
         labelIn(hdr, [NSString stringWithFormat:@"v%s", LLMR_VERSION],
-                NSMakeRect(kPad + 60, 14, 52, 16),
+                NSMakeRect(kPad + 60, 46, 52, 16),
                 [NSFont systemFontOfSize:10.0], cSec());
-        chatModelLabel_ = chipIn(hdr, @"Model: unset",
-                NSMakeRect(kPad + 104, 10, 108, 22),
+        chatModelLabel_ = chipIn(hdr, @"● Model missing",
+                NSMakeRect(kPad, 10, 160, 22),
                 cAccent(),
                 [NSColor colorWithCalibratedRed:0.07 green:0.13 blue:0.22 alpha:1.0],
                 [NSColor colorWithCalibratedRed:0.18 green:0.42 blue:0.72 alpha:1.0]);
         [chatModelLabel_ setAutoresizingMask:NSViewMaxXMargin | NSViewMaxYMargin];
-        chatOscLabel_ = chipIn(hdr, @"OSC",
-                NSMakeRect(kPad + 220, 10, 76, 22),
+        chatOscLabel_ = chipIn(hdr, @"● AbletonOSC not checked",
+                NSMakeRect(kPad + 168, 10, 126, 22),
                 cPri(),
                 [NSColor colorWithCalibratedRed:0.12 green:0.14 blue:0.18 alpha:1.0],
                 [NSColor colorWithCalibratedRed:0.30 green:0.35 blue:0.42 alpha:1.0]);
-        chatBridgeLabel_ = chipIn(hdr, @"Bridge",
-                NSMakeRect(kPad + 304, 10, 88, 22),
+        chatBridgeLabel_ = chipIn(hdr, @"● Bridge optional",
+                NSMakeRect(kPad + 302, 10, 126, 22),
+                cPri(),
+                [NSColor colorWithCalibratedRed:0.12 green:0.14 blue:0.18 alpha:1.0],
+                [NSColor colorWithCalibratedRed:0.30 green:0.35 blue:0.42 alpha:1.0]);
+        chatDryRunLabel_ = chipIn(hdr, @"● Dry run on",
+                NSMakeRect(kPad + 436, 10, 112, 22),
                 cPri(),
                 [NSColor colorWithCalibratedRed:0.12 green:0.14 blue:0.18 alpha:1.0],
                 [NSColor colorWithCalibratedRed:0.30 green:0.35 blue:0.42 alpha:1.0]);
 
-        NSButton *helpBtn = btnIn(hdr, NSMakeRect(width - 190, 8, 74, 28),
+        NSButton *helpBtn = btnIn(hdr, NSMakeRect(width - 190, 38, 74, 28),
                                   @"Help", kLlmrEditorActionOpenHelp);
         [helpBtn setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
-        chatSettingsButton_ = btnIn(hdr, NSMakeRect(width - 104, 8, 92, 28),
-                                    @"⚙  Settings", kLlmrEditorActionOpenSettings);
+        chatSettingsButton_ = btnIn(hdr, NSMakeRect(width - 104, 38, 92, 28),
+                                    @"Settings", kLlmrEditorActionOpenSettings);
         [chatSettingsButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
 
-        NSView *tabs = [[NSView alloc] initWithFrame:NSMakeRect(0, height - kHdr - kTabs, width, kTabs)];
+        NSView *guide = [[NSView alloc] initWithFrame:NSMakeRect(0, height - kHdr - kGuide, width, kGuide)];
+        [guide setWantsLayer:YES]; guide.layer.backgroundColor = cPanel().CGColor;
+        [guide setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
+        [chatView_ addSubview:guide]; [guide release];
+        labelIn(guide,
+                @"Flow: Settings -> provider/model -> prompt -> Plan -> review Plan/Details -> Dry run -> Execute when ready",
+                NSMakeRect(kPad, 8, width - 2*kPad, 18),
+                [NSFont systemFontOfSize:11.0], cSec());
+
+        NSView *tabs = [[NSView alloc] initWithFrame:NSMakeRect(0, height - kHdr - kGuide - kTabs, width, kTabs)];
         [tabs setWantsLayer:YES]; tabs.layer.backgroundColor = cBg().CGColor;
         [tabs setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
         [chatView_ addSubview:tabs]; [tabs release];
@@ -1155,9 +1253,9 @@ private:
 
         // Chat history scroll (fills middle, auto-resizes)
         chatHistoryView_ = chatTextViewIn(chatView_,
-            NSMakeRect(0, kBtm, width, height - kHdr - kTabs - kBtm));
+            NSMakeRect(0, kBtm, width, height - kHdr - kGuide - kTabs - kBtm));
         rawResponseView_ = chatTextViewIn(chatView_,
-            NSMakeRect(0, kBtm, width, height - kHdr - kTabs - kBtm));
+            NSMakeRect(0, kBtm, width, height - kHdr - kGuide - kTabs - kBtm));
         [[rawResponseView_ enclosingScrollView] setHidden:YES];
         [rawResponseView_ setRichText:NO];
         [rawResponseView_ setTextColor:cPri()];
@@ -1179,20 +1277,29 @@ private:
         [chatView_ addSubview:btm]; [btm release];
 
         // Status label
-        chatStatusLabel_ = labelIn(btm, @"Ready. Type a request and press Plan.",
+        NSString *initialStatus = @"Ready. Type a request and press Plan.";
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        NSString *provider = [defaults stringForKey:@"llmr.vst3.provider"] ?: @"";
+        NSString *apiKey = [defaults stringForKey:@"llmr.vst3.api_key"] ?: @"";
+        if ([provider length] == 0) {
+            initialStatus = @"Setup needed: Choose a provider in Settings.";
+        } else if (![provider isEqualToString:@"ollama"] && ![provider isEqualToString:@"omlx"] && [apiKey length] == 0) {
+            initialStatus = @"Setup needed: Add API key in Advanced Settings.";
+        }
+        chatStatusLabel_ = labelIn(btm, initialStatus,
                                    NSMakeRect(kPad, 4, width - kPad*2, 18),
                                    [NSFont systemFontOfSize:11.0], cSec());
         [chatStatusLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
 
         // Execute button + Preview button (second row)
-        chatExecuteButton_ = btnIn(btm, NSMakeRect(kPad, 26, 88, 26),
-                                   @"▶ Execute", kLlmrEditorActionExecute);
+        chatExecuteButton_ = btnIn(btm, NSMakeRect(kPad, 30, 96, 28),
+                                   @"Execute", kLlmrEditorActionExecute);
         [chatExecuteButton_ setEnabled:NO];
-        chatPreviewButton_ = btnIn(btm, NSMakeRect(kPad + 96, 26, 80, 26),
-                                   @"◯ Preview", kLlmrEditorActionPreview);
+        chatPreviewButton_ = btnIn(btm, NSMakeRect(kPad + 106, 30, 86, 28),
+                                   @"Dry run", kLlmrEditorActionPreview);
         [chatPreviewButton_ setEnabled:NO];
         chatAutoApproveButton_ = checkIn(btm,
-            NSMakeRect(kPad + 186, 27, 126, 24), @"Auto-approve", false);
+            NSMakeRect(kPad + 204, 32, 126, 24), @"Auto-approve", false);
         LlmrEditorTarget *autoTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionAutoApproveChanged];
         [targets_ addObject:autoTarget];
         [chatAutoApproveButton_ setTarget:autoTarget];
@@ -1200,7 +1307,7 @@ private:
         [autoTarget release];
 
         // Input field + Send button (top row of bottom)
-        chatInputField_ = promptFieldIn(btm, NSMakeRect(kPad, 58, width - kPad*2 - 80, 28),
+        chatInputField_ = promptFieldIn(btm, NSMakeRect(kPad, 68, width - kPad*2 - 92, 28),
                                         @"Describe what you want Ableton to do…");
         [chatInputField_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
         LlmrEditorTarget *inputTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionPlan];
@@ -1209,7 +1316,7 @@ private:
         [chatInputField_ setAction:@selector(performAction:)];
         [inputTarget release];
 
-        chatSendButton_ = btnIn(btm, NSMakeRect(width - kPad - 72, 58, 72, 28),
+        chatSendButton_ = btnIn(btm, NSMakeRect(width - kPad - 84, 68, 84, 28),
                                 @"Plan", kLlmrEditorActionPlan);
         [chatSendButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
 
@@ -1220,6 +1327,7 @@ private:
         if ([savedProv length] > 0 && [savedMdl length] > 0 && chatModelLabel_) {
             [chatModelLabel_ setStringValue:[NSString stringWithFormat:@"%@ / %@", savedProv, savedMdl]];
         }
+        refreshReadinessGuidance();
     }
 
     // ─── buildSettingsView ────────────────────────────────────
@@ -1242,7 +1350,7 @@ private:
                                         @"Advanced", kLlmrEditorActionOpenAdvancedSettings);
         [settingsAdvancedButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
         settingsBasicButton_ = btnIn(hdr, NSMakeRect(width - 320, 8, 112, 28),
-                                     @"Basic Settings", kLlmrEditorActionCloseAdvancedSettings);
+                                     @"Basic", kLlmrEditorActionCloseAdvancedSettings);
         [settingsBasicButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
         [settingsBasicButton_ setHidden:YES];
         NSButton *cancelBtn = btnIn(hdr, NSMakeRect(width - 198, 8, 86, 28),
@@ -1257,10 +1365,15 @@ private:
         [settingsMainView_ setWantsLayer:YES]; settingsMainView_.layer.backgroundColor = cBg().CGColor;
         [settingsView_ addSubview:settingsMainView_]; [settingsMainView_ release];
 
-        CGFloat y = height - kHdr - 28.0;
-        labelIn(settingsMainView_, @"Active planner", NSMakeRect(kPad, y - 24.0, width - 2*kPad, 24.0),
+        CGFloat y = height - kHdr - 22.0;
+        labelIn(settingsMainView_, @"Basic Settings", NSMakeRect(kPad, y - 24.0, width - 2*kPad, 24.0),
                 [NSFont boldSystemFontOfSize:13.0], cAccent());
-        y -= 42.0;
+        y -= 30.0;
+        noteIn(settingsMainView_,
+               @"Basic Settings chooses the model used for planning. Advanced Settings controls Ableton, Bridge, local runtimes, and diagnostics.",
+               NSMakeRect(kPad, y - 38.0, width - 2*kPad, 38.0),
+               [NSFont systemFontOfSize:11.0], cSec());
+        y -= 52.0;
         labelIn(settingsMainView_, @"Provider", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
                 [NSFont systemFontOfSize:12.0], cSec());
         settingsProviderCombo_ = comboIn(settingsMainView_,
@@ -1279,22 +1392,36 @@ private:
             NSMakeRect(kPad + kLblW + kGap, y - 28.0, mainFldW, 28.0),
             defaultModelsForProvider(@"openai"));
         [settingsModelField_ setAutoresizingMask:NSViewMaxYMargin];
-        y -= 32.0;
-        labelIn(settingsMainView_, @"For Ollama, use Advanced Settings to refresh installed models, serve a model, or stop a served model.",
-                NSMakeRect(kPad + kLblW + kGap, y - 32.0, mainFldW, 32.0),
-                [NSFont systemFontOfSize:11.0], cSec());
-        y -= 56.0;
+        y -= 36.0;
+        labelIn(settingsMainView_, @"Custom model", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
+                [NSFont systemFontOfSize:12.0], cSec());
+        settingsCustomModelField_ = fieldIn(settingsMainView_,
+            NSMakeRect(kPad + kLblW + kGap, y - 28.0, mainFldW, 28.0),
+            @"Only for unlisted or custom models", NO);
+        [settingsCustomModelField_ setAutoresizingMask:NSViewMaxYMargin];
+        y -= 34.0;
+        settingsModelStatusLabel_ = noteIn(settingsMainView_,
+            @"Select a listed model or enter a custom model.",
+            NSMakeRect(kPad + kLblW + kGap, y - 34.0, mainFldW, 34.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        y -= 48.0;
+        labelIn(settingsMainView_, @"Server", NSMakeRect(kPad, y - 28.0, kLblW, 28.0),
+                [NSFont systemFontOfSize:12.0], cSec());
+        settingsEndpointField_ = fieldIn(settingsMainView_,
+            NSMakeRect(kPad + kLblW + kGap, y - 28.0, mainFldW, 28.0),
+            @"Provider default or API base URL", NO);
+        [settingsEndpointField_ setAutoresizingMask:NSViewMaxYMargin];
+        y -= 44.0;
         settingsDryRunButton_ = checkIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 160, 24), @"Dry run default", true);
+            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 120, 24), @"Dry run", true);
         y -= 30.0;
         settingsAutoApproveButton_ = checkIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 170, 24), @"Auto-approve plans", false);
-        y -= 30.0;
-        settingsDestructiveButton_ = checkIn(settingsMainView_,
-            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 230, 24), @"Allow destructive actions", false);
-        y -= 48.0;
-        btnIn(settingsMainView_, NSMakeRect(kPad + kLblW + kGap, y - 30.0, 150, 30),
-              @"Advanced Settings", kLlmrEditorActionOpenAdvancedSettings);
+            NSMakeRect(kPad + kLblW + kGap, y - 24.0, 150, 24), @"Auto-approve", false);
+        y -= 46.0;
+        btnIn(settingsMainView_, NSMakeRect(kPad + kLblW + kGap, y - 30.0, 124, 30),
+              @"Test readiness", kLlmrEditorActionTestReadiness);
+        btnIn(settingsMainView_, NSMakeRect(kPad + kLblW + kGap + 134, y - 30.0, 132, 30),
+              @"Advanced", kLlmrEditorActionOpenAdvancedSettings);
 
         settingsAdvancedView_ = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
         [settingsAdvancedView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
@@ -1302,9 +1429,12 @@ private:
         [settingsAdvancedView_ setHidden:YES];
         [settingsView_ addSubview:settingsAdvancedView_]; [settingsAdvancedView_ release];
 
-        static const CGFloat kContentH = 800.0;
+        static const CGFloat kContentH = 980.0;
         NSScrollView *sc = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, width, height - kHdr)];
         [sc setHasVerticalScroller:YES]; [sc setBorderType:NSNoBorder];
+        [sc setHasHorizontalScroller:NO];
+        [sc setHorizontalScrollElasticity:NSScrollElasticityNone];
+        [sc setAutohidesScrollers:YES];
         [sc setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
         [sc setBackgroundColor:cBg()];
         [settingsAdvancedView_ addSubview:sc]; [sc release];
@@ -1329,43 +1459,96 @@ private:
         field_expr; \
         ay -= 30.0;
 
-        SECT(@"Provider keys and endpoint")
-        ROW_LBL(@"Endpoint:",
-            settingsEndpointField_ = fieldIn(cv,
-                NSMakeRect(kPad + kLblW + kGap, ay - 28.0, fldW, 28.0),
-                @"Leave blank for provider default", NO))
-        ROW_LBL(@"API Key:",
+        noteIn(cv,
+            @"Advanced Settings controls Ableton, Bridge, local runtimes, and diagnostics. Basic Settings chooses the planning model.",
+            NSMakeRect(kPad, ay - 42.0, width - 2*kPad, 42.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        ay -= 54.0;
+        noteIn(cv,
+            @"Runtime checks are manual in this VST3: click Recheck Bridge or Refresh Status. Opening Settings does not probe services.",
+            NSMakeRect(kPad, ay - 30.0, width - 2*kPad, 30.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        ay -= 40.0;
+
+        SECT(@"Provider credentials")
+        ROW_LBL(@"API key:",
             settingsApiKeyField_ = fieldIn(cv,
                 NSMakeRect(kPad + kLblW + kGap, ay - 28.0, fldW, 28.0),
                 @"API key (cloud providers)", YES))
         ay -= 8.0;
         settingsExtraPromptButton_ = checkIn(cv,
             NSMakeRect(kPad + kLblW + kGap, ay - 24.0, 220, 24), @"LLM-r guidance prompt", true);
-        ay -= 34.0;
+        ay -= 30.0;
+        noteIn(cv,
+            @"Server/API base URL is in Basic Settings. Companion server API tokens are configured outside the VST3.",
+            NSMakeRect(kPad + kLblW + kGap, ay - 34.0, fldW, 34.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        ay -= 46.0;
 
         SECT(@"AbletonOSC")
         ay -= 8.0;
-        labelIn(cv, @"Host:", NSMakeRect(kPad, ay - 28.0, kLblW, 28.0),
+        labelIn(cv, @"Host", NSMakeRect(kPad, ay - 28.0, kLblW, 28.0),
                 [NSFont systemFontOfSize:12.0], cSec());
         settingsOscHostField_ = fieldIn(cv,
             NSMakeRect(kPad + kLblW + kGap, ay - 28.0, 170, 28.0), @"127.0.0.1", NO);
-        labelIn(cv, @"Port:", NSMakeRect(kPad + kLblW + kGap + 182, ay - 28.0, 44, 28.0),
+        labelIn(cv, @"Port", NSMakeRect(kPad + kLblW + kGap + 182, ay - 28.0, 44, 28.0),
                 [NSFont systemFontOfSize:12.0], cSec());
         settingsOscPortField_ = fieldIn(cv,
             NSMakeRect(kPad + kLblW + kGap + 232, ay - 28.0, 90, 28.0), @"11000", NO);
-        ay -= 38.0;
+        btnIn(cv, NSMakeRect(kPad + kLblW + kGap + 334, ay - 28.0, 128, 28), @"Test readiness", kLlmrEditorActionTestReadiness);
+        ay -= 42.0;
 
         SECT(@"Device Bridge")
-        deviceBridgeStatusLabel_ = labelIn(cv,
-            @"Device Bridge: status unknown. Click Check Bridge before executing device_load plans.",
-            NSMakeRect(kPad, ay - 36.0, width - 2*kPad, 36.0),
+        ay -= 8.0;
+        labelIn(cv, @"Host", NSMakeRect(kPad, ay - 28.0, kLblW, 28.0),
+                [NSFont systemFontOfSize:12.0], cSec());
+        settingsBridgeHostField_ = fieldIn(cv,
+            NSMakeRect(kPad + kLblW + kGap, ay - 28.0, 170, 28.0), @"127.0.0.1", NO);
+        labelIn(cv, @"Port", NSMakeRect(kPad + kLblW + kGap + 182, ay - 28.0, 44, 28.0),
+                [NSFont systemFontOfSize:12.0], cSec());
+        settingsBridgePortField_ = fieldIn(cv,
+            NSMakeRect(kPad + kLblW + kGap + 232, ay - 28.0, 90, 28.0), @"8788", NO);
+        ay -= 40.0;
+
+        labelIn(cv, @"Detected", NSMakeRect(kPad, ay - 28.0, kLblW, 28.0),
+                [NSFont systemFontOfSize:12.0], cSec());
+        settingsBridgeLibraryCandidatesCombo_ = comboIn(cv,
+            NSMakeRect(kPad + kLblW + kGap, ay - 28.0, fldW - 150.0, 28.0), @[]);
+        LlmrEditorTarget *detectedLibraryTarget = [[LlmrEditorTarget alloc] initWithOwner:this action:kLlmrEditorActionUseDetectedBridgeLibrary];
+        [targets_ addObject:detectedLibraryTarget];
+        [settingsBridgeLibraryCandidatesCombo_ setTarget:detectedLibraryTarget];
+        [settingsBridgeLibraryCandidatesCombo_ setAction:@selector(performAction:)];
+        [detectedLibraryTarget release];
+        btnIn(cv, NSMakeRect(kPad + kLblW + kGap + fldW - 142.0, ay - 28.0, 142, 28),
+              @"Choose Ableton User Library…", kLlmrEditorActionChooseBridgeUserLibrary);
+        ay -= 38.0;
+
+        settingsBridgeLibraryLabel_ = noteIn(cv,
+            @"Selected Ableton User Library: Not selected",
+            NSMakeRect(kPad, ay - 34.0, width - 2*kPad, 34.0),
             [NSFont systemFontOfSize:11.0], cSec());
-        ay -= 48.0;
-        btnIn(cv, NSMakeRect(kPad, ay - 28.0, 128, 28), @"Check Bridge", kLlmrEditorActionDeviceBridgeStatus);
-        ay -= 44.0;
+        ay -= 38.0;
+        settingsBridgeInstallTargetLabel_ = noteIn(cv,
+            @"Bridge install target: Not selected",
+            NSMakeRect(kPad, ay - 34.0, width - 2*kPad, 34.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        ay -= 38.0;
+        deviceBridgeStatusLabel_ = noteIn(cv,
+            @"Bridge status: Not installed",
+            NSMakeRect(kPad, ay - 108.0, width - 2*kPad, 108.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        ay -= 118.0;
+
+        btnIn(cv, NSMakeRect(kPad, ay - 28.0, 84, 28), @"Recheck", kLlmrEditorActionDeviceBridgeStatus);
+        settingsBridgeInstallButton_ = btnIn(cv, NSMakeRect(kPad + 94, ay - 28.0, 132, 28), @"Install / Reinstall Bridge", kLlmrEditorActionInstallBridge);
+        settingsBridgeRevealButton_ = btnIn(cv, NSMakeRect(kPad + 236, ay - 28.0, 138, 28), @"Reveal Installed Bridge", kLlmrEditorActionRevealInstalledBridge);
+        btnIn(cv, NSMakeRect(kPad + 384, ay - 28.0, 124, 28), @"Copy Install Path", kLlmrEditorActionCopyBridgeInstallPath);
+        ay -= 36.0;
+        btnIn(cv, NSMakeRect(kPad, ay - 28.0, 136, 28), @"Open Bridge Setup Help", kLlmrEditorActionOpenBridgeHelp);
+        ay -= 40.0;
 
         SECT(@"Ollama")
-        ollamaStatusLabel_ = labelIn(cv,
+        ollamaStatusLabel_ = noteIn(cv,
             @"Ollama: status unknown. Open Advanced Settings or click Refresh Status.",
             NSMakeRect(kPad, ay - 36.0, width - 2*kPad, 36.0),
             [NSFont systemFontOfSize:11.0], cSec());
@@ -1385,7 +1568,6 @@ private:
         CGFloat ollamaBtnX = kPad + ollamaComboW + 10.0;
         ollamaModelsCombo_ = comboIn(cv,
             NSMakeRect(kPad, ay - 28.0, ollamaComboW, 28.0), @[]);
-        [ollamaModelsCombo_ setEditable:NO];
         [ollamaModelsCombo_ setAutoresizingMask:NSViewMaxYMargin];
         btnIn(cv, NSMakeRect(ollamaBtnX, ay - 28.0, 64, 28), @"Serve", kLlmrEditorActionOllamaServeModel);
         btnIn(cv, NSMakeRect(ollamaBtnX + 72, ay - 28.0, 112, 28), @"Stop Serving", kLlmrEditorActionOllamaStopServingModel);
@@ -1398,14 +1580,32 @@ private:
         ollamaModelField_ = comboIn(cv,
             NSMakeRect(kPad, ay - 28.0, ollamaComboW, 28.0),
             fallbackOllamaDownloadModels());
-        [ollamaModelField_ setEditable:NO];
         [ollamaModelField_ setAutoresizingMask:NSViewMaxYMargin];
         btnIn(cv, NSMakeRect(ollamaBtnX, ay - 28.0, 118, 28),
               @"Refresh Online", kLlmrEditorActionOllamaRefreshOnlineModels);
         btnIn(cv, NSMakeRect(ollamaBtnX + 126, ay - 28.0, 118, 28),
               @"Download", kLlmrEditorActionOllamaDownloadModel);
+        ay -= 52.0;
+
+        SECT(@"oMLX")
+        noteIn(cv,
+            @"oMLX can be selected as a provider in Basic Settings. Use the PyQt companion for oMLX runtime download, serve, stop, and delete controls in this release.",
+            NSMakeRect(kPad, ay - 44.0, width - 2*kPad, 44.0),
+            [NSFont systemFontOfSize:11.0], cSec());
+        ay -= 58.0;
+
+        SECT(@"Safety and diagnostics")
+        settingsDestructiveButton_ = checkIn(cv,
+            NSMakeRect(kPad, ay - 24.0, 210, 24), @"Allow destructive actions", false);
+        ay -= 34.0;
+        noteIn(cv,
+            @"Debug output lives in the Details tab after planning or execution.",
+            NSMakeRect(kPad, ay - 30.0, width - 2*kPad, 30.0),
+            [NSFont systemFontOfSize:11.0], cSec());
 
         (void)ay;
+        refreshBridgeLibraryCandidates();
+        refreshBridgePathUI();
 #undef SECT
 #undef ROW_LBL
     }
@@ -1417,30 +1617,156 @@ private:
         }
     }
 
+    void setComboItems(NSPopUpButton *combo, NSArray *items, NSString *preferred,
+                       NSString *emptyTitle = @"No items")
+    {
+        if (!combo) return;
+        [combo removeAllItems];
+        NSArray *safeItems = items ?: @[];
+        if ([safeItems count] == 0) {
+            [combo addItemWithTitle:emptyTitle ?: @"No items"];
+            NSMenuItem *item = [combo lastItem];
+            [item setRepresentedObject:@""];
+            [item setEnabled:NO];
+            [combo selectItemAtIndex:0];
+            return;
+        }
+        for (NSString *itemTitle in safeItems) {
+            if (![itemTitle isKindOfClass:[NSString class]] || [itemTitle length] == 0) continue;
+            [combo addItemWithTitle:itemTitle];
+            [[combo lastItem] setRepresentedObject:itemTitle];
+        }
+        BOOL selected = NO;
+        if ([preferred length] > 0) {
+            for (NSInteger i = 0; i < [combo numberOfItems]; ++i) {
+                NSMenuItem *item = [combo itemAtIndex:i];
+                id value = [item representedObject];
+                if ([value isKindOfClass:[NSString class]] && [value isEqualToString:preferred]) {
+                    [combo selectItemAtIndex:i];
+                    selected = YES;
+                    break;
+                }
+            }
+        }
+        if (!selected && [combo numberOfItems] > 0) {
+            [combo selectItemAtIndex:0];
+        }
+    }
+
+    bool comboContainsValue(NSPopUpButton *combo, NSString *value)
+    {
+        if (!combo || [value length] == 0) return false;
+        for (NSInteger i = 0; i < [combo numberOfItems]; ++i) {
+            id represented = [[combo itemAtIndex:i] representedObject];
+            if ([represented isKindOfClass:[NSString class]] && [represented isEqualToString:value]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void selectComboValue(NSPopUpButton *combo, NSString *value)
+    {
+        if (!combo || [value length] == 0) return;
+        for (NSInteger i = 0; i < [combo numberOfItems]; ++i) {
+            id represented = [[combo itemAtIndex:i] representedObject];
+            if ([represented isKindOfClass:[NSString class]] && [represented isEqualToString:value]) {
+                [combo selectItemAtIndex:i];
+                return;
+            }
+        }
+    }
+
     void updateModelBadge()
     {
         if (!chatModelLabel_) return;
         NSString *provider = settingsProviderCombo_ ? controlString(settingsProviderCombo_) : @"";
-        NSString *model = settingsModelField_ ? controlString(settingsModelField_) : @"";
-        NSString *modelBadge = @"Model: unset";
+        NSString *model = resolvedModelForSettings(provider, settingsModelField_ ? controlString(settingsModelField_) : @"");
+        NSString *modelBadge = @"Model missing";
         if ([provider length] > 0 && [model length] > 0) {
             modelBadge = [NSString stringWithFormat:@"%@ / %@", provider, model];
         } else if ([provider length] > 0) {
             modelBadge = provider;
         }
-        if ([modelBadge length] > 18) {
-            modelBadge = [NSString stringWithFormat:@"%@…", [modelBadge substringToIndex:17]];
+        if ([modelBadge length] > 30) {
+            modelBadge = [NSString stringWithFormat:@"%@…", [modelBadge substringToIndex:29]];
         }
         [chatModelLabel_ setStringValue:modelBadge];
+        refreshReadinessGuidance();
+    }
+
+    bool currentDryRunDefault()
+    {
+        if (settingsDryRunButton_) return buttonOn(settingsDryRunButton_);
         NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-        NSInteger port = [d integerForKey:@"llmr.vst3.osc_port"];
-        if (port <= 0) port = 11000;
-        if (chatOscLabel_) {
-            [chatOscLabel_ setStringValue:[NSString stringWithFormat:@"OSC %ld", (long)port]];
+        return [d objectForKey:@"llmr.vst3.dry_run"] ? [d boolForKey:@"llmr.vst3.dry_run"] : true;
+    }
+
+    NSString *deviceBridgeHost()
+    {
+        NSString *host = settingsBridgeHostField_ ? controlString(settingsBridgeHostField_) : @"";
+        if ([host length] == 0) {
+            host = [[NSUserDefaults standardUserDefaults] stringForKey:@"llmr.vst3.bridge_host"] ?: @"127.0.0.1";
         }
-        if (chatBridgeLabel_) {
-            [chatBridgeLabel_ setStringValue:@"Bridge"];
+        return [host length] > 0 ? host : @"127.0.0.1";
+    }
+
+    int deviceBridgePort()
+    {
+        NSInteger port = settingsBridgePortField_ ? [controlString(settingsBridgePortField_) integerValue] : 0;
+        if (port <= 0) {
+            port = [[NSUserDefaults standardUserDefaults] integerForKey:@"llmr.vst3.bridge_port"];
         }
+        if (port <= 0) port = 8788;
+        deviceBridgePort_ = static_cast<int>(port);
+        return deviceBridgePort_;
+    }
+
+    void refreshReadinessGuidance()
+    {
+        NSString *provider = settingsProviderCombo_ ? controlString(settingsProviderCombo_) :
+            ([[NSUserDefaults standardUserDefaults] stringForKey:@"llmr.vst3.provider"] ?: @"");
+        NSString *model = resolvedModelForSettings(provider, settingsModelField_ ? controlString(settingsModelField_) :
+            ([[NSUserDefaults standardUserDefaults] stringForKey:@"llmr.vst3.model"] ?: @""));
+        bool modelReady = [provider length] > 0 && [model length] > 0;
+        setChip(chatModelLabel_, modelReady ? @"Model configured" : @"Model missing", modelReady);
+
+        NSString *oscHost = settingsOscHostField_ ? controlString(settingsOscHostField_) :
+            ([[NSUserDefaults standardUserDefaults] stringForKey:@"llmr.vst3.osc_host"] ?: @"127.0.0.1");
+        NSInteger oscPort = settingsOscPortField_ ? [controlString(settingsOscPortField_) integerValue] :
+            [[NSUserDefaults standardUserDefaults] integerForKey:@"llmr.vst3.osc_port"];
+        if (oscPort <= 0) oscPort = 11000;
+        bool oscConfigured = [oscHost length] > 0 && oscPort > 0;
+        setChip(chatOscLabel_, oscConfigured ? @"AbletonOSC not checked" : @"AbletonOSC missing", false);
+
+        NSString *bridgeLabel = deviceBridgeChecked_
+            ? (deviceBridgeReachable_ ? @"Bridge reachable" : @"Bridge unreachable")
+            : @"Bridge optional";
+        setChip(chatBridgeLabel_, bridgeLabel, deviceBridgeReachable_);
+
+        bool dry = currentDryRunDefault();
+        setChip(chatDryRunLabel_, dry ? @"Dry run on" : @"Dry run off", dry);
+    }
+
+    void testReadiness()
+    {
+        refreshReadinessGuidance();
+        NSString *provider = settingsProviderCombo_ ? controlString(settingsProviderCombo_) : @"";
+        NSString *model = resolvedModelForSettings(provider, settingsModelField_ ? controlString(settingsModelField_) : @"");
+        if ([provider length] == 0 || [model length] == 0) {
+            setStatus(@"Model missing - open Basic Settings and choose a provider/model or enter Custom model.");
+            return;
+        }
+        NSString *oscHost = settingsOscHostField_ ? controlString(settingsOscHostField_) : @"127.0.0.1";
+        NSInteger oscPort = settingsOscPortField_ ? [controlString(settingsOscPortField_) integerValue] : 11000;
+        if ([oscHost length] == 0 || oscPort <= 0) {
+            setStatus(@"AbletonOSC missing - open Advanced Settings and set host/port.");
+            return;
+        }
+        setStatus(currentDryRunDefault()
+            ? @"Readiness: model configured; AbletonOSC not checked; Device Bridge optional; Dry run on. Recheck Bridge for device_load."
+            : @"Readiness: model configured; AbletonOSC not checked; Device Bridge optional; Dry run off. Enable Dry run before first execution.");
+        checkDeviceBridgeStatus();
     }
 
     void setBusy(bool busy)
@@ -1467,12 +1793,28 @@ private:
         [chatView_ setHidden:NO];
     }
 
+    void refreshSettingsScreenAfterModeToggle(NSResponder *preferredResponder)
+    {
+        if (!settingsView_) return;
+        [settingsView_ setNeedsLayout:YES];
+        [settingsView_ layoutSubtreeIfNeeded];
+        [settingsView_ setNeedsDisplay:YES];
+        [settingsView_ displayIfNeeded];
+        NSWindow *window = [settingsView_ window];
+        if (!window) return;
+        [window recalculateKeyViewLoop];
+        if (preferredResponder) {
+            [window makeFirstResponder:preferredResponder];
+        }
+    }
+
     void showBasicSettings()
     {
         if (settingsMainView_) [settingsMainView_ setHidden:NO];
         if (settingsAdvancedView_) [settingsAdvancedView_ setHidden:YES];
         if (settingsAdvancedButton_) [settingsAdvancedButton_ setHidden:NO];
         if (settingsBasicButton_) [settingsBasicButton_ setHidden:YES];
+        refreshSettingsScreenAfterModeToggle(settingsProviderCombo_);
     }
 
     void showAdvancedSettings()
@@ -1481,11 +1823,8 @@ private:
         if (settingsAdvancedView_) [settingsAdvancedView_ setHidden:NO];
         if (settingsAdvancedButton_) [settingsAdvancedButton_ setHidden:YES];
         if (settingsBasicButton_) [settingsBasicButton_ setHidden:NO];
-        checkDeviceBridgeStatus();
-        ollamaListModels();
-        if (!ollamaOnlineModelsLoaded_) {
-            ollamaRefreshOnlineModels(false);
-        }
+        refreshSettingsScreenAfterModeToggle(settingsApiKeyField_);
+        refreshBridgePathUI();
     }
 
     void showResponseTab(bool raw)
@@ -1514,10 +1853,267 @@ private:
         }
     }
 
+    void showTextDialog(NSString *title, NSString *text)
+    {
+        NSAlert *alert = [[NSAlert alloc] init];
+        [alert setMessageText:title ?: @"LLM-r Help"];
+        [alert addButtonWithTitle:@"Close"];
+        NSScrollView *scroll = [[[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 640, 420)] autorelease];
+        [scroll setHasVerticalScroller:YES];
+        [scroll setHasHorizontalScroller:NO];
+        [scroll setAutohidesScrollers:YES];
+        NSTextView *body = [[[LlmrCopyTextView alloc] initWithFrame:NSMakeRect(0, 0, 620, 420)] autorelease];
+        [body setEditable:NO];
+        [body setSelectable:YES];
+        [body setRichText:NO];
+        [body setFont:[NSFont systemFontOfSize:12.0]];
+        [body setString:text ?: @""];
+        [body setHorizontallyResizable:NO];
+        [[body textContainer] setWidthTracksTextView:YES];
+        [scroll setDocumentView:body];
+        [alert setAccessoryView:scroll];
+        [alert runModal];
+        [alert release];
+    }
+
+    NSString *bridgeSetupText()
+    {
+        NSString *library = bridgeUserLibraryPath_ ? bridgeUserLibraryPath_ : @"";
+        NSString *target = bridgeInstallTargetForUserLibrary(library);
+        if ([target length] == 0) {
+            target = @"Not selected";
+        }
+        return [NSString stringWithFormat:
+            @"Device Bridge setup\n\n"
+            @"How to find your Ableton User Library:\n"
+            @"1. In Live's Browser, right-click User Library.\n"
+            @"2. Choose Show in Finder.\n"
+            @"3. In LLM-r, click Choose Ableton User Library… and select that folder.\n\n"
+            @"Selected User Library:\n%@\n"
+            @"Bridge install target:\n%@\n\n"
+            @"Setup steps:\n"
+            @"1. Click Install / Reinstall Bridge in LLM-r.\n"
+            @"2. Restart Ableton Live.\n"
+            @"3. Open Settings -> Link, Tempo & MIDI.\n"
+            @"4. In a Control Surface slot, choose LLMR_Bridge if it appears.\n"
+            @"5. If it does not appear, check Live Log.txt for LLMR, Bridge, RemoteScriptError, Traceback, or ImportError.\n\n"
+            @"The User Library may be on an external SSD. This is supported as long as the drive is mounted before launching Live.\n\n"
+            @"Fallback (documented only, not preferred):\n"
+            @"/Applications/Ableton Live 12 Suite.app/Contents/App-Resources/MIDI Remote Scripts/\n"
+            @"This may require admin permissions and may be overwritten by Ableton updates.\n\n"
+            @"Device Bridge is optional for core AbletonOSC plans and required for device_load/browser loading.",
+            [library length] > 0 ? library : @"Not selected",
+            target];
+    }
+
+    void refreshBridgeLibraryCandidates()
+    {
+        if (!settingsBridgeLibraryCandidatesCombo_) return;
+        NSArray<NSString *> *candidates = detectedUserLibraryCandidates();
+        NSString *preferred = bridgeUserLibraryPath_ ?: @"";
+        setComboItems(settingsBridgeLibraryCandidatesCombo_, candidates, preferred, @"No detected libraries");
+    }
+
+    void refreshBridgePathUI()
+    {
+        NSString *library = bridgeUserLibraryPath_ ? bridgeUserLibraryPath_ : @"";
+        NSString *target = bridgeInstallTargetForUserLibrary(library);
+
+        if (settingsBridgeLibraryLabel_) {
+            [settingsBridgeLibraryLabel_ setStringValue:[NSString stringWithFormat:@"Selected Ableton User Library: %@",
+                [library length] > 0 ? library : @"Not selected"]];
+        }
+        if (settingsBridgeInstallTargetLabel_) {
+            [settingsBridgeInstallTargetLabel_ setStringValue:[NSString stringWithFormat:@"Bridge install target: %@",
+                [target length] > 0 ? target : @"Not selected"]];
+        }
+
+        BOOL hasSelection = [library length] > 0;
+        if (settingsBridgeInstallButton_) [settingsBridgeInstallButton_ setEnabled:hasSelection];
+        if (settingsBridgeRevealButton_) [settingsBridgeRevealButton_ setEnabled:hasSelection];
+
+        NSString *status = bridgeInstallStatusForUserLibrary(library);
+        if (deviceBridgeChecked_ && !deviceBridgeReachable_) {
+            NSString *runtimeState = bridgeInitFileExistsForUserLibrary(library)
+                ? @"Bridge status: Installed but not reachable"
+                : @"Bridge status: Not installed";
+            NSString *reachability =
+                [NSString stringWithFormat:@"\n\n%@\n"
+                @"Device Bridge not reachable.\n"
+                @"Likely causes:\n"
+                @"- The LLM-r Remote Script is not installed in Ableton's active User Library.\n"
+                @"- Live has not been restarted after installation.\n"
+                @"- The Remote Script has not been selected in Live Settings -> Link, Tempo & MIDI.\n"
+                @"- Ableton blocked the script because of an import/runtime error.\n"
+                @"Next actions:\n"
+                @"1. Reveal Installed Bridge\n"
+                @"2. Copy Install Path\n"
+                @"3. Reinstall Bridge\n"
+                @"4. Open Bridge Setup Help\n"
+                @"5. Recheck Bridge", runtimeState];
+            status = [status stringByAppendingString:reachability];
+        } else if (deviceBridgeReachable_) {
+            status = [status stringByAppendingString:@"\n\nBridge status: Reachable"];
+        }
+        if (deviceBridgeStatusLabel_) {
+            [deviceBridgeStatusLabel_ setStringValue:status];
+        }
+    }
+
+    void setBridgeUserLibraryPath(NSString *path, bool persist, bool refreshCandidates = false)
+    {
+        NSString *normalized = normalizedPath(path);
+        [bridgeUserLibraryPath_ release];
+        bridgeUserLibraryPath_ = ([normalized length] > 0) ? [normalized retain] : nil;
+        if (persist) {
+            NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+            if (bridgeUserLibraryPath_) {
+                [d setObject:bridgeUserLibraryPath_ forKey:bridgeUserLibrarySettingsKey()];
+            } else {
+                [d removeObjectForKey:bridgeUserLibrarySettingsKey()];
+            }
+            [d synchronize];
+        }
+        if (refreshCandidates) {
+            refreshBridgeLibraryCandidates();
+        }
+        refreshBridgePathUI();
+    }
+
+    void useDetectedBridgeLibrary()
+    {
+        NSString *selected = controlString(settingsBridgeLibraryCandidatesCombo_);
+        if ([selected length] == 0) {
+            setStatus(@"No detected User Library selected.");
+            return;
+        }
+        setBridgeUserLibraryPath(selected, true, false);
+        setStatus([NSString stringWithFormat:@"Selected Ableton User Library: %@", selected]);
+    }
+
+    void chooseBridgeUserLibrary()
+    {
+        NSOpenPanel *panel = [NSOpenPanel openPanel];
+        [panel setCanChooseFiles:NO];
+        [panel setCanChooseDirectories:YES];
+        [panel setAllowsMultipleSelection:NO];
+        [panel setCanCreateDirectories:NO];
+        [panel setMessage:@"Select Ableton User Library folder (not Remote Scripts)."];
+        NSString *start = bridgeUserLibraryPath_;
+        if ([start length] == 0) {
+            start = [detectedUserLibraryCandidates() firstObject] ?: @"";
+        }
+        if ([start length] > 0) {
+            [panel setDirectoryURL:[NSURL fileURLWithPath:start]];
+        }
+        NSModalResponse response = [panel runModal];
+        if (response != NSModalResponseOK) return;
+        NSString *selected = normalizedPath([[panel URL] path]);
+        if ([selected length] == 0) return;
+        setBridgeUserLibraryPath(selected, true, true);
+        setStatus([NSString stringWithFormat:@"Selected Ableton User Library: %@", selected]);
+    }
+
+    void revealInstalledBridge()
+    {
+        NSString *target = bridgeInstallTargetForUserLibrary(bridgeUserLibraryPath_);
+        if ([target length] == 0) {
+            setStatus(@"Choose Ableton User Library first, then reveal install path.");
+            return;
+        }
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *toReveal = [fm fileExistsAtPath:target]
+            ? target
+            : remoteScriptsPathForUserLibrary(bridgeUserLibraryPath_);
+        if (![fm fileExistsAtPath:toReveal]) {
+            setStatus(@"Install target does not exist yet. Choose User Library and install bridge first.");
+            return;
+        }
+        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[[NSURL fileURLWithPath:toReveal]]];
+        setStatus([NSString stringWithFormat:@"Revealed bridge path: %@", toReveal]);
+    }
+
     void openHelp()
     {
-        [[NSWorkspace sharedWorkspace] openURL:
-            [NSURL URLWithString:@"https://github.com/krahd/LLM-r/blob/main/docs/USER_MANUAL.md"]];
+        showTextDialog(@"LLM-r first dry-run help",
+            @"First dry-run in 60 seconds\n\n"
+            @"1. Keep Dry run enabled.\n"
+            @"2. Open Settings and choose Provider and Model.\n"
+            @"3. Enter a simple prompt.\n"
+            @"4. Click Plan.\n"
+            @"5. Review Plan and Details.\n"
+            @"6. Click Execute while Dry run is still enabled.\n\n"
+            @"Example safe prompts\n\n"
+            @"- Set tempo to 120 BPM\n"
+            @"- Create a MIDI track called Drums\n"
+            @"- Load Drum Rack on the selected track (requires Device Bridge)\n\n"
+            @"Safety\n\n"
+            @"Dry run does not mutate the Live set. Live execution requires Dry run off. Destructive actions require explicit approval in Advanced Settings.\n\n"
+            @"Bridge\n\n"
+                @"AbletonOSC handles core commands. Device Bridge handles browser/device loading.\n\n"
+                @"How to find your Ableton User Library:\n"
+                @"1. In Live's Browser, right-click User Library.\n"
+                @"2. Choose Show in Finder.\n"
+                @"3. In LLM-r, click Choose Ableton User Library… and select that folder.\n\n"
+                @"After installing the bridge:\n"
+                @"1. Restart Ableton Live.\n"
+                @"2. Open Live Settings -> Link, Tempo & MIDI.\n"
+                @"3. In a Control Surface slot, choose LLMR_Bridge if it appears.\n"
+                @"4. If it does not appear, check Live Log.txt for LLMR, Bridge, RemoteScriptError, Traceback, or ImportError.\n\n"
+                @"The User Library may be on an external SSD. This is supported as long as the drive is mounted before launching Live.");
+    }
+
+    void openBridgeSetupHelp()
+    {
+        showTextDialog(@"Device Bridge setup", bridgeSetupText());
+    }
+
+    void copyBridgeInstallPath()
+    {
+        NSString *path = bridgeInstallTargetForUserLibrary(bridgeUserLibraryPath_);
+        if ([path length] == 0) {
+            setStatus(@"Choose Ableton User Library first, then copy install path.");
+            return;
+        }
+        NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+        [pasteboard clearContents];
+        [pasteboard setString:path forType:NSPasteboardTypeString];
+        setStatus([NSString stringWithFormat:@"Copied Device Bridge install path: %@", path]);
+    }
+
+    void installDeviceBridgeFromSettings()
+    {
+        NSString *library = bridgeUserLibraryPath_ ? bridgeUserLibraryPath_ : @"";
+        if ([library length] == 0) {
+            setStatus(@"Choose your Ableton User Library first. In Live, right-click User Library in the Browser and choose Show in Finder.");
+            refreshBridgePathUI();
+            return;
+        }
+
+        if (bridgeDoubleNestedForUserLibrary(library)) {
+            NSAlert *warning = [[NSAlert alloc] init];
+            [warning setMessageText:@"Bridge install structure warning"];
+            [warning setInformativeText:@"Bridge appears to be double-nested. Reinstalling will replace it with the correct folder structure."];
+            [warning runModal];
+            [warning release];
+        }
+
+        NSString *error = nil;
+        bool ok = installLLMRBridgeToUserLibrary(library, &error);
+        NSAlert *done = [[NSAlert alloc] init];
+        if (ok) {
+            [done setMessageText:@"LLM-r Device Bridge Installed"];
+            [done setInformativeText:
+                @"Bridge files are installed. Restart Ableton Live and select LLMR_Bridge in Live Settings if it appears."];
+            setStatus(@"Bridge files installed on disk. Restart Live and select LLMR_Bridge in Settings -> Link, Tempo & MIDI.");
+        } else {
+            [done setMessageText:@"Device Bridge Installation Failed"];
+            [done setInformativeText:error ?: @"Could not install LLMR_Bridge."];
+            setStatus(@"Device Bridge installation failed.");
+        }
+        [done runModal];
+        [done release];
+        refreshBridgePathUI();
     }
 
     void appendToChat(NSString *role, NSString *text)
@@ -1563,16 +2159,24 @@ private:
         NSString *host = [d stringForKey:@"llmr.vst3.osc_host"] ?: @"127.0.0.1";
         NSInteger port = [d integerForKey:@"llmr.vst3.osc_port"];
         if (port <= 0) port = 11000;
-        [settingsProviderCombo_ setStringValue:prov];
-        rebuildModelChoices(prov, mdl);
+        NSString *bridgeHost = [d stringForKey:@"llmr.vst3.bridge_host"] ?: @"127.0.0.1";
+        NSInteger bridgePort = [d integerForKey:@"llmr.vst3.bridge_port"];
+        NSString *bridgeUserLibrary = normalizedPath([d stringForKey:bridgeUserLibrarySettingsKey()] ?: @"");
+        if (bridgePort <= 0) bridgePort = 8788;
+        deviceBridgePort_ = static_cast<int>(bridgePort);
+        selectComboValue(settingsProviderCombo_, prov);
+        rebuildModelChoices(prov, mdl, true);
         [settingsEndpointField_ setStringValue:ep];
         [settingsApiKeyField_   setStringValue:key];
         [settingsOscHostField_  setStringValue:host];
         [settingsOscPortField_  setStringValue:[NSString stringWithFormat:@"%ld", (long)port]];
+        [settingsBridgeHostField_ setStringValue:bridgeHost];
+        [settingsBridgePortField_ setStringValue:[NSString stringWithFormat:@"%ld", (long)bridgePort]];
+        setBridgeUserLibraryPath(bridgeUserLibrary, false, false);
         bool extraOn = [d objectForKey:@"llmr.vst3.extra_prompt_enabled"]
                        ? [d boolForKey:@"llmr.vst3.extra_prompt_enabled"] : true;
         bool dryOn   = [d objectForKey:@"llmr.vst3.dry_run"]
-                       ? [d boolForKey:@"llmr.vst3.dry_run"] : false;
+                       ? [d boolForKey:@"llmr.vst3.dry_run"] : true;
         bool autoOn  = [d objectForKey:@"llmr.vst3.auto_approve"]
                        ? [d boolForKey:@"llmr.vst3.auto_approve"] : false;
         [settingsExtraPromptButton_ setState:extraOn ? NSControlStateValueOn : NSControlStateValueOff];
@@ -1586,28 +2190,41 @@ private:
         updateModelBadge();
     }
 
-    void rebuildModelChoices(NSString *provider, NSString *preferred)
+    void rebuildModelChoices(NSString *provider, NSString *preferred, bool allowCustomPreferred = true)
     {
         if (!settingsModelField_) return;
         NSString *p = [(provider ? provider : @"openai") lowercaseString];
         NSMutableArray *models = [NSMutableArray array];
         if ([p isEqualToString:@"ollama"] && ollamaModelsCombo_) {
             for (NSInteger i = 0; i < [ollamaModelsCombo_ numberOfItems]; ++i) {
-                NSString *item = [ollamaModelsCombo_ itemObjectValueAtIndex:i];
+                NSString *item = @"";
+                id represented = [[ollamaModelsCombo_ itemAtIndex:i] representedObject];
+                if ([represented isKindOfClass:[NSString class]]) item = represented;
                 if ([item length] > 0) [models addObject:item];
             }
         }
         if ([models count] == 0) {
             [models addObjectsFromArray:defaultModelsForProvider(p)];
         }
-        [settingsModelField_ removeAllItems];
-        [settingsModelField_ addItemsWithObjectValues:models];
-        if ([preferred length] > 0) {
-            [settingsModelField_ setStringValue:preferred];
-        } else if ([models count] > 0) {
-            [settingsModelField_ selectItemAtIndex:0];
-        } else {
-            [settingsModelField_ setStringValue:@""];
+        NSString *message = @"Select a listed model or enter a custom model if needed.";
+        NSString *emptyTitle = @"No listed models";
+        BOOL preferredIsListed = [preferred length] > 0 && [models containsObject:preferred];
+        setComboItems(settingsModelField_, models, preferredIsListed ? preferred : nil, emptyTitle);
+        if (settingsCustomModelField_) {
+            [settingsCustomModelField_ setStringValue:
+                (!preferredIsListed && allowCustomPreferred && [preferred length] > 0) ? preferred : @""];
+        }
+        if ([models count] == 0) {
+            if ([p isEqualToString:@"custom"]) {
+                message = @"Enter a custom model and Server URL.";
+            } else {
+                message = @"Could not list models for this provider. Enter a custom model or use PyQt Advanced Settings.";
+            }
+        } else if (!preferredIsListed && allowCustomPreferred && [preferred length] > 0) {
+            message = @"Saved model is not in the provider list. It is kept in Custom model.";
+        }
+        if (settingsModelStatusLabel_) {
+            [settingsModelStatusLabel_ setStringValue:message];
         }
     }
 
@@ -1639,6 +2256,10 @@ private:
     NSString *resolvedModelForSettings(NSString *provider, NSString *model)
     {
         NSString *p = canonicalProvider(provider);
+        NSString *customRaw = settingsCustomModelField_ ? controlString(settingsCustomModelField_) : @"";
+        NSString *customValue = [customRaw stringByTrimmingCharactersInSet:
+                           [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([customValue length] > 0) return customValue;
         NSString *raw = model ? model : @"";
         NSString *value = [raw stringByTrimmingCharactersInSet:
                            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -1646,10 +2267,6 @@ private:
         if ([p isEqualToString:@"ollama"] && ollamaModelsCombo_) {
             NSString *selected = controlString(ollamaModelsCombo_);
             if ([selected length] > 0) return selected;
-            if ([ollamaModelsCombo_ numberOfItems] > 0) {
-                NSString *first = [ollamaModelsCombo_ itemObjectValueAtIndex:0];
-                if ([first length] > 0) return first;
-            }
         }
         NSArray *defaults = defaultModelsForProvider(p);
         return [defaults count] > 0 ? [defaults objectAtIndex:0] : value;
@@ -1658,8 +2275,9 @@ private:
     void providerChanged()
     {
         NSString *provider = canonicalProvider(controlString(settingsProviderCombo_));
-        [settingsProviderCombo_ setStringValue:provider];
-        rebuildModelChoices(provider, nil);
+        selectComboValue(settingsProviderCombo_, provider);
+        if (settingsCustomModelField_) [settingsCustomModelField_ setStringValue:@""];
+        rebuildModelChoices(provider, nil, false);
         if (settingsEndpointField_) {
             NSString *endpoint = resolvedEndpointForSettings(provider, controlString(settingsEndpointField_));
             [settingsEndpointField_ setStringValue:endpoint];
@@ -1667,6 +2285,7 @@ private:
         if ([provider isEqualToString:@"ollama"]) {
             ollamaListModels();
         }
+        refreshReadinessGuidance();
     }
 
     void saveSettings()
@@ -1676,8 +2295,13 @@ private:
         NSString *provider = canonicalProvider(controlString(settingsProviderCombo_));
         NSString *model = resolvedModelForSettings(provider, controlString(settingsModelField_));
         NSString *endpoint = resolvedEndpointForSettings(provider, controlString(settingsEndpointField_));
-        [settingsProviderCombo_ setStringValue:provider];
-        [settingsModelField_ setStringValue:model];
+        selectComboValue(settingsProviderCombo_, provider);
+        if (comboContainsValue(settingsModelField_, model)) {
+            selectComboValue(settingsModelField_, model);
+            if (settingsCustomModelField_) [settingsCustomModelField_ setStringValue:@""];
+        } else if (settingsCustomModelField_) {
+            [settingsCustomModelField_ setStringValue:model ?: @""];
+        }
         [settingsEndpointField_ setStringValue:endpoint];
         [d setObject:provider forKey:@"llmr.vst3.provider"];
         [d setObject:model forKey:@"llmr.vst3.model"];
@@ -1685,6 +2309,13 @@ private:
         [d setObject:controlString(settingsApiKeyField_)   forKey:@"llmr.vst3.api_key"];
         [d setObject:controlString(settingsOscHostField_)  forKey:@"llmr.vst3.osc_host"];
         [d setInteger:[controlString(settingsOscPortField_) integerValue] forKey:@"llmr.vst3.osc_port"];
+        [d setObject:controlString(settingsBridgeHostField_) forKey:@"llmr.vst3.bridge_host"];
+        [d setInteger:[controlString(settingsBridgePortField_) integerValue] forKey:@"llmr.vst3.bridge_port"];
+        if (bridgeUserLibraryPath_ && [bridgeUserLibraryPath_ length] > 0) {
+            [d setObject:bridgeUserLibraryPath_ forKey:bridgeUserLibrarySettingsKey()];
+        } else {
+            [d removeObjectForKey:bridgeUserLibrarySettingsKey()];
+        }
         [d setBool:buttonOn(settingsExtraPromptButton_) forKey:@"llmr.vst3.extra_prompt_enabled"];
         [d setBool:buttonOn(settingsDestructiveButton_) forKey:@"llmr.vst3.allow_destructive"];
         [d setBool:buttonOn(settingsDryRunButton_)      forKey:@"llmr.vst3.dry_run"];
@@ -1723,6 +2354,11 @@ private:
                           NSDictionary *headers, NSTimeInterval timeout,
                           NSInteger *statusCode, NSString **error)
     {
+        if ([NSThread isMainThread]) {
+            if (statusCode) *statusCode = 0;
+            if (error) *error = @"Internal error: blocking HTTP request attempted on the UI thread.";
+            return nil;
+        }
         NSURL *url = [NSURL URLWithString:urlString];
         if (!url) {
             if (error) *error = @"Invalid URL.";
@@ -1820,20 +2456,6 @@ private:
         return models;
     }
 
-    void setComboItems(NSComboBox *combo, NSArray *items, NSString *preferred)
-    {
-        if (!combo) return;
-        [combo removeAllItems];
-        [combo addItemsWithObjectValues:items ?: @[]];
-        if ([preferred length] > 0 && [items containsObject:preferred]) {
-            [combo setStringValue:preferred];
-        } else if ([items count] > 0) {
-            [combo selectItemAtIndex:0];
-        } else {
-            [combo setStringValue:@""];
-        }
-    }
-
     NSString *ollamaExecutablePath()
     {
         NSArray *candidates = @[
@@ -1905,6 +2527,12 @@ private:
 
     void ollamaListModels()
     {
+        if (ollamaListInFlight_) {
+            if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Ollama: already checking status..."];
+            setStatus(@"Already checking Ollama status...");
+            return;
+        }
+        ollamaListInFlight_ = true;
         if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Ollama: checking local service..."];
         addRef();
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
@@ -1935,11 +2563,12 @@ private:
                 __block NSArray *rm = [installed retain];
                 __block NSString *rs = [status retain];
                 dispatch_async(dispatch_get_main_queue(), ^{
+                    ollamaListInFlight_ = false;
                     NSString *preferred = ollamaModelsCombo_ ? controlString(ollamaModelsCombo_) : @"";
                     setComboItems(ollamaModelsCombo_, rm, preferred);
                     if (settingsProviderCombo_ &&
                         [[controlString(settingsProviderCombo_) lowercaseString] isEqualToString:@"ollama"]) {
-                        rebuildModelChoices(@"ollama", controlString(settingsModelField_));
+                        rebuildModelChoices(@"ollama", resolvedModelForSettings(@"ollama", controlString(settingsModelField_)), true);
                     }
                     if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:rs];
                     [rm release]; [rs release];
@@ -2030,8 +2659,12 @@ private:
             if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:@"Choose an installed model to serve."];
             return;
         }
-        if (settingsProviderCombo_) [settingsProviderCombo_ setStringValue:@"ollama"];
-        if (settingsModelField_) [settingsModelField_ setStringValue:name];
+        if (settingsProviderCombo_) selectComboValue(settingsProviderCombo_, @"ollama");
+        if (settingsCustomModelField_) [settingsCustomModelField_ setStringValue:@""];
+        if (settingsModelField_) {
+            rebuildModelChoices(@"ollama", name, true);
+            selectComboValue(settingsModelField_, name);
+        }
         if (settingsEndpointField_) [settingsEndpointField_ setStringValue:defaultEndpointForProvider(@"ollama")];
         if (ollamaStatusLabel_) [ollamaStatusLabel_ setStringValue:[NSString stringWithFormat:@"Ollama: serving %@...", name]];
         runOllamaGenerate(name, @"30m", @"Ollama: model is being served.");
@@ -2276,6 +2909,14 @@ private:
             [userPrompt release];
             return;
         }
+        NSString *providerValue = canonicalProvider(controlString(settingsProviderCombo_));
+        NSString *modelValue = resolvedModelForSettings(providerValue, controlString(settingsModelField_));
+        if ([modelValue length] == 0) {
+            setStatus(@"Model missing - open Basic Settings and choose a provider/model or enter Custom model.");
+            [userPrompt release];
+            refreshReadinessGuidance();
+            return;
+        }
         // Clear input field and add to chat history
         if (chatInputField_) [chatInputField_ setStringValue:@""];
         appendToChat(@"user", userPrompt);
@@ -2283,11 +2924,11 @@ private:
         NSTimeInterval planStartTime = [NSDate timeIntervalSinceReferenceDate];
         setStatus(@"Planning with LLM…");
 
-        NSString *providerValue = canonicalProvider(controlString(settingsProviderCombo_));
-        NSString *modelValue = resolvedModelForSettings(providerValue, controlString(settingsModelField_));
         NSString *endpointValue = resolvedEndpointForSettings(providerValue, controlString(settingsEndpointField_));
-        if (settingsProviderCombo_) [settingsProviderCombo_ setStringValue:providerValue];
-        if (settingsModelField_) [settingsModelField_ setStringValue:modelValue ?: @""];
+        if (settingsProviderCombo_) selectComboValue(settingsProviderCombo_, providerValue);
+        if (settingsModelField_ && comboContainsValue(settingsModelField_, modelValue)) {
+            selectComboValue(settingsModelField_, modelValue);
+        }
         if (settingsEndpointField_) [settingsEndpointField_ setStringValue:endpointValue ?: @""];
         NSString *provider = [providerValue copy];
         NSString *model = [modelValue copy];
@@ -2356,12 +2997,18 @@ private:
                 if (actions && [actions count] > 0) {
                     display = [renderPlan(plan, content, actions) retain];
                     rawDisplay = [renderRawPlan(plan, content, actions) retain];
-                    status = [[NSString stringWithFormat:@"Plan ready — %lu step(s). Execute to send to Ableton, Preview to review. (%.1fs)",
+                    status = [[NSString stringWithFormat:@"Plan ready - %lu step(s). Execute uses the Dry run setting; Dry run previews only. (%.1fs)",
                                (unsigned long)[actions count], elapsed] retain];
                 } else {
                     display = [assistantFailureMessage(error, content) retain];
                     rawDisplay = [(content ?: error ?: @"") retain];
-                    status = [@"No executable actions." retain];
+                    if (error && [error length] > 0) {
+                        status = [[NSString stringWithFormat:@"Planning failed: %@", error] retain];
+                    } else if (content && [content length] > 0 && [content rangeOfString:@"no executable actions" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                        status = [@"Plan has no executable actions. Model may need clarification." retain];
+                    } else {
+                        status = [@"No executable actions." retain];
+                    }
                 }
                 __block NSArray *retainedActions = [actions retain];
                 [content release];
@@ -2407,11 +3054,19 @@ private:
         if (![cleanPath hasPrefix:@"/"]) {
             cleanPath = [@"/" stringByAppendingString:cleanPath];
         }
-        return [NSString stringWithFormat:@"http://127.0.0.1:%d%@", deviceBridgePort_, cleanPath];
+        return [NSString stringWithFormat:@"http://%@:%d%@", deviceBridgeHost(), deviceBridgePort(), cleanPath];
     }
 
     void checkDeviceBridgeStatus()
     {
+        if (deviceBridgeCheckInFlight_) {
+            if (deviceBridgeStatusLabel_) {
+                [deviceBridgeStatusLabel_ setStringValue:@"Device Bridge: already checking..."];
+            }
+            setStatus(@"Already checking Device Bridge...");
+            return;
+        }
+        deviceBridgeCheckInFlight_ = true;
         if (deviceBridgeStatusLabel_) {
             [deviceBridgeStatusLabel_ setStringValue:@"Device Bridge: checking local Remote Script..."];
         }
@@ -2425,16 +3080,51 @@ private:
                 NSDictionary *json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
                 NSString *bridge = [json isKindOfClass:[NSDictionary class]] ? [json objectForKey:@"bridge"] : nil;
                 BOOL ok = (code >= 200 && code < 300 && !error);
+                NSString *host = deviceBridgeHost();
+                int port = deviceBridgePort();
+                NSString *library = bridgeUserLibraryPath_ ? bridgeUserLibraryPath_ : @"";
+                NSString *target = bridgeInstallTargetForUserLibrary(library);
+                NSString *diskState = bridgeInstallStatusForUserLibrary(library);
                 NSString *status = ok
-                    ? [NSString stringWithFormat:@"Device Bridge: reachable on 127.0.0.1:%d%@%@.",
-                       deviceBridgePort_, [bridge length] ? @" - " : @"", bridge ?: @""]
-                    : [NSString stringWithFormat:@"Device Bridge: not reachable on 127.0.0.1:%d. %@",
-                       deviceBridgePort_, error ?: @"Enable LLMRDeviceBridge in Live."];
+                    ? [NSString stringWithFormat:@"Device Bridge reachable on %@:%d%@%@.",
+                       host, port, [bridge length] ? @" - " : @"", bridge ?: @""]
+                    : [NSString stringWithFormat:
+                       @"Device Bridge not reachable\n"
+                       @"Likely causes:\n"
+                       @"- The LLM-r Remote Script is not installed in Ableton's active User Library.\n"
+                       @"- Live has not been restarted after installation.\n"
+                       @"- The Remote Script has not been selected in Live Settings -> Link, Tempo & MIDI.\n"
+                       @"- Ableton blocked the script because of an import/runtime error.\n"
+                       @"Selected User Library: %@\n"
+                       @"Install target: %@\n"
+                       @"%@\n"
+                       @"Next actions:\n"
+                       @"1. Reveal Installed Bridge\n"
+                       @"2. Copy Install Path\n"
+                       @"3. Reinstall Bridge\n"
+                       @"4. Open Bridge Setup Help\n"
+                       @"5. Recheck Bridge\n"
+                       @"Bridge files are installed only on disk; Live selection is a separate step. %@",
+                       [library length] > 0 ? library : @"Not selected",
+                       [target length] > 0 ? target : @"Not selected",
+                       diskState,
+                       error ?: @""];
                 __block NSString *rs = [status retain];
+                __block BOOL rok = ok;
                 dispatch_async(dispatch_get_main_queue(), ^{
+                    deviceBridgeCheckInFlight_ = false;
+                    deviceBridgeChecked_ = true;
+                    deviceBridgeReachable_ = rok;
                     if (deviceBridgeStatusLabel_) [deviceBridgeStatusLabel_ setStringValue:rs];
-                    if (chatBridgeLabel_) [chatBridgeLabel_ setStringValue:ok ? @"Bridge ok" : @"Bridge off"];
-                    setStatus(rs);
+                    refreshBridgePathUI();
+                    refreshReadinessGuidance();
+                    if ([library length] == 0) {
+                        setStatus(@"Choose Ableton User Library before installing the bridge.");
+                    } else if (rok) {
+                        setStatus(@"Device Bridge reachable.");
+                    } else {
+                        setStatus(@"Device Bridge not reachable. See Advanced Settings.");
+                    }
                     [rs release];
                     this->release();
                 });
@@ -2632,8 +3322,8 @@ private:
                         httpRequest(deviceBridgeURL(@"/health"), @"GET", nil, nil, 2.0, &code, &err);
                         if (code < 200 || code >= 300 || err) {
                             blocked = true;
-                            [report appendFormat:@"BLOCKED Device Bridge preflight failed on 127.0.0.1:%d. %@\n",
-                                deviceBridgePort_, err ?: @"Enable LLMRDeviceBridge in Ableton Live."];
+                            [report appendFormat:@"BLOCKED Device Bridge preflight failed on %@:%d. %@\n",
+                                deviceBridgeHost(), deviceBridgePort(), err ?: @"Enable LLMR_Bridge in Ableton Live."];
                         }
                         if (!blocked) {
                             for (NSUInteger actionIndex = 0; actionIndex < [runtimeActions count]; ++actionIndex) {
@@ -3484,73 +4174,121 @@ private:
         }
     }
 
-    // Return all candidate paths where Live might scan for user Remote Scripts.
-    // Live 10/11/12 all accept ~/Music/Ableton/User Library/Remote Scripts/.
-    // Live 12 also scans the versioned Preferences folder when the User Library
-    // has been relocated.  We return every candidate so install/check can cover
-    // all of them.
-    static NSArray<NSString *> *userRemoteScriptsCandidates()
+    static NSString *bridgeFolderName()
     {
-        NSMutableArray *paths = [NSMutableArray array];
+        return @"LLMR_Bridge";
+    }
 
-        // 1. Standard User Library path (Live 10/11/12 default).
+    static NSString *legacyBridgeFolderName()
+    {
+        return @"LLMRDeviceBridge";
+    }
+
+    static NSString *bridgeUserLibrarySettingsKey()
+    {
+        return @"llmr.vst3.bridge_user_library_path";
+    }
+
+    static NSString *normalizedPath(NSString *path)
+    {
+        NSString *raw = path ?: @"";
+        NSString *trimmed = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([trimmed length] == 0) return @"";
+        return [trimmed stringByStandardizingPath];
+    }
+
+    static NSString *remoteScriptsPathForUserLibrary(NSString *userLibraryPath)
+    {
+        NSString *library = normalizedPath(userLibraryPath);
+        if ([library length] == 0) return @"";
+        return [library stringByAppendingPathComponent:@"Remote Scripts"];
+    }
+
+    static NSString *bridgeInstallTargetForUserLibrary(NSString *userLibraryPath)
+    {
+        NSString *scripts = remoteScriptsPathForUserLibrary(userLibraryPath);
+        if ([scripts length] == 0) return @"";
+        return [scripts stringByAppendingPathComponent:bridgeFolderName()];
+    }
+
+    static NSString *bridgeInitPathForUserLibrary(NSString *userLibraryPath)
+    {
+        NSString *target = bridgeInstallTargetForUserLibrary(userLibraryPath);
+        if ([target length] == 0) return @"";
+        return [target stringByAppendingPathComponent:@"__init__.py"];
+    }
+
+    static NSString *bridgeDoubleNestedInitPathForUserLibrary(NSString *userLibraryPath)
+    {
+        NSString *target = bridgeInstallTargetForUserLibrary(userLibraryPath);
+        if ([target length] == 0) return @"";
+        return [[target stringByAppendingPathComponent:bridgeFolderName()] stringByAppendingPathComponent:@"__init__.py"];
+    }
+
+    static void addDetectedLibraryCandidate(NSMutableArray<NSString *> *paths, NSString *candidate)
+    {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *normalized = normalizedPath(candidate);
+        if ([normalized length] == 0) return;
+        BOOL isDir = NO;
+        if (![fm fileExistsAtPath:normalized isDirectory:&isDir] || !isDir) return;
+        if (![paths containsObject:normalized]) {
+            [paths addObject:normalized];
+        }
+    }
+
+    static NSArray<NSString *> *detectedUserLibraryCandidates()
+    {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSMutableArray<NSString *> *paths = [NSMutableArray array];
+
         NSString *music = [NSSearchPathForDirectoriesInDomains(NSMusicDirectory, NSUserDomainMask, YES) firstObject];
         if ([music length] == 0) {
             music = [NSHomeDirectory() stringByAppendingPathComponent:@"Music"];
         }
-        NSString *userLibPath = [[music stringByAppendingPathComponent:@"Ableton/User Library"]
-            stringByAppendingPathComponent:@"Remote Scripts"];
-        [paths addObject:userLibPath];
+        addDetectedLibraryCandidate(paths, [music stringByAppendingPathComponent:@"Ableton/User Library"]);
 
-        // 2. Try to read Live's own preferences to find a relocated User Library.
-        NSString *prefsRoot = [NSHomeDirectory() stringByAppendingPathComponent:
-            @"Library/Preferences/Ableton"];
-        NSFileManager *fm = [NSFileManager defaultManager];
-        NSArray *liveVersionDirs = [fm contentsOfDirectoryAtPath:prefsRoot error:nil];
-        // Sort descending so the newest Live version is tried first.
-        liveVersionDirs = [liveVersionDirs sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
-            return [b compare:a options:NSNumericSearch];
-        }];
-        for (NSString *versionDir in liveVersionDirs) {
-            if (![versionDir hasPrefix:@"Live "]) continue;
-            NSString *prefFile = [prefsRoot stringByAppendingPathComponent:
-                [versionDir stringByAppendingPathComponent:@"Preferences.cfg"]];
-            NSString *prefContents = [NSString stringWithContentsOfFile:prefFile
-                encoding:NSUTF8StringEncoding error:nil];
-            // Look for a UserLibraryPath entry in the flat preferences file.
-            if (prefContents) {
-                for (NSString *line in [prefContents componentsSeparatedByString:@"\n"]) {
-                    NSString *trimmed = [line stringByTrimmingCharactersInSet:
-                        [NSCharacterSet whitespaceCharacterSet]];
-                    if ([trimmed hasPrefix:@"UserLibraryPath"]) {
-                        NSArray *parts = [trimmed componentsSeparatedByString:@" "];
-                        NSString *libPath = parts.count >= 2 ? parts.lastObject : nil;
-                        if ([libPath length] > 0) {
-                            NSString *candidate = [libPath
-                                stringByAppendingPathComponent:@"Remote Scripts"];
-                            if (![paths containsObject:candidate]) {
-                                [paths addObject:candidate];
-                            }
-                        }
-                        break;
+        NSString *volumesRoot = @"/Volumes";
+        NSArray<NSString *> *volumes = [fm contentsOfDirectoryAtPath:volumesRoot error:nil] ?: @[];
+        for (NSString *volume in volumes) {
+            NSString *root = [volumesRoot stringByAppendingPathComponent:volume];
+            BOOL isDir = NO;
+            if (![fm fileExistsAtPath:root isDirectory:&isDir] || !isDir) continue;
+
+            addDetectedLibraryCandidate(paths, [root stringByAppendingPathComponent:@"Ableton/User Library"]);
+
+            NSArray<NSString *> *firstLevel = [fm contentsOfDirectoryAtPath:root error:nil] ?: @[];
+            for (NSString *a in firstLevel) {
+                NSString *aPath = [root stringByAppendingPathComponent:a];
+                if (![fm fileExistsAtPath:aPath isDirectory:&isDir] || !isDir) continue;
+                NSArray<NSString *> *secondLevel = [fm contentsOfDirectoryAtPath:aPath error:nil] ?: @[];
+                for (NSString *b in secondLevel) {
+                    NSString *bPath = [aPath stringByAppendingPathComponent:b];
+                    if (![fm fileExistsAtPath:bPath isDirectory:&isDir] || !isDir) continue;
+                    NSString *lowerA = [a lowercaseString];
+                    NSString *lowerB = [b lowercaseString];
+                    if ([lowerA containsString:@"ableton"] && [lowerB containsString:@"user library"]) {
+                        addDetectedLibraryCandidate(paths, bPath);
                     }
                 }
             }
-            // Also add the versioned Preferences Remote Scripts folder as fallback.
-            NSString *prefScripts = [prefsRoot stringByAppendingPathComponent:
-                [versionDir stringByAppendingPathComponent:@"Remote Scripts"]];
-            if (![paths containsObject:prefScripts]) {
-                [paths addObject:prefScripts];
+
+            NSDirectoryEnumerator *enumerator = [fm enumeratorAtURL:[NSURL fileURLWithPath:root]
+                                          includingPropertiesForKeys:@[NSURLIsDirectoryKey, NSURLPathKey]
+                                                             options:NSDirectoryEnumerationSkipsHiddenFiles
+                                                        errorHandler:nil];
+            for (NSURL *entry in enumerator) {
+                NSNumber *isDirectory = nil;
+                [entry getResourceValue:&isDirectory forKey:NSURLIsDirectoryKey error:nil];
+                if (![isDirectory boolValue]) continue;
+                NSString *last = [[entry path] lastPathComponent];
+                if ([last isEqualToString:@"Remote Scripts"]) {
+                    addDetectedLibraryCandidate(paths, [[entry path] stringByDeletingLastPathComponent]);
+                }
             }
         }
 
         return paths;
-    }
-
-    static NSString *userRemoteScriptsPath()
-    {
-        // Primary path – the standard User Library location.
-        return [userRemoteScriptsCandidates() firstObject];
     }
 
     NSString *llmrDeviceBridgeInstallSource()
@@ -3573,54 +4311,94 @@ private:
         return nil;
     }
 
-    bool llmrDeviceBridgeInstalled()
+    bool bridgeFolderExistsAtPath(NSString *path)
     {
-        NSFileManager *fm = [NSFileManager defaultManager];
         BOOL isDir = NO;
-        for (NSString *scriptsPath in userRemoteScriptsCandidates()) {
-            NSString *dst = [scriptsPath stringByAppendingPathComponent:@"LLMRDeviceBridge"];
-            if ([fm fileExistsAtPath:dst isDirectory:&isDir] && isDir) {
-                return true;
-            }
-        }
-        return false;
+        return [[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&isDir] && isDir;
     }
 
-    bool installLLMRDeviceBridge(NSString **errorText)
+    bool bridgeInitFileExistsForUserLibrary(NSString *userLibraryPath)
     {
+        return [[NSFileManager defaultManager] fileExistsAtPath:bridgeInitPathForUserLibrary(userLibraryPath)];
+    }
+
+    bool bridgeDoubleNestedForUserLibrary(NSString *userLibraryPath)
+    {
+        return [[NSFileManager defaultManager] fileExistsAtPath:bridgeDoubleNestedInitPathForUserLibrary(userLibraryPath)];
+    }
+
+    NSString *bridgeInstallStatusForUserLibrary(NSString *userLibraryPath)
+    {
+        NSString *library = normalizedPath(userLibraryPath);
+        if ([library length] == 0) {
+            return @"Bridge status: Not installed\nChoose your Ableton User Library first. In Live, right-click User Library in the Browser and choose Show in Finder.";
+        }
+        if (bridgeInitFileExistsForUserLibrary(library)) {
+            return @"Bridge status: Installed";
+        }
+        if (bridgeDoubleNestedForUserLibrary(library)) {
+            return @"Bridge status: Installed but invalid structure\nBridge appears to be double-nested. Reinstalling will replace it with the correct folder structure.";
+        }
+        return @"Bridge status: Not installed";
+    }
+
+    bool installLLMRBridgeToUserLibrary(NSString *userLibraryPath, NSString **errorText)
+    {
+        NSString *library = normalizedPath(userLibraryPath);
+        if ([library length] == 0) {
+            if (errorText) *errorText = @"Choose your Ableton User Library first.";
+            return false;
+        }
+
         NSString *src = llmrDeviceBridgeInstallSource();
         if (!src) {
             if (errorText) *errorText = @"Bundled LLMRDeviceBridge Remote Script was not found.";
             return false;
         }
-        // Install to all candidate paths so the script appears regardless of
-        // which path the installed Live version actually scans.
+
         NSFileManager *fm = [NSFileManager defaultManager];
-        NSArray *candidates = userRemoteScriptsCandidates();
-        NSString *lastError = nil;
-        bool anyOk = false;
-        for (NSString *scriptsPath in candidates) {
-            NSString *dst = [scriptsPath stringByAppendingPathComponent:@"LLMRDeviceBridge"];
-            NSError *err = nil;
-            if ([fm fileExistsAtPath:dst]) {
-                anyOk = true;
-                continue;
-            }
-            if (![fm createDirectoryAtPath:scriptsPath withIntermediateDirectories:YES
-                    attributes:nil error:&err]) {
-                lastError = [err localizedDescription];
-                continue;
-            }
-            if ([fm copyItemAtPath:src toPath:dst error:&err]) {
-                anyOk = true;
-            } else {
-                lastError = [err localizedDescription];
+        NSString *scriptsPath = remoteScriptsPathForUserLibrary(library);
+        NSString *target = bridgeInstallTargetForUserLibrary(library);
+        NSString *legacy = [scriptsPath stringByAppendingPathComponent:legacyBridgeFolderName()];
+        NSError *err = nil;
+
+        if (![fm createDirectoryAtPath:scriptsPath withIntermediateDirectories:YES attributes:nil error:&err]) {
+            if (errorText) *errorText = [err localizedDescription] ?: @"Could not create Remote Scripts directory.";
+            return false;
+        }
+
+        if ([fm fileExistsAtPath:target]) {
+            if (![fm removeItemAtPath:target error:&err]) {
+                if (errorText) *errorText = [err localizedDescription] ?: @"Could not replace existing bridge install.";
+                return false;
             }
         }
-        if (!anyOk && errorText) {
-            *errorText = lastError ?: @"Could not install LLMRDeviceBridge to any Remote Scripts path.";
+        if (bridgeDoubleNestedForUserLibrary(library)) {
+            [fm removeItemAtPath:[target stringByAppendingPathComponent:bridgeFolderName()] error:nil];
         }
-        return anyOk;
+        if ([fm fileExistsAtPath:legacy]) {
+            [fm removeItemAtPath:legacy error:nil];
+        }
+
+        if (![fm copyItemAtPath:src toPath:target error:&err]) {
+            if (errorText) *errorText = [err localizedDescription] ?: @"Could not copy bridge files to selected User Library.";
+            return false;
+        }
+        if (!bridgeInitFileExistsForUserLibrary(library)) {
+            if (errorText) *errorText = @"Installed bridge folder is missing __init__.py.";
+            return false;
+        }
+        return true;
+    }
+
+    bool llmrBridgeInstalledAnywhere()
+    {
+        for (NSString *library in detectedUserLibraryCandidates()) {
+            if (bridgeInitFileExistsForUserLibrary(library)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     void checkLLMRDeviceBridgeOnFirstUse()
@@ -3628,8 +4406,14 @@ private:
         static bool s_checked = false;
         if (s_checked) return;
         s_checked = true;
-        if (llmrDeviceBridgeInstalled()) return;
+        if (llmrBridgeInstalledAnywhere()) return;
         if (!llmrDeviceBridgeInstallSource()) return;
+
+        NSString *selectedLibrary = normalizedPath([[NSUserDefaults standardUserDefaults] stringForKey:bridgeUserLibrarySettingsKey()]);
+        if ([selectedLibrary length] == 0) {
+            setStatus(@"Choose your Ableton User Library in Advanced Settings before installing Bridge.");
+            return;
+        }
 
         NSAlert *alert = [[NSAlert alloc] init];
         [alert setMessageText:@"LLM-r Device Bridge Not Found"];
@@ -3637,7 +4421,7 @@ private:
             @"Loading instruments, audio effects, MIDI effects, and plug-ins requires "
             @"the LLM-r Device Bridge Remote Script.\n\n"
             @"Install it now? After installing, restart Ableton Live and enable "
-            @"LLMRDeviceBridge in an empty Control Surface slot."];
+            @"LLMR_Bridge in an empty Control Surface slot."];
         [alert addButtonWithTitle:@"Install Device Bridge"];
         [alert addButtonWithTitle:@"Not Now"];
         [alert setAlertStyle:NSAlertStyleInformational];
@@ -3647,17 +4431,17 @@ private:
         if (resp != NSAlertFirstButtonReturn) return;
 
         NSString *error = nil;
-        bool ok = installLLMRDeviceBridge(&error);
+        bool ok = installLLMRBridgeToUserLibrary(selectedLibrary, &error);
         NSAlert *done = [[NSAlert alloc] init];
         if (ok) {
             [done setMessageText:@"LLM-r Device Bridge Installed"];
             [done setInformativeText:
                 @"Restart Ableton Live, then open Preferences -> Link/Tempo/MIDI "
-                @"and set a Control Surface slot to LLMRDeviceBridge."];
+                @"and set a Control Surface slot to LLMR_Bridge."];
             setStatus(@"Device Bridge installed - restart Ableton Live and enable it.");
         } else {
             [done setMessageText:@"Device Bridge Installation Failed"];
-            [done setInformativeText:error ?: @"Could not install LLMRDeviceBridge."];
+            [done setInformativeText:error ?: @"Could not install LLMR_Bridge."];
             setStatus(@"Device Bridge installation failed.");
         }
         [done runModal];
@@ -3770,7 +4554,7 @@ private:
 #endif
 
     std::atomic<uint32> refCount_{1};
-    ViewRect rect_{0, 0, 820, 660};
+    ViewRect rect_{0, 0, 960, 720};
     IPlugFrame *plugFrame_{nullptr};
 #if defined(__APPLE__)
     NSView *view_{nullptr};
@@ -3800,12 +4584,21 @@ private:
 
     // Settings overlay
     NSView *settingsView_{nullptr};
-    NSComboBox *settingsProviderCombo_{nullptr};
-    NSComboBox *settingsModelField_{nullptr};
+    NSPopUpButton *settingsProviderCombo_{nullptr};
+    NSPopUpButton *settingsModelField_{nullptr};
+    NSTextField *settingsCustomModelField_{nullptr};
+    NSTextField *settingsModelStatusLabel_{nullptr};
     NSTextField *settingsEndpointField_{nullptr};
     NSTextField *settingsApiKeyField_{nullptr};
     NSTextField *settingsOscHostField_{nullptr};
     NSTextField *settingsOscPortField_{nullptr};
+    NSTextField *settingsBridgeHostField_{nullptr};
+    NSTextField *settingsBridgePortField_{nullptr};
+    NSPopUpButton *settingsBridgeLibraryCandidatesCombo_{nullptr};
+    NSTextField *settingsBridgeLibraryLabel_{nullptr};
+    NSTextField *settingsBridgeInstallTargetLabel_{nullptr};
+    NSButton *settingsBridgeInstallButton_{nullptr};
+    NSButton *settingsBridgeRevealButton_{nullptr};
     NSButton *settingsExtraPromptButton_{nullptr};
     NSButton *settingsDestructiveButton_{nullptr};
     NSButton *settingsDryRunButton_{nullptr};
@@ -3818,10 +4611,15 @@ private:
     // Ollama controls (inside settings)
     NSTextField *ollamaStatusLabel_{nullptr};
     NSTextField *deviceBridgeStatusLabel_{nullptr};
-    NSComboBox *ollamaModelField_{nullptr};
-    NSComboBox *ollamaModelsCombo_{nullptr};
+    NSPopUpButton *ollamaModelField_{nullptr};
+    NSPopUpButton *ollamaModelsCombo_{nullptr};
     bool ollamaOnlineModelsLoaded_{false};
     bool ollamaOnlineLoadInFlight_{false};
+    bool ollamaListInFlight_{false};
+    bool deviceBridgeCheckInFlight_{false};
+    bool deviceBridgeChecked_{false};
+    bool deviceBridgeReachable_{false};
+    NSString *bridgeUserLibraryPath_{nullptr};
 
     // Local Remote Script bridge for browser/device loading.
     int deviceBridgePort_{8788};
@@ -4172,16 +4970,14 @@ LlmrPluginFactory gFactory;
 @end
 
 @implementation FullClickComboBox
+- (BOOL)acceptsFirstMouse:(NSEvent *)event
+{
+    (void)event;
+    return YES;
+}
 - (void)mouseDown:(NSEvent *)event
 {
-    // Open the popup whenever the user clicks anywhere in the combo box, not
-    // only when they click the small arrow button.  We let super handle the
-    // event first (for focus/selection), then unconditionally open the list.
     [super mouseDown:event];
-    SEL openSelector = @selector(openPopUp);
-    if ([self respondsToSelector:openSelector]) {
-        [self performSelector:openSelector];
-    }
 }
 @end
 

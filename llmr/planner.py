@@ -117,6 +117,7 @@ class PlanStore:
                         "description": a.description,
                         "destructive": a.destructive,
                         "transport": getattr(a, "transport", "osc"),
+                        "semantic_args": getattr(a, "semantic_args", {}),
                     }
                     for a in p.actions
                 ],
@@ -145,6 +146,7 @@ class PlanStore:
                     description=a["description"],
                     destructive=bool(a.get("destructive", False)),
                     transport=str(a.get("transport", "osc")),
+                    semantic_args=dict(a.get("semantic_args") or {}),
                 )
                 for a in item.get("actions", [])
             ]
