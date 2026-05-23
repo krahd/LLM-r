@@ -1,452 +1,170 @@
 # LLM-r
 
-**LLM-r** bridges [Ableton Live](https://www.ableton.com/) and large language models to automate music-production workflows. Describe what you want in plain language inside the VST3 plug-in; LLM-r translates it into AbletonOSC actions, plus optional Device Bridge requests for browser loading. The desktop app, server, and API are optional companion surfaces for the same workflow.
+**Status: closed / archived prototype.**
+
+LLM-r is no longer being developed as a product. The project remains public as a research-and-development prototype, implementation archive, and record of what was learned while exploring natural-language control of Ableton Live from a VST3, desktop GUI, web UI, and FastAPI surface.
+
+The next product direction is not to continue expanding LLM-r as-is. The work should move to a new, product-first project centred on the simpler end-user promise:
+
+> Chat with Ableton Live.
+
+That future project should be local-first, musician-facing, and self-contained from the user's point of view: install a VST3 / helper package, open Ableton Live, type what you want, review the plan, and execute it. Internally, it should use existing Ableton-control infrastructure rather than continuing to grow a private bridge and action protocol inside this repository.
+
+---
+
+## Why this repository is closed
+
+LLM-r successfully demonstrated that an LLM can plan and execute Ableton Live operations through a typed capability layer, AbletonOSC, and an auxiliary Device Bridge. It also showed that the current architecture is not the right foundation for a polished product.
+
+The decisive issues were:
+
+- **The VST3 became too much of the product.** A plug-in instance is track/device-scoped, while the desired assistant is session/global. For a full Ableton assistant, a VST3 is a useful front panel, not the correct place to host the runtime, model management, bridge logic, diagnostics, and long-lived state.
+- **The UI remained developer-oriented.** The settings, runtime controls, bridge status, provider selection, and diagnostics were useful during development but too technical and visually unpolished for musicians with no AI/development background.
+- **The bridge layer duplicated existing work.** Existing projects already expose Ableton Live through MCP, AbletonOSC, Remote Scripts, and OSC/JSON control surfaces. LLM-r should not continue inventing its own private Ableton-control stack unless there is a specific missing capability.
+- **Prompts alone are not enough.** Better system prompts help, but reliable musical behaviour requires real tools, Ableton state, musical abstractions, validators, and deterministic/semi-deterministic generators for clips, notes, variations, humanisation, effects, and automation.
+- **Local model management must be productised.** Ordinary users should not see provider jargon, endpoint URLs, or implementation details. Ollama should be the default local runtime, hidden behind simple language such as “Local AI: Ready”.
+- **MCP is valuable, but probably not the internal VST3 runtime path.** MCP is excellent as an interoperability layer and tool schema surface. For a musician-facing product, a local helper process should own the model runtime, Ableton control, diagnostics, and persistence, while the VST3 remains a thin UI.
+
+---
+
+## What we learned
+
+### 1. The right product framing is not “LLM-r”
+
+The end-user proposition is clearer as:
+
+> Chat with Ableton Live.
+
+Names and UI should avoid infrastructure terms such as LLM, MCP, provider, endpoint, agent, tool schema, or bridge. Those are implementation details.
+
+### 2. A hybrid architecture is better than a pure VST3
+
+A plausible future architecture is:
 
 ```text
-Natural language prompt in the VST3
-        │
-        ▼
-   LLM-r planner  ────────────────►  LLM (OpenAI-compatible / Anthropic / Ollama)
-        │
-        ▼
-   Action plan  (dry-run or execute)
-        │
-        ▼
-   AbletonOSC / Device Bridge ─────►  Ableton Live
+VST3 front-end
+  -> local helper app / daemon
+  -> Ollama-backed local model
+  -> planner / validator / executor
+  -> AbletonOSC / MCP-derived Ableton tool layer
+  -> Ableton Live
 ```
+
+The user can still experience the product as a VST3, but the runtime should live outside the plug-in UI thread.
+
+### 3. Ollama is the correct default local runtime
+
+For the target user, Ollama is a better default than exposing multiple provider choices. A future product should use an existing Ollama installation if available, offer to start it if stopped, guide installation if missing, and download one recommended model. Advanced users can still configure models and endpoints.
+
+Decisions for the successor project:
+
+- no OpenClaw;
+- no llama.cpp;
+- no Claude / ChatGPT / Gemini as default product path;
+- no cloud API keys required for normal use;
+- oMLX and Modelito may remain advanced/internal options, but not the beginner-facing path.
+
+### 4. MCP and AbletonOSC work should be reused
+
+The successor should start by auditing and reusing existing open-source infrastructure, especially AbletonOSC MCP wrappers, instead of creating yet another bridge. The useful work is likely above that layer: musician UX, local model packaging, prompt presets, plan review, reliable musical actions, and a polished installer.
+
+### 5. The missing layer is musical product design
+
+Existing infrastructure exposes Ableton operations. The product challenge is to make prompts such as these work reliably:
+
+- “Create a one-minute jazz drum track with fills and humanisation.”
+- “Create a one-minute piano jazz ballad.”
+- “Extend the selected loop to two minutes with variations.”
+- “Add reverb and compression to the drums.”
+- “Automate the filter opening over eight bars.”
+
+That requires musical generators, Ableton context, arrangement/session awareness, validation, and concise plan review. It is not solved by dumping hundreds of raw tools into a model prompt.
 
 ---
 
-## Features
+## Related projects and prior art
 
-- **Self-contained VST3 plug-in** — configure the LLM, write prompts, review plans, dry-run, and execute from inside Ableton Live
-- **Natural-language planner** — the plug-in and `POST /api/plan` convert a free-text prompt into a typed, validated action plan
-- **Safe execution** — dry-run mode, destructive-action approval step, and a strict capability registry
-- **Macro system** — named sequences of actions (`idea_sketch`, `performance_prep`, …) with full CRUD via the API
-- **Live state introspection** — query song settings, tracks, devices, clips, and parameters at runtime
-- **Device loading** — load Live browser devices or plug-ins by name through the bundled LLMRDeviceBridge Remote Script
-- **MIDI and clip editing** — add/remove MIDI notes, set note velocity through note payloads, rename/duplicate clips, and adjust clip loop/marker settings
-- **Audio clip controls** — set clip gain, transpose/detune, warping, warp mode, and RAM mode for existing audio clips
-- **Session history** — plans, executions, and sessions are persisted to disk and survive restarts
-- **SSE streaming** — `POST /api/stream` for streaming LLM completions
-- **Desktop GUI** — optional PyQt6 companion app with embedded mode, server attach/start controls, and runtime settings
-- **Multi-provider LLM support** — use cloud or local models from the plug-in, GUI, or API; local runtimes (Ollama and oMLX) are mediated by [Modelito](docs/MODELITO.md)
+### Ableton control, AbletonOSC, and MCP
 
----
+- [AbletonOSC](https://github.com/ideoforms/AbletonOSC) — OSC Remote Script exposing much of Ableton Live’s Live Object Model. Strong base layer for broad Live control.
+- [mawaha/AbleOscMcp](https://github.com/mawaha/AbleOscMcp) — AbletonOSC-to-MCP server with broad tool coverage, resources, subscriptions, musical helpers, and optional browser/device support through an additional Remote Script. This is probably the first project to audit before writing any new AbletonOSC MCP wrapper.
+- [nozomi-koborinai/ableton-osc-mcp](https://github.com/nozomi-koborinai/ableton-osc-mcp) — Go-based MCP-to-AbletonOSC translator. Useful as a compact alternative implementation and distribution reference.
+- [Simon-Kansara/ableton-live-mcp-server](https://github.com/Simon-Kansara/ableton-live-mcp-server) — Python/FastMCP AbletonOSC MCP server experiment. Useful as a reference for schema and mapping ideas, though it should be audited before use.
+- [ahujasid/ableton-mcp](https://github.com/ahujasid/ableton-mcp) — MCP server for Ableton Live that does not use AbletonOSC; it ships its own Remote Script and communicates with Live over JSON/TCP. Important because it covers browser/device-loading workflows differently from standard AbletonOSC.
 
-## Requirements
+### Chat / AI control products around Ableton Live
 
-| Requirement | Version |
-| --- | --- |
-| Python | 3.11 or newer |
-| [AbletonOSC](https://github.com/ideoforms/AbletonOSC) | installed and running in Ableton Live |
-| LLMRDeviceBridge *(device loading only)* | installed and enabled in Ableton Live |
-| PyQt6 *(optional GUI)* | 6.7 or newer |
+- [MIDI Agent](https://midiagent.com/) — commercial VST3/AU/AAX/standalone plug-in for prompt-based MIDI generation. Relevant because it shows a narrower, track-local VST shape for AI music generation.
+- [Yuma / AbletonGPT](https://yuma.studio/) — desktop companion app for natural-language Ableton Live control. Relevant as an example of the “sidecar app rather than VST3” pattern.
+- [OBSIDIAN Neural / ai-dj](https://github.com/innermost47/ai-dj) — open-source AI loop/performance instrument, VST3/AU/standalone. Relevant as a VST-based AI music precedent, but focused on audio loop generation rather than session-wide Ableton control.
 
----
+### Local model runtime and provider infrastructure
 
-## Installation
+- [Ollama](https://github.com/ollama/ollama) — recommended default runtime direction for a local-first musician product. Provides local model serving, model download, model listing, chat/completions, and a relatively user-friendly local-LLM ecosystem.
+- [Modelito](https://github.com/krahd/modelito) — local/provider abstraction explored during LLM-r development. Still useful as an advanced/internal provider layer, but the successor product should hide provider complexity from ordinary users.
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/krahd/LLM-r.git
-cd LLM-r
+### Protocols and agent infrastructure
 
-# 2. Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -e .
-
-# Optional: include the desktop GUI
-pip install -e .[gui]
-```
+- [Model Context Protocol](https://modelcontextprotocol.io/) — open protocol for exposing tools, prompts, and resources to AI applications. Best treated as an interoperability layer and possible external-agent surface, not necessarily as the internal runtime boundary of a VST3 product.
+- [Pi](https://github.com/earendil-works/pi) — agentic harness investigated as a possible planner/tool-calling layer. Potentially useful above MCP/tool layers, but not a replacement for musician-facing product design.
 
 ---
 
-## Quick Start
+## Successor direction
 
-### 1. Start AbletonOSC
+A successor should probably be a new repository rather than a continuation of this one.
 
-Install and enable the [AbletonOSC](https://github.com/ideoforms/AbletonOSC) MIDI Remote Script in Ableton Live. By default it listens on `127.0.0.1:11000`.
+Working product statement:
 
-For instrument/effect/plug-in loading, also install and enable the bundled
-`LLMRDeviceBridge` Remote Script. The VST3 can install it into Ableton's User
-Library Remote Scripts folder and will prompt you on first use.
+> A local-first VST3/helper system that lets musicians chat with Ableton Live.
 
-### 2. Launch
+Expected structure:
 
-#### Option A — VST3 plug-in (primary)
-
-Build/install the local VST3 bundle, then open the Ableton test set:
-
-```bash
-bash scripts/test_install_vst3_and_open.sh "$HOME/Library/Audio/Plug-Ins/VST3"
+```text
+chat-with-live/
+  native/vst3/          # polished thin VST3 front-end
+  helper/               # local backend, Ollama management, planner, executor
+  prompts/              # curated musical task/system prompts
+  installer/            # AbletonOSC / Remote Script / helper setup
+  docs/                 # musician-facing documentation and screenshots
 ```
 
-Open the `LLM-r` plug-in window in Ableton Live. The plug-in GUI includes LLM
-provider/model selection, readiness chips, a Plan Board, Details output,
-explicit Save/Cancel settings, Advanced Settings for API keys and local
-runtime controls (Ollama and oMLX), prompt, dry-run, Auto-approve,
-destructive-action approval, plan, and execute controls.
+Possible internal dependency or fork:
 
-#### Option B — Desktop GUI (optional)
-
-```bash
-python gui/pyqt_app.py
+```text
+able-live-core/
+  AbletonOSC / AbleOscMcp-derived control layer
+  typed Live tools
+  diagnostics
+  optional MCP server export
 ```
 
-The GUI can run in embedded mode, attach to a running server, or start a local
-server from the toolbar. Its main Settings dialog keeps the normal workflow
-short: choose the provider, choose the model, set execution defaults, and save.
-Advanced Settings contains provider API keys, local runtime controls for
-both Ollama and oMLX (service management, model download, serve, delete),
-planner guidance, Ableton connection, server URL, and API token. See
-[docs/MODELITO.md](docs/MODELITO.md) for provider setup details. Use Open
-Help in the toolbar to open the GitHub manual.
+First vertical slice:
 
-#### Option C — Server only (headless / API)
-
-```bash
-python backend/main.py
-```
-
-Configure via environment variables (see [Configuration](#configuration)) before launching. The web UI is available at `http://127.0.0.1:8787`.
-
-### 3. Send a prompt
-
-```bash
-curl -s -X POST http://127.0.0.1:8787/api/plan \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Set the tempo to 120 BPM and create a MIDI track"}'
-```
-
-The response contains a `plan_id`. Execute it (`"dry_run": true` previews without sending actions):
-
-```bash
-curl -s -X POST http://127.0.0.1:8787/api/execute \
-  -H "Content-Type: application/json" \
-  -d '{"plan_id": "<PLAN_ID>", "dry_run": false}'
-```
-
-You can also execute explicit note edits without an LLM plan:
-
-```bash
-curl -s -X POST http://127.0.0.1:8787/api/execute_batch \
-  -H "Content-Type: application/json" \
-  -d '{"dry_run": false, "calls": [
-    {"tool": "clip_create", "args": {"track_index": 0, "clip_index": 0, "length_beats": 4}},
-    {"tool": "midi_notes_add", "args": {"track_index": 0, "clip_index": 0, "notes": [
-      {"pitch": 60, "start_time": 0, "duration": 1, "velocity": 100},
-      {"pitch": 64, "start_time": 1, "duration": 1, "velocity": 92},
-      {"pitch": 67, "start_time": 2, "duration": 1, "velocity": 96}
-    ]}}
-  ]}'
-```
-
-### Optional LLM assistant context
-
-If you are wiring LLM-r into a custom assistant, agent, or chat UI, you can give
-the model the optional prompt in [docs/LLM_ASSISTANT_PROMPT.md](docs/LLM_ASSISTANT_PROMPT.md).
-It explains the current Ableton Live control surface, the required JSON plan
-format, safe execution behavior, and how to translate broad requests like
-"compose a piano ballad", "mix the live set", or "add a sax solo" into actions
-LLM-r can actually execute.
-
-LLM-r appends this context to the planner prompt by default. You can disable it
-in the GUI Settings dialog, via `PATCH /api/settings`, or when launching the
-server:
-
-```bash
-LLMR_PLANNER_EXTRA_PROMPT_ENABLED=false python backend/main.py
-```
+1. Install/open the VST3.
+2. Detect or start Ollama.
+3. Download or select the recommended local model.
+4. Detect Ableton control layer.
+5. Accept prompt: “Create a one-minute jazz drum track with fills and humanisation.”
+6. Show a clear plan.
+7. Execute safely in Ableton Live.
+8. Produce musically acceptable material without exposing developer configuration.
 
 ---
 
-## Configuration
-
-Settings are read from environment variables, then from `.llmr/settings.json` (written by the GUI or `PATCH /api/settings`), with environment variables taking precedence. The GUI settings dialog covers the most common options without requiring manual env-var setup.
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `LLMR_PROVIDER` | `openai` | Modelito LLM provider |
-| `LLMR_MODEL` | `gpt-4.1-mini` | Model name for the selected provider |
-| `LLMR_PLANNER_EXTRA_PROMPT_ENABLED` | `true` | Whether to append the optional LLM assistant prompt to the planner prompt |
-| `LLMR_PLANNER_EXTRA_PROMPT_PATH` | `docs/LLM_ASSISTANT_PROMPT.md` | Optional file appended to the LLM-r planner prompt |
-| `LLMR_HOST` | `127.0.0.1` | Interface the API server binds to |
-| `LLMR_PORT` | `8787` | Port the API server listens on |
-| `LLMR_ABLETON_HOST` | `127.0.0.1` | AbletonOSC host |
-| `LLMR_ABLETON_PORT` | `11000` | AbletonOSC port |
-| `LLMR_DEVICE_BRIDGE_ENABLED` | `true` | Whether `device_load` calls are allowed |
-| `LLMR_DEVICE_BRIDGE_HOST` | `127.0.0.1` | LLMRDeviceBridge host |
-| `LLMR_DEVICE_BRIDGE_PORT` | `8788` | LLMRDeviceBridge port |
-| `LLMR_OSC_REPLY_ENABLED` | `true` | Start the AbletonOSC reply listener for live-state reconciliation |
-| `LLMR_OSC_REPLY_HOST` | `127.0.0.1` | OSC reply listener bind host |
-| `LLMR_OSC_REPLY_PORT` | `11001` | OSC reply listener port |
-| `LLMR_PLAN_STORE_PATH` | `.llmr/plans.json` | Persistent plan storage |
-| `LLMR_MACRO_STORE_PATH` | `.llmr/macros.json` | Persistent macro storage |
-| `LLMR_SESSION_STORE_PATH` | `.llmr/sessions.json` | Persistent session storage |
-| `LLMR_SETTINGS_PATH` | `.llmr/settings.json` | Runtime settings file |
-| `LLMR_API_TOKEN` | *(unset)* | Bearer token to protect write endpoints |
-
-> **Security:** Keep `LLMR_HOST=127.0.0.1` for local use. Setting `LLMR_HOST=0.0.0.0` exposes the API on all network interfaces. See [docs/SECURITY.md](docs/SECURITY.md).
-
----
-
-## API Reference
-
-### Core
-
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/health` | Health check |
-| `GET` | `/api/capabilities` | Runtime capability registry with domain/safety/destructive filtering |
-| `GET` | `/api/settings` | Current runtime settings |
-| `PATCH` | `/api/settings` | Update runtime settings and persist to disk |
-| `GET` | `/api/models` | Available models from Modelito |
-| `GET` | `/api/model_metadata` | Metadata for the active model |
-| `GET` | `/api/device-bridge/status` | LLMRDeviceBridge reachability |
-| `GET` | `/api/device-bridge/devices` | Browse Device Bridge candidates by `query` and `device_type` |
-| `POST` | `/api/device-bridge/resolve` | Validate the exact `device_load` candidate, preset, or confirmed browser path without mutating Live |
-| `GET` | `/api/device-parameters/maps` | Safe semantic device parameter mappings |
-| `GET` | `/api/osc-replies/status` | OSC reply listener status |
-| `GET` | `/api/osc-replies/recent` | Recent OSC replies applied to live state |
-| `POST` | `/api/live/refresh` | Request AbletonOSC readback; recognized replies update live state |
-
-### Planning & Execution
-
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `POST` | `/api/plan` | Create a plan from a natural-language prompt |
-| `GET` | `/api/plan/{plan_id}` | Retrieve a stored plan |
-| `POST` | `/api/execute` | Execute a plan by ID (supports `dry_run` and `approved`) |
-| `POST` | `/api/execute_batch` | Execute an explicit list of tool calls |
-| `POST` | `/api/stream` | Streaming LLM completions (SSE) |
-
-### Macro Endpoints
-
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/api/macros` | List all macros |
-| `GET` | `/api/macros/{name}` | Fetch a macro by name |
-| `POST` | `/api/macros` | Create a runtime macro *(auth required if token set)* |
-| `PUT` | `/api/macros/{name}` | Update a runtime macro *(auth required if token set)* |
-| `DELETE` | `/api/macros/{name}` | Delete a runtime macro *(auth required if token set)* |
-| `POST` | `/api/plan_macro` | Create a plan from a named macro |
-
-### Live State
-
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/api/live/song` | Current song settings (tempo, time signature, …) |
-| `GET` | `/api/live/tracks` | All tracks |
-| `GET` | `/api/live/tracks/{id}/devices` | Devices on a track |
-| `GET` | `/api/live/tracks/{id}/clips` | Clips on a track |
-| `GET` | `/api/live/tracks/{id}/parameters` | Parameters on a track |
-
-### History
-
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/api/sessions` | All sessions |
-| `GET` | `/api/sessions/{session_id}` | A specific session |
-| `GET` | `/api/history` | Execution history |
-
-When `LLMR_API_TOKEN` is set, include the token on write requests:
-
-```bash
--H "Authorization: Bearer $LLMR_API_TOKEN"
-```
-
----
-
-## Capabilities
-
-LLM-r exposes a declarative capability registry. The runtime source of truth is always `GET /api/capabilities`. It accepts optional query parameters: `domain`, `safety`, and `include_destructive=false`. Each capability includes a `transport` field (`osc` or `device_bridge`). Capabilities are organised into domains:
-
-| Domain | Actions |
-| --- | --- |
-| `song` | Transport, tempo, time signature, quantization, count-in |
-| `tracks` | Create, delete, rename, mixer controls, sends |
-| `session` | Scene and clip operations |
-| `clips` | Clip duplication, naming, color, launch, loop, and marker properties |
-| `midi` | MIDI note get/add/remove/clear |
-| `audio` | Existing audio clip gain, pitch, warping, warp mode, and RAM mode |
-| `devices` | Device loading, parameter inspection, device deletion |
-| `parameters` | Parameter writes |
-
-Capabilities marked `destructive: true` require `"approved": true` in `POST /api/execute` (unless `dry_run` is enabled). Full catalog: [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
-
-Browser search/load for one named device or plug-in is handled by
-LLMRDeviceBridge. Plugin-chain loading, warp marker CRUD, destructive
-sample-file edits, render/export, and loudness analysis remain outside the
-current runtime contract.
-
----
-
-## Macros
-
-Macros are named sequences of Ableton actions. LLM-r ships with built-in static macros (`idea_sketch`, `performance_prep`) and supports runtime macros persisted to disk.
-
-**List macros:**
-
-```bash
-curl http://127.0.0.1:8787/api/macros
-```
-
-**Run a macro:**
-
-```bash
-curl -s -X POST http://127.0.0.1:8787/api/plan_macro \
-  -H "Content-Type: application/json" \
-  -d '{"name": "idea_sketch"}'
-```
-
-**Create a runtime macro via the API:**
-
-```bash
-curl -s -X POST http://127.0.0.1:8787/api/macros \
-  -H "Content-Type: application/json" \
-  -d '{"name": "my_macro", "calls": [{"tool": "set_tempo", "args": {"bpm": 110}}, {"tool": "song_play", "args": {}}]}'
-```
-
-Runtime macros are persisted to `LLMR_MACRO_STORE_PATH` and survive restarts. To contribute a built-in macro, add an entry to `_STATIC_MACROS` in `llmr/macros.py` — see [docs/MACROS.md](docs/MACROS.md).
-
----
-
-## Safety Model
-
-LLM-r is designed to avoid unintended changes to a live session:
-
-- **Dry-run** — pass `"dry_run": true` to `POST /api/execute` to validate a plan without sending any OSC messages
-- **Destructive approval** — actions flagged `destructive: true` (track/scene/clip/device deletion, MIDI note removal/clear, stop-all) require `"approved": true`
-- **Capability registry** — the planner is grounded in a strict schema; it cannot generate actions outside the declared capability surface
-- **TTL pruning** — plans expire after 60 minutes; the store is bounded to 256 entries
-- **No double execution** — a plan can only be executed once
-
----
-
-## VST3 Plug-in
-
-The VST3 plug-in is the primary self-contained control surface. It does not
-require the desktop GUI or FastAPI server for normal use. The plug-in stores its
-own runtime settings in macOS user defaults and can:
-
-- choose provider/model/endpoint and API key
-- switch between Plan and Details response tabs
-- copy/select text from the response panel
-- keep provider/model on the basic settings screen while API keys, AbletonOSC,
-  and Ollama controls live under Advanced Settings
-- show Ollama and oMLX status, installed models, and currently served models
-- load the downloadable-model pull-down from the Ollama online model library
-- manage oMLX local models (download, serve, delete) from Advanced Settings
-- save or cancel settings changes explicitly
-- send the built-in LLM-r tool catalog and optional guidance to the LLM
-- parse the returned JSON plan
-- dry-run or execute the resulting AbletonOSC and Device Bridge actions
-- auto-approve plans after planning while respecting the dry-run default
-- block destructive actions unless explicitly allowed
-
-## Desktop GUI
-
-The GUI is an optional companion. It can run LLM-r in embedded mode without a
-separate server process, attach to a running server, or start/stop a local server
-from the toolbar.
-
-```bash
-pip install PyQt6
-python gui/pyqt_app.py
-```
-
-A **Settings** dialog (accessible from the toolbar) lets you configure everything at runtime:
-
-- Main Settings: LLM provider, model, dry-run default, Auto-approve, and destructive-execution default
-- Advanced Settings: provider API keys, assistant prompt guidance, Ableton OSC host/port, server URL, and API token
-- Advanced Settings → Ollama: status, start/stop service, installed model picker, served model stop, downloadable-model picker, download, serve, and delete
-- Advanced Settings → oMLX: status, start/stop service, local model picker, download, serve, stop serving, and delete; see [docs/MODELITO.md](docs/MODELITO.md)
-- Response tabs: Plan for action cards, Action Table for parsed tool calls, Run Log for execution reports, and Details for the complete payload plus parsed `llm_raw` when available
-- Open Help opens the GitHub user manual from the toolbar
-
-GUI connection settings are persisted to `~/.llmr/gui.json`. Runtime settings are
-pushed to the server via `PATCH /api/settings` when connected to HTTP mode, or
-saved directly by the embedded backend.
-
-If a server is already running when the GUI opens, it attaches to it instead of starting a new one.
-
----
-
-## Development
-
-```bash
-# Run tests
-python -m pytest -q
-
-# Lint
-ruff check .
-
-# Run server with auto-reload
-uvicorn llmr.app:app --host 127.0.0.1 --port 8787 --reload
-```
-
-### Release builds
-
-A CI workflow builds release artifacts on tag pushes: [.github/workflows/release.yml](.github/workflows/release.yml).
-
-To build locally (sdist, wheel, and PyInstaller standalone binary):
-
-```bash
-./scripts/build_release.sh
-```
-
-PyInstaller binaries are platform-specific and placed in the git-ignored
-`release/` directory. See [docs/RELEASE.md](docs/RELEASE.md).
-Local install helpers for generated vendor packages and VST3 bundles live under
-`scripts/`.
-
----
-
-## Development Plan
-
-See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
-
----
-
-## Documentation
-
-| Document | Description |
-| --- | --- |
-| [docs/CAPABILITIES.md](docs/CAPABILITIES.md) | Full capability catalog |
-| [docs/ABLETON_SMOKE_TEST.md](docs/ABLETON_SMOKE_TEST.md) | Real AbletonOSC + Device Bridge smoke-test checklist |
-| [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | Current AbletonOSC runtime contract notes |
-| [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) | Current pre-release audit and roadmap |
-| [docs/USER_MANUAL.md](docs/USER_MANUAL.md) | User-facing guide for the VST3 workflow |
-| [docs/GUI-PLUGIN.md](docs/GUI-PLUGIN.md) | Technical GUI behavior and settings |
-| [docs/LLM_ASSISTANT_PROMPT.md](docs/LLM_ASSISTANT_PROMPT.md) | Default planner guidance prompt |
-| [docs/MACROS.md](docs/MACROS.md) | Macro authoring guide |
-| [docs/MODELITO.md](docs/MODELITO.md) | Modelito integration details |
-| [docs/RELEASE.md](docs/RELEASE.md) | Release and build instructions |
-| [docs/SCENARIOS.md](docs/SCENARIOS.md) | Current executable workflow recipes |
-| [docs/SECURITY.md](docs/SECURITY.md) | Security model and deployment advice |
-
----
-
-## Current Limitations
-
-- Real Ableton Live validation (transport, OSC, device loading) is required for release confidence and is not automated.
-- Native VST3 build, install, and load should be verified on macOS before each release.
-- Real oMLX runtime validation is manual; automated tests cover the FastAPI routes with monkeypatched adapters only.
-- Some advanced workflows (device loading, ambiguous browser resolution) require both AbletonOSC and the LLMRDeviceBridge Remote Script.
-- Local model access via Ollama and oMLX is mediated by Modelito. Models pulled through Ollama are not automatically available to oMLX unless both runtimes expose the same model identifier.
-
----
-
-## Contributing
-
-Contributions are welcome. Open an issue to discuss a change, then submit a pull request. Follow the existing code style and add tests for new behaviour.
-
----
-
-## License
-
-See [LICENSE](LICENSE).
+## Repository state
+
+This repository is kept for reference. It contains useful experiments in:
+
+- VST3 UI prototyping;
+- Modelito-based model-provider abstraction;
+- Ollama/oMLX exploration;
+- AbletonOSC action planning;
+- Device Bridge experiments;
+- dry-run / approval workflow;
+- capability registry design;
+- FastAPI, PyQt, and web companion surfaces;
+- prompt architecture experiments;
+- release engineering lessons.
+
+It should not be presented as a finished product or used as the foundation for a polished musician-facing release without a significant architectural rewrite.
