@@ -1,17 +1,19 @@
-# STATUS — LLM-r 0.6.9 release candidate
+# STATUS — LLM-r (Closed Project)
 
-Last updated: 2026-05-21 06:30
+Last updated: 2026-05-23 03:36
 
 ## Snapshot
 - Version: `0.6.9`
 - Branch: `fix/0.6.9-vst3-ux-runtime-blockers`
-- Release state: pre-1.0 release candidate
+- Release state: closed/archived reference repository
 - Primary surface: native VST3 plug-in
 - Companion surfaces: PyQt GUI, web UI, FastAPI server
-- Current stance: release hardening with truthful docs, conservative safety defaults, and manual Ableton validation before tag
+- Current stance: project closed; code retained for archival/reference use and experimentation
 
 ## Product summary
 LLM-r turns plain-language production requests into executable Ableton Live action plans. It is designed as a DAW control bridge, not a full composition engine or audio post-production suite.
+
+Project note: this repository is now closed. Existing behaviour is preserved for reference, but no new production release cycle is planned from this codebase.
 
 The intended VST3 user workflow is: prompt -> Run. Run plans first, then automatically executes the validated action list in Preview mode or live mode depending on Settings. Preview mode preserves the dry-run safety path and does not mutate the Live set.
 
@@ -125,14 +127,10 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
   - Expected command: `python3 -m build`.
 - Not automated: browser-level web end-to-end automation, real Ableton Live mutation correctness, real Device Bridge browser behaviour, and real Ollama/oMLX runtime behaviour on release target machines.
 
-## Manual validation required before tag
-- VST3 build on macOS. -> Works.
-- VST3 install and Ableton scan. -> 
-- AbletonOSC real session smoke test.
-- Device Bridge install/load/resolve test.
-- Ollama runtime smoke test.
-- oMLX runtime smoke test.
-- Web UI smoke test (including local runtime status cards).
+## Manual validation status
+- This repository is closed; there is no active release-tag gate.
+- If you still run this code, validate manually on your own target machine before trusting live execution.
+- High-risk/manual areas remain: real Ableton mutation correctness, Device Bridge behaviour, and local runtime integration (Ollama/oMLX).
 
 ## Known limitations
 - No warp marker CRUD.
@@ -143,22 +141,16 @@ LLM-r uses Modelito as the provider abstraction layer for cloud and local runtim
 - VST3 does not yet include the full PyQt/web readiness strip or full oMLX management controls.
 - Real Ableton Live, Device Bridge, Ollama, and oMLX runtime validation remains manual.
 
-## 0.6.9 release blockers
-- Complete real AbletonOSC smoke test on a disposable session and record outcomes.
-- Complete Device Bridge install/load/resolve validation in a real Ableton session, including Prompt 16 path picker flow (`Choose Ableton User Library...`, `Install / Reinstall Bridge`, `Reveal Installed Bridge`, `Copy Install Path`, `Recheck`) and `LLMR_Bridge` Control Surface selection after restart.
-- Complete real Ollama runtime smoke test on the release target machine.
-- Complete real oMLX runtime smoke test on the release target machine.
-- Complete manual web and PyQt smoke passes on the release candidate build.
-- Complete real Ableton manual validation for Prompt 17-22 behaviour (Run -> plan -> preview/live execution, multiline composer keyboard UX, System Prompts selector/save/load/reset, modal Settings, Cancel, long-wait prompts, and 1-2 minute composition fallback behaviour).
+## Closure implications
+- Treat this codebase as reference material, not as a maintained product branch.
+- Documentation has been updated to clearly mark the project as closed.
+- Website surfaces now show a dismissible "project closed" overlay so closure status is visible at first load.
+- Website surfaces now also show a persistent closed-status badge in the top header/nav after overlay dismissal.
 
-## Post-0.6.9 roadmap
-1. Professional VST3 polish and validation.
-2. Real Ableton integration harness.
-3. Better live-state browser and plan diff.
-4. Macro editor/templates.
-5. Richer MIDI/audio transformations.
-6. Device/plugin-chain workflows.
-7. Readiness/oMLX parity decision for VST3.
-8. Packaging/signing/notarisation if needed.
+## Successor directions (outside this repository)
+1. Keep the VST3 as a thin front-end and move runtime responsibilities to a local helper process.
+2. Reuse existing AbletonOSC/MCP ecosystem pieces instead of expanding a private bridge stack.
+3. Productise local runtime UX (simple local defaults, minimal provider jargon).
+4. Focus on dependable musical tooling (validators/generators), not prompt-only orchestration.
 
-Last updated: 2026-05-21 06:30
+Last updated: 2026-05-23 03:36

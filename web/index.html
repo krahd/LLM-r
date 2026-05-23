@@ -56,6 +56,11 @@
     .chip.warn { color: var(--amber); border-color: #8a611d; background: #2d2110; }
     .chip.info { color: #a9c9ff; border-color: #2f64aa; background: #102039; }
     .chip.error { color: var(--red); border-color: #6a2030; background: #321820; }
+    .chip.closed {
+      color: #ffb9c2;
+      border-color: #74303c;
+      background: #2f1720;
+    }
     #readinessBar {
       display: flex;
       align-items: center;
@@ -440,15 +445,68 @@
       header { flex-wrap: wrap; }
       .container { grid-template-columns: 1fr; }
     }
+
+    .closed-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(2, 7, 14, 0.88);
+      backdrop-filter: blur(2px);
+    }
+    .closed-overlay.hidden { display: none; }
+    .closed-overlay-card {
+      width: min(680px, 100%);
+      background: #111927;
+      border: 1px solid #2f4868;
+      border-radius: 10px;
+      padding: 14px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+      display: grid;
+      gap: 8px;
+    }
+    .closed-overlay-card h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+    .closed-overlay-card p {
+      margin: 0;
+      color: #c7d5e8;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .closed-overlay-card button {
+      justify-self: start;
+      border: 1px solid var(--blue);
+      border-radius: 8px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 800;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
+  <div id="projectClosedOverlay" class="closed-overlay" role="dialog" aria-modal="true" aria-labelledby="projectClosedTitle" aria-describedby="projectClosedDesc">
+    <div class="closed-overlay-card">
+      <h2 id="projectClosedTitle">Project closed</h2>
+      <p id="projectClosedDesc">LLM-r is closed and no longer under active development. This command surface is preserved as an archive for reference and experimentation. Click below, or click outside this panel, to continue.</p>
+      <button id="dismissProjectClosedOverlay" type="button">Continue</button>
+    </div>
+  </div>
+
   <main>
     <header>
       <div>
         <h1>LLM-r Command Surface</h1>
         <div class="subtitle">Describe an Ableton Live action, review the plan, dry-run it, then execute.</div>
       </div>
+      <span class="chip closed" aria-label="Project status closed">Project closed</span>
       <span id="apiChip" class="chip">API checking</span>
       <span id="modelChip" class="chip">Model unknown</span>
       <span id="bridgeChip" class="chip">Bridge unknown</span>
@@ -726,6 +784,21 @@
         btn.setAttribute('aria-selected', id === name ? 'true' : 'false');
         document.getElementById(`${id}View`).classList.toggle('hidden', id !== name);
       }
+    }
+
+    function setupProjectClosedOverlay() {
+      const overlay = document.getElementById('projectClosedOverlay');
+      const dismiss = document.getElementById('dismissProjectClosedOverlay');
+      if (!overlay || !dismiss) return;
+
+      function hideOverlay() {
+        overlay.classList.add('hidden');
+      }
+
+      dismiss.addEventListener('click', hideOverlay);
+      overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) hideOverlay();
+      });
     }
 
     async function apiFetch(path, options) {
@@ -1527,6 +1600,7 @@
     });
 
     // Refresh on load and periodically
+    setupProjectClosedOverlay();
     renderQuickStarts();
     refreshHealth();
     refreshSettings({ forceFormSync: true, refreshModels: true });

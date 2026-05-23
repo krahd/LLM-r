@@ -55,6 +55,20 @@
       color: var(--green);
       letter-spacing: -.01em;
     }
+    .nav-status {
+      display: inline-block;
+      margin-left: .6rem;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: #fdbabf;
+      background: rgba(248, 113, 113, .14);
+      border: 1px solid rgba(248, 113, 113, .35);
+      border-radius: 999px;
+      padding: .16rem .52rem;
+      vertical-align: middle;
+    }
     .nav-links { display: flex; gap: 1.5rem; font-size: .9rem; color: var(--muted); }
     .nav-links a { color: var(--muted); transition: color .15s; }
     .nav-links a:hover { color: var(--text); text-decoration: none; }
@@ -339,13 +353,69 @@
       section { padding: 3.5rem 1.2rem; }
       .arch { padding: 0 1.2rem; margin-bottom: 4rem; }
     }
+
+    .closed-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.2rem;
+      background: rgba(2, 8, 18, 0.88);
+      backdrop-filter: blur(3px);
+    }
+    .closed-overlay.hidden { display: none; }
+    .closed-overlay-card {
+      width: min(720px, 100%);
+      background: #101a28;
+      border: 1px solid #29517a;
+      border-radius: 14px;
+      padding: 1.4rem;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+    }
+    .closed-overlay-card h2 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+    .closed-overlay-card p {
+      margin: .8rem 0 0;
+      color: #c6d4e6;
+      font-size: .95rem;
+    }
+    .closed-overlay-actions {
+      margin-top: 1rem;
+      display: flex;
+      gap: .7rem;
+      flex-wrap: wrap;
+    }
+    .closed-overlay-actions button {
+      border: 1px solid #2f7cf6;
+      background: #2f7cf6;
+      color: #fff;
+      border-radius: 8px;
+      font-weight: 700;
+      padding: .62rem .95rem;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
 
+<div id="projectClosedOverlay" class="closed-overlay" role="dialog" aria-modal="true" aria-labelledby="projectClosedTitle" aria-describedby="projectClosedDesc">
+  <div class="closed-overlay-card">
+    <h2 id="projectClosedTitle">Project closed</h2>
+    <p id="projectClosedDesc">LLM-r is closed and no longer under active development. This website is kept for archival and reference purposes only. Click below (or click outside this panel) to continue browsing.</p>
+    <div class="closed-overlay-actions">
+      <button id="dismissProjectClosedOverlay" type="button">Continue to archived site</button>
+    </div>
+  </div>
+</div>
+
 <!-- NAV -->
 <nav>
   <span class="nav-logo">LLM-r</span>
+  <span class="nav-status" aria-label="Project status closed">Closed</span>
   <div class="nav-links">
     <a href="#features">Features</a>
     <a href="#quickstart">Quick Start</a>
@@ -579,6 +649,23 @@ curl -s -X POST http://127.0.0.1:<span class="num">8787</span>/api/plan \
     <a href="https://github.com/ideoforms/AbletonOSC">AbletonOSC</a>
   </div>
 </footer>
+
+<script>
+  (function () {
+    const overlay = document.getElementById('projectClosedOverlay');
+    const dismiss = document.getElementById('dismissProjectClosedOverlay');
+    if (!overlay || !dismiss) return;
+
+    function hideOverlay() {
+      overlay.classList.add('hidden');
+    }
+
+    dismiss.addEventListener('click', hideOverlay);
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) hideOverlay();
+    });
+  }());
+</script>
 
 </body>
 </html>
